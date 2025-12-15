@@ -219,6 +219,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleApproveUser = (user: User) => {
       onUpdateUser({ ...user, isNew: false });
   };
+  
+  const handlePaymentStatusChange = (user: User, newStatus: PaymentStatus) => {
+      onUpdateUser({ ...user, paymentStatus: newStatus });
+  };
 
   const handleGenerateDescription = async () => {
     if (!newSession.type || !newSession.location) {
@@ -351,7 +355,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleDeleteType = (e: React.MouseEvent, type: string) => {
       e.stopPropagation(); // Stop click from bubbling up
       e.preventDefault(); // Prevent form submission
-      if (confirm(`למחוק את סוג האימון "${type}"?`)) {
+      if (confirm(`למחוק את סוג אימון "${type}"?`)) {
           onUpdateWorkoutTypes(workoutTypes.filter(t => t !== type));
       }
   };
@@ -393,7 +397,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   // Sort existing users based on monthly workout count descending
+  // Prioritize PENDING status
   const sortedExistingUsers = [...existingUsers].sort((a, b) => {
+      if (a.paymentStatus === PaymentStatus.PENDING && b.paymentStatus !== PaymentStatus.PENDING) return -1;
+      if (a.paymentStatus !== PaymentStatus.PENDING && b.paymentStatus === PaymentStatus.PENDING) return 1;
+      
       const countA = getMonthlyWorkoutsCount(a.phone);
       const countB = getMonthlyWorkoutsCount(b.phone);
       return countB - countA;
@@ -468,14 +476,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
                         value={formUser.email} onChange={e => setFormUser({...formUser, email: e.target.value})}
                     />
-                    <select 
-                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
-                        value={formUser.paymentStatus} onChange={e => setFormUser({...formUser, paymentStatus: e.target.value as PaymentStatus})}
-                    >
-                        <option value={PaymentStatus.PAID}>שולם</option>
-                        <option value={PaymentStatus.PENDING}>ממתין לתשלום</option>
-                        <option value={PaymentStatus.OVERDUE}>חוב</option>
-                    </select>
                 </div>
                 <div className="flex gap-2">
                     <Button onClick={handleUserSubmit} className="flex-1">
@@ -495,15 +495,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div className="max-h-96 overflow-y-auto custom-scrollbar">
                     {sortedExistingUsers.map((user, idx) => (
-                        <div key={user.id} className="p-3 border-b border-gray-700 hover:bg-gray-700/50 flex justify-between items-center group">
-                            <div className="flex items-center gap-3">
+                        <div 
+                            key={user.id} 
+                            className={`p-3 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center group ${user.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/10' : 'hover:bg-gray-700/50'}`}
+                        >
+                            <div className="flex items-center gap-3 mb-2 md:mb-0 w-full md:w-auto">
                                 <span className="text-gray-500 text-xs w-4">{idx + 1}</span>
-                                <div>
-                                    <div className="font-bold text-white">{user.fullName}</div>
+                                <div 
+                                    className="w-8 h-8 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: user.userColor || '#374151' }}
+                                />
+                                <div className="flex-1">
+                                    <div className="font-bold text-white flex items-center gap-2">
+                                        {user.fullName}
+                                        {user.paymentStatus === PaymentStatus.PENDING && (
+                                            <span className="text-[10px] bg-yellow-500 text-black px-1.5 rounded font-bold animate-pulse">ממתין לאישור תשלום</span>
+                                        )}
+                                    </div>
                                     <div className="text-xs text-gray-400">{user.phone}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            
+                            <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+                                {/* Payment Status Dropdown */}
+                                <select 
+                                    className={`text-xs p-1.5 rounded border ${
+                                        user.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 border-green-500/30 text-green-400' :
+                                        user.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
+                                        'bg-red-500/20 border-red-500/30 text-red-400'
+                                    }`}
+                                    value={user.paymentStatus}
+                                    onChange={(e) => handlePaymentStatusChange(user, e.target.value as PaymentStatus)}
+                                >
+                                    <option value={PaymentStatus.PAID}>שולם / מנוי פעיל</option>
+                                    <option value={PaymentStatus.PENDING}>דיווח תשלום (לא מאושר)</option>
+                                    <option value={PaymentStatus.OVERDUE}>חוב / לא שולם</option>
+                                </select>
+
                                 <div className="text-center px-2">
                                     <span className="block text-xs text-gray-400">אימונים החודש</span>
                                     <span className="font-bold text-brand-primary">{getMonthlyWorkoutsCount(user.phone)}</span>

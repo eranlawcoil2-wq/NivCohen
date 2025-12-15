@@ -29,6 +29,7 @@ export interface User {
   startDate: string;
   paymentStatus: PaymentStatus;
   isNew?: boolean; // Flag for self-registered users pending coach review
+  userColor?: string; // Custom color for the user name in lists
 }
 
 export interface TrainingSession {

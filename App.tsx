@@ -77,6 +77,17 @@ const WhatsAppButton: React.FC = () => {
     );
 };
 
+const USER_COLORS = [
+    '#ffffff', // Default White
+    '#EF4444', // Red
+    '#F59E0B', // Amber
+    '#10B981', // Emerald
+    '#3B82F6', // Blue
+    '#8B5CF6', // Violet
+    '#EC4899', // Pink
+    '#A3E635'  // Brand Lime
+];
+
 const App: React.FC = () => {
   // State with Safe Parsing
   const [users, setUsers] = useState<User[]>(() => safeJsonParse<User[]>('niv_app_users', INITIAL_USERS));
@@ -151,6 +162,7 @@ const App: React.FC = () => {
   
   // Profile Edit State
   const [editDisplayName, setEditDisplayName] = useState('');
+  const [editUserColor, setEditUserColor] = useState('');
 
   // Statistics Calculation Helpers
   const getMonthlyWorkoutsCount = (userPhone: string) => {
@@ -192,6 +204,8 @@ const App: React.FC = () => {
   const championData = getChampionOfTheMonth();
   const currentUserMonthlyCount = currentUserPhone ? getMonthlyWorkoutsCount(currentUserPhone) : 0;
   const currentUser = Array.isArray(users) ? users.find(u => u.phone === currentUserPhone) : undefined;
+  
+  const pendingUsersCount = users.filter(u => u.paymentStatus === PaymentStatus.PENDING).length;
 
   // Helper to get current week dates (Sunday to Saturday) with offset
   const getCurrentWeekDates = (offset: number) => {
@@ -298,6 +312,12 @@ const App: React.FC = () => {
         alert('מתאמנים חדשים יכולים להירשם לאימוני ניסיון בלבד.');
         return;
     }
+    
+    // 4. Check Payment Status
+    if (currentUser?.paymentStatus === PaymentStatus.OVERDUE) {
+         alert('לא ניתן להירשם לאימון עקב חוב פתוח. אנא הסדר תשלום מול המאמן.');
+         return;
+    }
 
     setSessions(prevSessions => prevSessions.map(s => {
       if (s.id === sessionId) {
@@ -341,6 +361,12 @@ const App: React.FC = () => {
              // Logic check for new user restriction
              if (existingUser.isNew && !session.isTrial) {
                  alert('נרשמת בהצלחה למערכת! שים לב: כמתאמן חדש, באפשרותך להירשם רק לאימוני ניסיון.');
+                 setTargetSessionId(null);
+                 return;
+             }
+             
+             if (existingUser.paymentStatus === PaymentStatus.OVERDUE) {
+                 alert('התחברת בהצלחה, אך לא ניתן להירשם לאימון עקב חוב.');
                  setTargetSessionId(null);
                  return;
              }
@@ -388,6 +414,7 @@ const App: React.FC = () => {
       setRegName('');
       setRegPhone('');
       setRegEmail('');
+      setEditUserColor('');
   };
 
   const handleUpdateUser = (updatedUser: User) => {
@@ -419,7 +446,8 @@ const App: React.FC = () => {
     if (currentUser) {
         handleUpdateUser({
             ...currentUser,
-            displayName: editDisplayName.trim() || currentUser.fullName
+            displayName: editDisplayName.trim() || currentUser.fullName,
+            userColor: editUserColor
         });
         setShowProfileModal(false);
     }
@@ -428,6 +456,7 @@ const App: React.FC = () => {
   const openProfileModal = () => {
       if (currentUser) {
           setEditDisplayName(currentUser.displayName || currentUser.fullName);
+          setEditUserColor(currentUser.userColor || '');
           setShowProfileModal(true);
       }
   };
@@ -444,6 +473,17 @@ const App: React.FC = () => {
       const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
       
       window.open(whatsappUrl, '_blank');
+  };
+  
+  const handleReportPayment = () => {
+      if (!currentUser) return;
+      if (confirm('האם אתה בטוח שביצעת את התשלום? הסטטוס שלך יעודכן ל"ממתין לאישור" והמאמן יקבל התראה.')) {
+          handleUpdateUser({
+              ...currentUser,
+              paymentStatus: PaymentStatus.PENDING
+          });
+          alert('הדיווח נשלח למאמן בהצלחה!');
+      }
   };
 
   const handleViewDetails = (sessionId: string) => {
@@ -471,7 +511,7 @@ const App: React.FC = () => {
   const getSessionAttendees = (session: TrainingSession) => {
       return session.registeredPhoneNumbers.map(phone => {
           const u = users.find(user => user.phone === phone);
-          return u ? (u.displayName || u.fullName) : `אורח (${phone})`;
+          return u ? { name: u.displayName || u.fullName, color: u.userColor } : { name: `אורח (${phone})`, color: undefined };
       });
   };
 
@@ -565,7 +605,7 @@ const App: React.FC = () => {
                           תשלומים
                        </button>
                       <div className="flex items-center gap-2">
-                          <p className="text-white text-sm font-bold">
+                          <p className="text-white text-sm font-bold" style={{ color: currentUser.userColor }}>
                               היי, {currentUser.displayName || currentUser.fullName.split(' ')[0]}
                           </p>
                           <button onClick={openProfileModal} className="text-gray-400 hover:text-white transition-colors" title="ערוך פרופיל">
@@ -608,7 +648,7 @@ const App: React.FC = () => {
                         </div>
                         <div>
                             <p className="text-xs text-yellow-500 font-bold uppercase tracking-wider">שיאן החודש</p>
-                            <p className="text-white font-bold text-sm">
+                            <p className="font-bold text-sm" style={{ color: championData.user.userColor || 'white' }}>
                                 {championData.user.displayName || championData.user.fullName} <span className="text-gray-500 text-xs">({championData.count} אימונים)</span>
                             </p>
                         </div>
@@ -826,7 +866,7 @@ const App: React.FC = () => {
                                   אין נרשמים עדיין. היה הראשון!
                               </p>
                           ) : (
-                              getSessionAttendees(viewingSession).map((name, idx) => (
+                              getSessionAttendees(viewingSession).map((attendee, idx) => (
                                   <div key={idx} className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-xl border border-gray-800">
                                       <div 
                                         className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shadow-inner"
@@ -834,7 +874,12 @@ const App: React.FC = () => {
                                       >
                                           {idx + 1}
                                       </div>
-                                      <span className="text-gray-200 font-medium text-lg">{name}</span>
+                                      <span 
+                                        className="text-gray-200 font-medium text-lg"
+                                        style={{ color: attendee.color || '#E5E7EB' }}
+                                      >
+                                          {attendee.name}
+                                      </span>
                                   </div>
                               ))
                           )}
@@ -894,6 +939,21 @@ const App: React.FC = () => {
                         />
                          <p className="text-xs text-gray-500 mt-1">זה השם שיופיע ברשימות הנרשמים</p>
                     </div>
+
+                    <div>
+                        <label className="text-sm text-gray-400 block mb-1">בחר צבע לשם שלך</label>
+                        <div className="flex gap-2 flex-wrap">
+                            {USER_COLORS.map(color => (
+                                <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setEditUserColor(color)}
+                                    className={`w-8 h-8 rounded-full border-2 transition-all ${editUserColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-50'}`}
+                                    style={{ backgroundColor: color }}
+                                />
+                            ))}
+                        </div>
+                    </div>
                     
                     <div className="flex gap-3 pt-2">
                         <Button onClick={handleProfileUpdate} className="flex-1">שמור שינויים</Button>
@@ -912,9 +972,33 @@ const App: React.FC = () => {
                     <span>💳</span>
                     רכישה ותשלומים
                 </h3>
+                
+                <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-600 mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-gray-400 text-sm">סטטוס נוכחי:</span>
+                        <span className={`text-sm font-bold px-2 py-0.5 rounded ${
+                            currentUser?.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 text-green-400' :
+                            currentUser?.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-red-500/20 text-red-400'
+                        }`}>
+                            {currentUser?.paymentStatus === PaymentStatus.PAID ? 'מנוי פעיל' : 
+                             currentUser?.paymentStatus === PaymentStatus.PENDING ? 'ממתין לאישור' : 
+                             'לא שולם / חוב'}
+                        </span>
+                    </div>
+                     {currentUser?.paymentStatus !== PaymentStatus.PENDING && currentUser?.paymentStatus !== PaymentStatus.PAID && (
+                         <Button onClick={handleReportPayment} size="sm" variant="secondary" className="w-full mt-2 text-xs">
+                             עדכן את המאמן שביצעתי תשלום
+                         </Button>
+                     )}
+                     {currentUser?.paymentStatus === PaymentStatus.PENDING && (
+                         <p className="text-xs text-yellow-500 mt-1">המאמן קיבל את הדיווח ויאשר בקרוב.</p>
+                     )}
+                </div>
+
                 <p className="text-gray-400 text-sm mb-4">בחר מוצר ולחץ לקבלת קישור לתשלום ישירות לוואטסאפ שלך.</p>
                 
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <div className="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar">
                     {paymentLinks.length === 0 ? (
                         <p className="text-gray-500 text-center py-4">לא הוגדרו מוצרים לתשלום</p>
                     ) : (
@@ -993,16 +1077,24 @@ const App: React.FC = () => {
               מדיניות השימוש
           </button>
 
-          <button 
-            onClick={() => setIsAdminMode(!isAdminMode)}
-            className={`p-2 rounded-full transition-all ${isAdminMode ? 'bg-brand-primary text-brand-black rotate-90' : 'text-gray-500 hover:text-white hover:bg-gray-800'}`}
-            title="ניהול תוכן"
-          >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-          </button>
+          <div className="relative">
+              {pendingUsersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
+                  </span>
+              )}
+              <button 
+                onClick={() => setIsAdminMode(!isAdminMode)}
+                className={`p-2 rounded-full transition-all ${isAdminMode ? 'bg-brand-primary text-brand-black rotate-90' : 'text-gray-500 hover:text-white hover:bg-gray-800'}`}
+                title="ניהול תוכן"
+              >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+              </button>
+          </div>
       </footer>
     </div>
   );
