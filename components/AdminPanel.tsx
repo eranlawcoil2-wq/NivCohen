@@ -183,30 +183,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
 
-  const getUpcomingDaysOptions = () => {
-    const options = [];
-    const today = new Date();
-    for (let i = 0; i < 21; i++) {
-        const date = new Date(today);
-        date.setDate(today.getDate() + i);
-        const dateStr = date.toISOString().split('T')[0];
-        const dayName = date.toLocaleDateString('he-IL', { weekday: 'long' });
-        const formattedDate = date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
-        
-        let labelPrefix = '';
-        if (i === 0) labelPrefix = 'היום - ';
-        else if (i === 1) labelPrefix = 'מחר - ';
-
-        options.push({ 
-            value: dateStr, 
-            label: `${labelPrefix}${dayName} (${formattedDate})` 
-        });
-    }
-    return options;
-  };
-
-  const dateOptions = getUpcomingDaysOptions();
-
   const getMonthlyWorkoutsCount = (userPhone: string) => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -1180,15 +1156,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                         <select 
-                            className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
-                            value={newSession.date} 
-                            onChange={e => setNewSession({...newSession, date: e.target.value})}
-                         >
-                             {dateOptions.map(opt => (
-                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
-                             ))}
-                         </select>
+                        <input 
+                          type="date"
+                          className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
+                          value={newSession.date} 
+                          onChange={e => setNewSession({...newSession, date: e.target.value})}
+                        />
                         <input 
                             type="time" className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
                             value={newSession.time} onChange={e => setNewSession({...newSession, time: e.target.value})}
