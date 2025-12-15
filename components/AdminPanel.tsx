@@ -14,7 +14,7 @@ interface AdminPanelProps {
   paymentLinks: PaymentLink[];
   onAddUser: (user: User) => void;
   onUpdateUser: (user: User) => void;
-  onDeleteUser: (userId: string) => void; // Added Delete User Prop
+  onDeleteUser: (userId: string) => void; 
   onAddSession: (session: TrainingSession) => void;
   onUpdateSession: (session: TrainingSession) => void;
   onDeleteSession: (id: string) => void;
@@ -38,6 +38,64 @@ const SESSION_COLORS = [
     '#F97316'  // Orange
 ];
 
+const USER_COLORS = [
+    '#ffffff', // Default White
+    '#EF4444', // Red
+    '#F59E0B', // Amber
+    '#10B981', // Emerald
+    '#3B82F6', // Blue
+    '#8B5CF6', // Violet
+    '#EC4899', // Pink
+    '#A3E635'  // Brand Lime
+];
+
+const SQL_SCRIPT = `
+-- טבלת משתמשים
+create table if not exists users (
+  id text primary key,
+  "fullName" text,
+  "displayName" text,
+  phone text unique,
+  email text,
+  "startDate" text,
+  "paymentStatus" text,
+  "isNew" boolean,
+  "userColor" text
+);
+
+-- טבלת אימונים
+create table if not exists sessions (
+  id text primary key,
+  type text,
+  date text,
+  time text,
+  location text,
+  "maxCapacity" int,
+  description text,
+  "registeredPhoneNumbers" text[],
+  color text,
+  "isTrial" boolean,
+  "zoomLink" text
+);
+
+-- פתיחת גישה (Row Level Security)
+alter table users enable row level security;
+alter table sessions enable row level security;
+
+-- יצירת מדיניות גישה ציבורית (לפיתוח)
+create policy "Public Access Users" on users for all using (true);
+create policy "Public Access Sessions" on sessions for all using (true);
+`;
+
+const getSunday = (d: Date) => {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day; 
+  return new Date(date.setDate(diff));
+};
+
+const formatDateForInput = (date: Date) => date.toISOString().split('T')[0];
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
     users, 
     sessions, 
@@ -48,7 +106,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     paymentLinks,
     onAddUser, 
     onUpdateUser,
-    onDeleteUser, // Destructure
+    onDeleteUser, 
     onAddSession, 
     onUpdateSession,
     onDeleteSession,
@@ -60,17 +118,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     onDeletePaymentLink,
     onExitAdmin
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'settings' | 'new_users'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'settings' | 'new_users' | 'connections'>('users');
   
   // User Form State
   const [formUser, setFormUser] = useState<Partial<User>>({
     fullName: '',
+    displayName: '', 
     phone: '',
     email: '',
     startDate: new Date().toISOString().split('T')[0],
-    paymentStatus: PaymentStatus.PAID
+    paymentStatus: PaymentStatus.PAID,
+    userColor: ''
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
+
+  // User Filter State
+  const [filterText, setFilterText] = useState('');
+  const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'ALL'>('ALL');
+  const [sortByWorkouts, setSortByWorkouts] = useState(false);
 
   // Session Form State
   const [newSession, setNewSession] = useState<Partial<TrainingSession>>({
@@ -86,6 +151,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   });
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
+  // Template Management State
+  const [templateSourceDate, setTemplateSourceDate] = useState(formatDateForInput(new Date()));
+  const [templateTargetDate, setTemplateTargetDate] = useState(formatDateForInput(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)));
+
   // Settings State
   const [citySearch, setCitySearch] = useState('');
   const [isSearchingCity, setIsSearchingCity] = useState(false);
@@ -99,26 +168,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
 
+  // Supabase Connection State
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState('');
+  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
+
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isZoomSession, setIsZoomSession] = useState(false);
+
+  useEffect(() => {
+      setSupabaseUrlInput(localStorage.getItem('niv_app_supabase_url') || '');
+      setSupabaseKeyInput(localStorage.getItem('niv_app_supabase_key') || '');
+  }, []);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
 
-  // Sync zoom session toggle when editing
-  useEffect(() => {
-      if (newSession.zoomLink) {
-          setIsZoomSession(true);
-      } else {
-          setIsZoomSession(false);
-      }
-  }, [newSession.zoomLink]);
-
-  // Helper to generate upcoming days for the select dropdown
   const getUpcomingDaysOptions = () => {
     const options = [];
     const today = new Date();
-    // Generate options for the next 21 days (3 weeks)
     for (let i = 0; i < 21; i++) {
         const date = new Date(today);
         date.setDate(today.getDate() + i);
@@ -126,7 +193,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         const dayName = date.toLocaleDateString('he-IL', { weekday: 'long' });
         const formattedDate = date.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
         
-        // Add "Today" and "Tomorrow" labels
         let labelPrefix = '';
         if (i === 0) labelPrefix = 'היום - ';
         else if (i === 1) labelPrefix = 'מחר - ';
@@ -141,7 +207,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const dateOptions = getUpcomingDaysOptions();
 
-  // Helper to count workouts for a user in the current month
   const getMonthlyWorkoutsCount = (userPhone: string) => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -157,6 +222,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }).length;
   };
 
+  const getDayName = (dateStr: string) => {
+      return new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long' });
+  };
+
   const handleUserSubmit = () => {
       if (!formUser.fullName || !formUser.phone) {
           alert('נא למלא שם וטלפון');
@@ -164,7 +233,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
 
       if (editingUserId) {
-          // Update existing user
           onUpdateUser({
               ...formUser,
               id: editingUserId,
@@ -174,39 +242,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               email: formUser.email || '',
               startDate: formUser.startDate!,
               paymentStatus: formUser.paymentStatus!,
-              isNew: false // Explicitly remove new flag if editing
+              userColor: formUser.userColor,
+              isNew: false 
           } as User);
           alert('פרטי משתמש עודכנו');
           setEditingUserId(null);
       } else {
-          // Add new user
           onAddUser({
               id: Date.now().toString(),
               fullName: formUser.fullName!,
-              displayName: formUser.fullName!,
+              displayName: formUser.displayName || formUser.fullName!,
               phone: formUser.phone!,
               email: formUser.email || '',
               startDate: formUser.startDate!,
               paymentStatus: formUser.paymentStatus!,
+              userColor: formUser.userColor,
               isNew: false
           } as User);
           alert('משתמש נוסף בהצלחה');
       }
       
-      // Reset form
       setFormUser({ 
           fullName: '', 
+          displayName: '',
           phone: '', 
           email: '', 
           startDate: new Date().toISOString().split('T')[0], 
-          paymentStatus: PaymentStatus.PAID 
+          paymentStatus: PaymentStatus.PAID,
+          userColor: ''
       });
   };
 
   const handleEditUserClick = (user: User) => {
       setFormUser({ ...user });
       setEditingUserId(user.id);
-      setActiveTab('users'); // Switch to main user tab to edit
+      setActiveTab('users');
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   
@@ -230,7 +300,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         return;
     }
     setIsGeneratingAi(true);
-    // Cast to string as workoutTypes is now string[] but generateWorkoutDescription expects specific type or string
     const desc = await generateWorkoutDescription(newSession.type as any, newSession.location);
     setNewSession(prev => ({ ...prev, description: desc }));
     setIsGeneratingAi(false);
@@ -239,7 +308,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSessionSubmit = () => {
       if (newSession.type && newSession.date && newSession.location) {
           if (editingSessionId) {
-              // Update Session
                onUpdateSession({
                   ...newSession,
                   id: editingSessionId,
@@ -249,7 +317,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   location: newSession.location!,
                   maxCapacity: newSession.maxCapacity || 15,
                   description: newSession.description || '',
-                  // Preserve existing registered users if updating
                   registeredPhoneNumbers: sessions.find(s => s.id === editingSessionId)?.registeredPhoneNumbers || [],
                   color: newSession.color || SESSION_COLORS[0],
                   isTrial: newSession.isTrial || false,
@@ -258,7 +325,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               alert('האימון עודכן בהצלחה');
               setEditingSessionId(null);
           } else {
-              // Create Session
               onAddSession({
                   id: Date.now().toString(),
                   type: newSession.type!,
@@ -275,7 +341,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               alert('אימון נוסף בהצלחה');
           }
           
-          // Reset form (keep date partially useful or reset to today)
           setNewSession({ 
               type: workoutTypes[0] || '', 
               date: newSession.date, 
@@ -296,6 +361,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleEditSessionClick = (session: TrainingSession) => {
       setNewSession({ ...session });
       setEditingSessionId(session.id);
+      setIsZoomSession(!!session.zoomLink);
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -323,11 +389,82 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       const duplicatedSession = {
           ...session,
           id: Date.now().toString(),
-          date: nextWeekDate.toISOString().split('T')[0], // Set automatically to next week
-          registeredPhoneNumbers: [] // Start with empty list
+          date: nextWeekDate.toISOString().split('T')[0],
+          registeredPhoneNumbers: [] 
       };
       onAddSession(duplicatedSession);
       alert(`האימון שוכפל בהצלחה לתאריך ${duplicatedSession.date}`);
+  };
+
+  const handleSaveTemplate = () => {
+      const sourceDate = new Date(templateSourceDate);
+      const startOfWeek = getSunday(sourceDate);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+
+      const sessionsToSave = sessions.filter(s => {
+          const sDate = new Date(s.date);
+          return sDate >= startOfWeek && sDate <= endOfWeek;
+      });
+
+      if (sessionsToSave.length === 0) {
+          alert('לא נמצאו אימונים בשבוע שנבחר לשמירה.');
+          return;
+      }
+
+      const template = sessionsToSave.map(s => {
+          const sDate = new Date(s.date);
+          const dayIndex = sDate.getDay(); 
+          return {
+              ...s,
+              dayIndex 
+          };
+      });
+
+      localStorage.setItem('niv_app_week_template', JSON.stringify(template));
+      alert(`נשמרה תבנית עם ${template.length} אימונים מהשבוע של ה-${startOfWeek.toLocaleDateString('he-IL')}`);
+  };
+
+  const handleLoadTemplate = () => {
+      const templateStr = localStorage.getItem('niv_app_week_template');
+      if (!templateStr) {
+          alert('לא קיימת תבנית שמורה. אנא שמור שבוע לדוגמה קודם.');
+          return;
+      }
+
+      if (!confirm('האם אתה בטוח שברצונך לייצר אימונים לשבוע שנבחר על בסיס התבנית?')) return;
+
+      const template = JSON.parse(templateStr);
+      const targetDate = new Date(templateTargetDate);
+      const targetStartOfWeek = getSunday(targetDate);
+
+      let addedCount = 0;
+      template.forEach((t: any) => {
+          const newDate = new Date(targetStartOfWeek);
+          newDate.setDate(newDate.getDate() + t.dayIndex);
+          const dateStr = newDate.toISOString().split('T')[0];
+
+          const exists = sessions.some(s => s.date === dateStr && s.time === t.time && s.location === t.location);
+          if (!exists) {
+              const newSession: TrainingSession = {
+                  id: Date.now().toString() + Math.random().toString().slice(2, 5),
+                  type: t.type,
+                  date: dateStr,
+                  time: t.time,
+                  location: t.location,
+                  maxCapacity: t.maxCapacity,
+                  description: t.description,
+                  registeredPhoneNumbers: [],
+                  color: t.color,
+                  isTrial: t.isTrial,
+                  zoomLink: t.zoomLink
+              };
+              onAddSession(newSession);
+              addedCount++;
+          }
+      });
+
+      alert(`נוספו ${addedCount} אימונים לשבוע של ה-${targetStartOfWeek.toLocaleDateString('he-IL')}`);
   };
 
   const handleSearchCity = async () => {
@@ -353,8 +490,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleDeleteType = (e: React.MouseEvent, type: string) => {
-      e.stopPropagation(); // Stop click from bubbling up
-      e.preventDefault(); // Prevent form submission
+      e.stopPropagation(); 
+      e.preventDefault(); 
       if (confirm(`למחוק את סוג אימון "${type}"?`)) {
           onUpdateWorkoutTypes(workoutTypes.filter(t => t !== type));
       }
@@ -375,8 +512,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleDeleteLocation = (e: React.MouseEvent, id: string) => {
-       e.stopPropagation(); // Stop click from bubbling up
-       e.preventDefault(); // Prevent form submission
+       e.stopPropagation(); 
+       e.preventDefault();
        if (confirm(`למחוק את המיקום הזה?`)) {
           onUpdateLocations(locations.filter(l => l.id !== id));
       }
@@ -396,15 +533,102 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
 
-  // Sort existing users based on monthly workout count descending
-  // Prioritize PENDING status
-  const sortedExistingUsers = [...existingUsers].sort((a, b) => {
+  const handleExportData = () => {
+      const data = {
+          users,
+          sessions,
+          workoutTypes,
+          locations,
+          weatherLocation,
+          paymentLinks,
+          exportDate: new Date().toISOString()
+      };
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `niv_fitness_backup_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleImportData = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const content = e.target?.result as string;
+              const data = JSON.parse(content);
+              
+              if (confirm('זהירות: טעינת נתונים תדרוס את המידע הקיים במכשיר זה. האם להמשיך?')) {
+                  if (data.users) { 
+                      data.users.forEach((u: User) => onUpdateUser(u)); 
+                      localStorage.setItem('niv_app_users', JSON.stringify(data.users));
+                  }
+                  if (data.sessions) localStorage.setItem('niv_app_sessions', JSON.stringify(data.sessions));
+                  if (data.workoutTypes) localStorage.setItem('niv_app_types', JSON.stringify(data.workoutTypes));
+                  if (data.locations) localStorage.setItem('niv_app_locations', JSON.stringify(data.locations));
+                  if (data.paymentLinks) localStorage.setItem('niv_app_payments', JSON.stringify(data.paymentLinks));
+                  
+                  alert('הנתונים נטענו בהצלחה! הדף יתרענן כעת.');
+                  window.location.reload();
+              }
+          } catch (err) {
+              console.error(err);
+              alert('שגיאה בטעינת הקובץ. וודא שזהו קובץ גיבוי תקין.');
+          }
+      };
+      reader.readAsText(file);
+  };
+
+  const handleSaveSupabase = () => {
+      localStorage.setItem('niv_app_supabase_url', supabaseUrlInput.trim());
+      localStorage.setItem('niv_app_supabase_key', supabaseKeyInput.trim());
+      if (confirm('ההגדרות נשמרו. יש לרענן את האפליקציה כדי להתחבר למסד הנתונים. לרענן עכשיו?')) {
+          window.location.reload();
+      }
+  };
+
+  const handleCopySql = () => {
+      navigator.clipboard.writeText(SQL_SCRIPT).then(() => {
+          alert('הסקריפט הועתק ללוח! הדבק אותו ב-SQL Editor ב-Supabase.');
+      });
+  };
+
+  const filteredUsers = existingUsers.filter(user => {
+      const matchesText = 
+        user.fullName.includes(filterText) || 
+        user.phone.includes(filterText) ||
+        (user.email && user.email.includes(filterText));
+      
+      const matchesStatus = filterStatus === 'ALL' || user.paymentStatus === filterStatus;
+      
+      return matchesText && matchesStatus;
+  }).sort((a, b) => {
+      if (sortByWorkouts) {
+          return getMonthlyWorkoutsCount(b.phone) - getMonthlyWorkoutsCount(a.phone);
+      }
       if (a.paymentStatus === PaymentStatus.PENDING && b.paymentStatus !== PaymentStatus.PENDING) return -1;
       if (a.paymentStatus !== PaymentStatus.PENDING && b.paymentStatus === PaymentStatus.PENDING) return 1;
-      
-      const countA = getMonthlyWorkoutsCount(a.phone);
-      const countB = getMonthlyWorkoutsCount(b.phone);
-      return countB - countA;
+      return a.fullName.localeCompare(b.fullName);
+  });
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const sortedSessions = sessions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  const pastSessions = sortedSessions.filter(s => s.date < todayStr);
+  const futureSessions = sortedSessions.filter(s => s.date >= todayStr);
+  
+  const recentPastSessions = pastSessions.filter(s => {
+      const d = new Date(s.date);
+      const limit = new Date();
+      limit.setDate(limit.getDate() - 30);
+      return d > limit;
   });
 
   return (
@@ -452,6 +676,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         >
             הגדרות ומוצרים
         </button>
+        <button 
+            onClick={() => setActiveTab('connections')}
+            className={`px-4 py-2 rounded whitespace-nowrap ${activeTab === 'connections' ? 'bg-brand-primary text-brand-black' : 'bg-gray-700 text-gray-300'}`}
+        >
+            חיבורים (Supabase)
+        </button>
       </div>
 
       {activeTab === 'users' && (
@@ -467,6 +697,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         value={formUser.fullName} onChange={e => setFormUser({...formUser, fullName: e.target.value})}
                     />
                     <input 
+                        type="text" placeholder="כינוי (שם תצוגה)"
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        value={formUser.displayName || ''} 
+                        onChange={e => setFormUser({...formUser, displayName: e.target.value})}
+                    />
+                    <input 
                         type="tel" placeholder="טלפון"
                         className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
                         value={formUser.phone} onChange={e => setFormUser({...formUser, phone: e.target.value})}
@@ -476,13 +712,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
                         value={formUser.email} onChange={e => setFormUser({...formUser, email: e.target.value})}
                     />
+                    <div className="col-span-2">
+                        <label className="text-gray-400 text-sm block mb-1">צבע מתאמן</label>
+                         <div className="flex gap-2 flex-wrap">
+                            {USER_COLORS.map(color => (
+                                <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setFormUser({...formUser, userColor: color})}
+                                    className={`w-8 h-8 rounded-full border-2 transition-all ${formUser.userColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-50'}`}
+                                    style={{ backgroundColor: color }}
+                                />
+                            ))}
+                        </div>
+                    </div>
                 </div>
                 <div className="flex gap-2">
                     <Button onClick={handleUserSubmit} className="flex-1">
                         {editingUserId ? 'עדכן פרטים' : 'הוסף מתאמן'}
                     </Button>
                     {editingUserId && (
-                        <Button variant="secondary" onClick={() => { setEditingUserId(null); setFormUser({ fullName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID }); }}>
+                        <Button variant="secondary" onClick={() => { setEditingUserId(null); setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '' }); }}>
                             ביטול
                         </Button>
                     )}
@@ -490,70 +740,102 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
 
             <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
-                <div className="p-3 bg-gray-700 font-bold text-white flex justify-between">
-                    <span>רשימת מתאמנים ({sortedExistingUsers.length})</span>
-                </div>
-                <div className="max-h-96 overflow-y-auto custom-scrollbar">
-                    {sortedExistingUsers.map((user, idx) => (
-                        <div 
-                            key={user.id} 
-                            className={`p-3 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center group ${user.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/10' : 'hover:bg-gray-700/50'}`}
+                <div className="p-3 bg-gray-700 font-bold text-white flex flex-col gap-2">
+                    <div className="flex justify-between items-center">
+                        <span>רשימת מתאמנים ({filteredUsers.length})</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                        <input 
+                            type="text" 
+                            placeholder="חפש לפי שם או טלפון..." 
+                            className="p-2 rounded bg-gray-900 border border-gray-600 text-white text-sm"
+                            value={filterText}
+                            onChange={e => setFilterText(e.target.value)}
+                        />
+                        <select 
+                            className="p-2 rounded bg-gray-900 border border-gray-600 text-white text-sm"
+                            value={filterStatus}
+                            onChange={e => setFilterStatus(e.target.value as any)}
                         >
-                            <div className="flex items-center gap-3 mb-2 md:mb-0 w-full md:w-auto">
-                                <span className="text-gray-500 text-xs w-4">{idx + 1}</span>
-                                <div 
-                                    className="w-8 h-8 rounded-full flex-shrink-0"
-                                    style={{ backgroundColor: user.userColor || '#374151' }}
-                                />
-                                <div className="flex-1">
-                                    <div className="font-bold text-white flex items-center gap-2">
-                                        {user.fullName}
-                                        {user.paymentStatus === PaymentStatus.PENDING && (
-                                            <span className="text-[10px] bg-yellow-500 text-black px-1.5 rounded font-bold animate-pulse">ממתין לאישור תשלום</span>
-                                        )}
+                            <option value="ALL">כל הסטטוסים</option>
+                            <option value={PaymentStatus.PAID}>מנוי פעיל</option>
+                            <option value={PaymentStatus.PENDING}>ממתין לתשלום</option>
+                            <option value={PaymentStatus.OVERDUE}>חוב</option>
+                        </select>
+                        <button 
+                            onClick={() => setSortByWorkouts(!sortByWorkouts)}
+                            className={`p-2 rounded border text-sm transition-colors ${sortByWorkouts ? 'bg-brand-primary text-black border-brand-primary' : 'bg-gray-900 text-white border-gray-600'}`}
+                        >
+                            {sortByWorkouts ? 'ממוין לפי אימונים (גבוה לנמוך)' : 'מיין לפי אימונים'}
+                        </button>
+                    </div>
+                </div>
+                
+                <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                    {filteredUsers.length === 0 ? (
+                        <p className="p-4 text-center text-gray-500">לא נמצאו מתאמנים בסינון זה.</p>
+                    ) : (
+                        filteredUsers.map((user, idx) => (
+                            <div 
+                                key={user.id} 
+                                className={`p-3 border-b border-gray-700 flex flex-col md:flex-row justify-between items-start md:items-center group ${user.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/10' : 'hover:bg-gray-700/50'}`}
+                            >
+                                <div className="flex items-center gap-3 mb-2 md:mb-0 w-full md:w-auto">
+                                    <span className="text-gray-500 text-xs w-4">{idx + 1}</span>
+                                    <div 
+                                        className="w-8 h-8 rounded-full flex-shrink-0"
+                                        style={{ backgroundColor: user.userColor || '#374151' }}
+                                    />
+                                    <div className="flex-1">
+                                        <div className="font-bold text-white flex items-center gap-2">
+                                            {user.fullName}
+                                            {user.displayName && <span className="text-xs text-gray-400">({user.displayName})</span>}
+                                            {user.paymentStatus === PaymentStatus.PENDING && (
+                                                <span className="text-[10px] bg-yellow-500 text-black px-1.5 rounded font-bold animate-pulse">ממתין לאישור תשלום</span>
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-gray-400">{user.phone}</div>
                                     </div>
-                                    <div className="text-xs text-gray-400">{user.phone}</div>
                                 </div>
-                            </div>
-                            
-                            <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
-                                {/* Payment Status Dropdown */}
-                                <select 
-                                    className={`text-xs p-1.5 rounded border ${
-                                        user.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 border-green-500/30 text-green-400' :
-                                        user.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
-                                        'bg-red-500/20 border-red-500/30 text-red-400'
-                                    }`}
-                                    value={user.paymentStatus}
-                                    onChange={(e) => handlePaymentStatusChange(user, e.target.value as PaymentStatus)}
-                                >
-                                    <option value={PaymentStatus.PAID}>שולם / מנוי פעיל</option>
-                                    <option value={PaymentStatus.PENDING}>דיווח תשלום (לא מאושר)</option>
-                                    <option value={PaymentStatus.OVERDUE}>חוב / לא שולם</option>
-                                </select>
+                                
+                                <div className="flex items-center gap-2 w-full md:w-auto justify-between md:justify-end">
+                                    <select 
+                                        className={`text-xs p-1.5 rounded border ${
+                                            user.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 border-green-500/30 text-green-400' :
+                                            user.paymentStatus === PaymentStatus.PENDING ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400' :
+                                            'bg-red-500/20 border-red-500/30 text-red-400'
+                                        }`}
+                                        value={user.paymentStatus}
+                                        onChange={(e) => handlePaymentStatusChange(user, e.target.value as PaymentStatus)}
+                                    >
+                                        <option value={PaymentStatus.PAID}>שולם / מנוי פעיל</option>
+                                        <option value={PaymentStatus.PENDING}>דיווח תשלום (לא מאושר)</option>
+                                        <option value={PaymentStatus.OVERDUE}>חוב / לא שולם</option>
+                                    </select>
 
-                                <div className="text-center px-2">
-                                    <span className="block text-xs text-gray-400">אימונים החודש</span>
-                                    <span className="font-bold text-brand-primary">{getMonthlyWorkoutsCount(user.phone)}</span>
+                                    <div className="text-center px-2">
+                                        <span className="block text-xs text-gray-400">אימונים החודש</span>
+                                        <span className="font-bold text-brand-primary">{getMonthlyWorkoutsCount(user.phone)}</span>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleEditUserClick(user)}
+                                        className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded text-xs transition-colors"
+                                    >
+                                        ערוך
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeleteUserClick(user.id)}
+                                        className="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white p-2 rounded text-xs transition-colors"
+                                        title="מחק מתאמן"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
                                 </div>
-                                <button 
-                                    onClick={() => handleEditUserClick(user)}
-                                    className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded text-xs transition-colors"
-                                >
-                                    ערוך
-                                </button>
-                                <button 
-                                    onClick={() => handleDeleteUserClick(user.id)}
-                                    className="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white p-2 rounded text-xs transition-colors"
-                                    title="מחק מתאמן"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                </button>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
             </div>
         </div>
@@ -582,8 +864,97 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
            </div>
       )}
 
+      {activeTab === 'connections' && (
+          <div className="space-y-6">
+              <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
+                  <h3 className="text-xl text-brand-primary font-bold mb-4">חיבור למסד נתונים בענן (Supabase)</h3>
+                  
+                  <div className="bg-gray-900/50 p-4 rounded-lg mb-6 text-sm text-gray-300 space-y-2">
+                      <p>כדי שהנתונים יסונכרנו בין כל המכשירים (שלך ושל המתאמנים), יש לחבר את האפליקציה ל-Supabase.</p>
+                      <ol className="list-decimal list-inside space-y-1 mt-2 text-gray-400">
+                          <li>פתח חשבון בחינם באתר <a href="https://supabase.com" target="_blank" className="text-blue-400 underline">supabase.com</a></li>
+                          <li>צור פרויקט חדש (New Project)</li>
+                          <li>העתק את כתובת ה-URL והמפתח הסודי (Anon Key) מהגדרות הפרויקט (Project Settings - API)</li>
+                          <li>הדבק אותם בשדות למטה ושמור</li>
+                          <li>הרץ את הסקריפט (למטה) ב-SQL Editor ב-Supabase כדי ליצור את הטבלאות</li>
+                      </ol>
+                  </div>
+
+                  <div className="grid gap-4 mb-6">
+                      <div>
+                          <label className="block text-gray-400 text-sm font-bold mb-2">Supabase Project URL</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white font-mono text-sm"
+                            placeholder="https://your-project.supabase.co"
+                            value={supabaseUrlInput}
+                            onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-gray-400 text-sm font-bold mb-2">Supabase Anon Key</label>
+                          <input 
+                            type="text" 
+                            className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white font-mono text-sm"
+                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                            value={supabaseKeyInput}
+                            onChange={(e) => setSupabaseKeyInput(e.target.value)}
+                          />
+                      </div>
+                      <Button onClick={handleSaveSupabase}>שמור הגדרות ורענן אפליקציה</Button>
+                  </div>
+
+                  <div className="border-t border-gray-700 pt-6">
+                      <div className="flex justify-between items-center mb-2">
+                          <label className="text-gray-400 text-sm font-bold">SQL Script (להרצה ב-Supabase)</label>
+                          <Button size="sm" variant="secondary" onClick={handleCopySql}>העתק סקריפט 📋</Button>
+                      </div>
+                      <textarea 
+                          readOnly
+                          value={SQL_SCRIPT}
+                          className="w-full h-48 p-3 rounded bg-black border border-gray-700 text-green-400 font-mono text-xs overflow-y-auto"
+                          style={{ direction: 'ltr' }}
+                      />
+                  </div>
+              </div>
+          </div>
+      )}
+
       {activeTab === 'settings' && (
           <div className="space-y-8">
+              
+              {/* Sync / Export Import Section */}
+              <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 border-l-4 border-l-brand-primary shadow-lg">
+                  <h3 className="text-xl text-brand-primary mb-3 font-bold flex items-center gap-2">
+                       <span>🔄</span>
+                       סנכרון נתונים (גיבוי ושחזור)
+                  </h3>
+                  <p className="text-gray-300 text-sm mb-4">
+                      אם אינך מחובר ל-Supabase, הנתונים נשמרים מקומית.
+                      ניתן לגבות ולשחזר ידנית כאן.
+                  </p>
+                  <div className="flex gap-4">
+                      <Button onClick={handleExportData} className="flex-1">
+                          📥 שמור גיבוי לקובץ
+                      </Button>
+                      <div className="relative flex-1">
+                          <input 
+                              type="file" 
+                              id="import-file" 
+                              className="hidden" 
+                              accept=".json"
+                              onChange={handleImportData}
+                          />
+                          <label 
+                              htmlFor="import-file" 
+                              className="block w-full text-center bg-gray-700 text-white font-bold py-3 px-6 rounded-lg cursor-pointer hover:bg-gray-600 border border-gray-500 transition-colors"
+                          >
+                              📤 טען גיבוי מקובץ
+                          </label>
+                      </div>
+                  </div>
+              </div>
+
               {/* Payment Links Settings */}
               <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                   <h3 className="text-xl text-brand-primary mb-3">ניהול תשלומים (לינקים)</h3>
@@ -746,177 +1117,262 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {activeTab === 'sessions' && (
-        <div className="space-y-4">
-            <h3 className="text-xl text-brand-primary">{editingSessionId ? 'עריכת אימון' : 'יצירת אימון חדש'}</h3>
-            <div className="grid gap-3">
-                <div className="grid grid-cols-2 gap-2">
-                    <select 
-                        className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
-                        value={newSession.type} onChange={e => setNewSession({...newSession, type: e.target.value})}
-                    >
-                         <option value="" disabled>בחר סוג אימון</option>
-                        {workoutTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                    <input 
-                        type="number" placeholder="מקסימום מתאמנים" className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
-                        value={newSession.maxCapacity} onChange={e => setNewSession({...newSession, maxCapacity: parseInt(e.target.value)})}
-                    />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                     <select 
-                        className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
-                        value={newSession.date} 
-                        onChange={e => setNewSession({...newSession, date: e.target.value})}
-                     >
-                         {dateOptions.map(opt => (
-                             <option key={opt.value} value={opt.value}>{opt.label}</option>
-                         ))}
-                     </select>
-                    <input 
-                        type="time" className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
-                        value={newSession.time} onChange={e => setNewSession({...newSession, time: e.target.value})}
-                    />
-                </div>
-                
-                {/* Location Selection */}
-                <select 
-                    className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
-                    value={newSession.location} onChange={e => setNewSession({...newSession, location: e.target.value})}
-                >
-                    <option value="" disabled>בחר מיקום</option>
-                    {locations.map(loc => <option key={loc.id} value={loc.name}>{loc.name}</option>)}
-                </select>
-
-                {/* Session Color Picker */}
-                <div>
-                    <label className="text-gray-400 text-sm mb-2 block">צבע האימון (משפיע על עיצוב הכרטיס)</label>
-                    <div className="flex gap-2 flex-wrap mb-4">
-                        {SESSION_COLORS.map(color => (
-                            <button
-                                key={color}
-                                type="button"
-                                onClick={() => setNewSession({...newSession, color})}
-                                className={`w-8 h-8 rounded-full border-2 transition-all ${newSession.color === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70'}`}
-                                style={{ backgroundColor: color }}
+        <div className="space-y-8">
+            {/* Template Management */}
+            <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg">
+                <h3 className="text-xl font-bold text-white mb-4 border-b border-gray-700 pb-2">ניהול תבנית שבועית</h3>
+                <div className="grid md:grid-cols-2 gap-6">
+                    {/* Save Template Section */}
+                    <div className="bg-gray-900/50 p-4 rounded-lg">
+                        <label className="text-gray-400 text-sm block mb-2">1. בחר שבוע מקור לשמירה כתבנית</label>
+                        <div className="flex gap-2 items-center">
+                            <input 
+                                type="date" 
+                                className="p-2 rounded bg-gray-800 border border-gray-600 text-white text-sm"
+                                value={templateSourceDate}
+                                onChange={(e) => setTemplateSourceDate(e.target.value)}
                             />
-                        ))}
-                    </div>
-                    
-                    <div className="flex gap-4">
-                        {/* Trial Session Toggle */}
-                        <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
-                            <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
-                                <input 
-                                    type="checkbox" 
-                                    name="isTrial" 
-                                    id="isTrial" 
-                                    className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
-                                    style={{ right: newSession.isTrial ? '0' : 'auto', left: newSession.isTrial ? 'auto' : '0' }}
-                                    checked={newSession.isTrial || false}
-                                    onChange={e => setNewSession({...newSession, isTrial: e.target.checked})}
-                                />
-                                <label htmlFor="isTrial" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${newSession.isTrial ? 'bg-brand-primary' : 'bg-gray-600'}`}></label>
-                            </div>
-                            <span className="text-white font-bold select-none text-sm">אימון ניסיון</span>
-                        </label>
-
-                         {/* Zoom Toggle */}
-                         <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
-                            <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
-                                <input 
-                                    type="checkbox" 
-                                    name="isZoom" 
-                                    id="isZoom" 
-                                    className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
-                                    style={{ right: isZoomSession ? '0' : 'auto', left: isZoomSession ? 'auto' : '0' }}
-                                    checked={isZoomSession}
-                                    onChange={e => {
-                                        setIsZoomSession(e.target.checked);
-                                        if (!e.target.checked) setNewSession({ ...newSession, zoomLink: '' });
-                                    }}
-                                />
-                                <label htmlFor="isZoom" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${isZoomSession ? 'bg-blue-600' : 'bg-gray-600'}`}></label>
-                            </div>
-                            <span className="text-white font-bold select-none text-sm">אימון ZOOM</span>
-                        </label>
-                    </div>
-
-                    {/* Zoom Link Input (Conditional) */}
-                    {isZoomSession && (
-                        <div className="mt-2 animate-in fade-in slide-in-from-top-2">
-                             <input 
-                                type="url" 
-                                placeholder="הדבק כאן את הקישור ל-Zoom" 
-                                className="w-full p-3 rounded bg-blue-900/20 border border-blue-500/50 text-white placeholder-blue-300/50"
-                                value={newSession.zoomLink} 
-                                onChange={e => setNewSession({...newSession, zoomLink: e.target.value})}
-                            />
+                            <Button size="sm" onClick={handleSaveTemplate} variant="secondary">
+                                שמור תבנית
+                            </Button>
                         </div>
-                    )}
-                </div>
-                
-                <div className="flex gap-2 mt-2">
-                    <input 
-                        type="text" placeholder="תיאור (אופציונלי)" className="p-3 rounded bg-gray-800 border border-gray-700 text-white flex-grow"
-                        value={newSession.description} onChange={e => setNewSession({...newSession, description: e.target.value})}
-                    />
-                    <Button variant="secondary" onClick={handleGenerateDescription} isLoading={isGeneratingAi} type="button">
-                        ✨ נסח בעזרת AI
-                    </Button>
-                </div>
-                
-                <div className="flex gap-2">
-                    <Button onClick={handleSessionSubmit} className="flex-1">{editingSessionId ? 'עדכן אימון' : 'צור אימון'}</Button>
-                    {editingSessionId && (
-                        <Button variant="secondary" onClick={handleCancelEditSession} className="flex-1">ביטול עריכה</Button>
-                    )}
+                        <p className="text-xs text-gray-500 mt-2">
+                            זה ישמור את מבנה האימונים (ימים, שעות, סוגים) של השבוע שנבחר כתבנית קבועה.
+                        </p>
+                    </div>
+
+                    {/* Load Template Section */}
+                    <div className="bg-gray-900/50 p-4 rounded-lg">
+                        <label className="text-gray-400 text-sm block mb-2">2. החל תבנית על שבוע יעד</label>
+                        <div className="flex gap-2 items-center">
+                            <input 
+                                type="date" 
+                                className="p-2 rounded bg-gray-800 border border-gray-600 text-white text-sm"
+                                value={templateTargetDate}
+                                onChange={(e) => setTemplateTargetDate(e.target.value)}
+                            />
+                            <Button size="sm" onClick={handleLoadTemplate}>
+                                טען תבנית
+                            </Button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                            זה ייצר אימונים חדשים בשבוע שנבחר על בסיס התבנית השמורה האחרונה.
+                        </p>
+                    </div>
                 </div>
             </div>
 
-            <h3 className="text-xl text-brand-primary mt-8">אימונים קרובים</h3>
-            <div className="bg-gray-800 rounded p-2 max-h-96 overflow-y-auto no-scrollbar space-y-2">
-                {sessions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(s => (
-                    <div 
-                        key={s.id} 
-                        className="flex justify-between items-center border border-gray-700 p-2 rounded relative overflow-hidden" 
+            {/* Edit / Create Session Form */}
+            <div className="bg-gray-800 p-5 rounded-xl border border-gray-700">
+                <h3 className="text-xl text-brand-primary mb-4">{editingSessionId ? 'עריכת אימון' : 'יצירת אימון חדש'}</h3>
+                <div className="grid gap-3">
+                    <div className="grid grid-cols-2 gap-2">
+                        <select 
+                            className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
+                            value={newSession.type} onChange={e => setNewSession({...newSession, type: e.target.value})}
+                        >
+                             <option value="" disabled>בחר סוג אימון</option>
+                            {workoutTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <input 
+                            type="number" placeholder="מקסימום מתאמנים" className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
+                            value={newSession.maxCapacity} onChange={e => setNewSession({...newSession, maxCapacity: parseInt(e.target.value)})}
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                         <select 
+                            className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
+                            value={newSession.date} 
+                            onChange={e => setNewSession({...newSession, date: e.target.value})}
+                         >
+                             {dateOptions.map(opt => (
+                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
+                             ))}
+                         </select>
+                        <input 
+                            type="time" className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
+                            value={newSession.time} onChange={e => setNewSession({...newSession, time: e.target.value})}
+                        />
+                    </div>
+                    
+                    {/* Location Selection */}
+                    <select 
+                        className="p-3 rounded bg-gray-800 border border-gray-700 text-white"
+                        value={newSession.location} onChange={e => setNewSession({...newSession, location: e.target.value})}
                     >
-                        {/* Background color tint for session color visibility */}
-                        <div 
-                            className="absolute inset-0 opacity-10 pointer-events-none" 
-                            style={{ backgroundColor: s.color || 'transparent' }}
-                        ></div>
-                        <div 
-                            className="absolute right-0 top-0 bottom-0 w-1.5" 
-                            style={{ backgroundColor: s.color || 'transparent' }}
-                        ></div>
+                        <option value="" disabled>בחר מיקום</option>
+                        {locations.map(loc => <option key={loc.id} value={loc.name}>{loc.name}</option>)}
+                    </select>
 
-                        <div className="pl-2 pr-3 relative z-10">
-                            <div className="font-bold text-white flex items-center gap-2">
-                                {s.type}
-                                {s.isTrial && <span className="text-[10px] bg-purple-600 text-white px-1.5 rounded-full">ניסיון</span>}
-                                {s.zoomLink && <span className="text-[10px] bg-blue-600 text-white px-1.5 rounded-full">ZOOM</span>}
-                            </div>
-                            <div className="text-xs text-gray-400">{s.date} | {s.time}</div>
-                            <div className="text-xs text-gray-500">{s.location}</div>
+                    {/* Session Color Picker */}
+                    <div>
+                        <label className="text-gray-400 text-sm mb-2 block">צבע האימון (משפיע על עיצוב הכרטיס)</label>
+                        <div className="flex gap-2 flex-wrap mb-4">
+                            {SESSION_COLORS.map(color => (
+                                <button
+                                    key={color}
+                                    type="button"
+                                    onClick={() => setNewSession({...newSession, color})}
+                                    className={`w-8 h-8 rounded-full border-2 transition-all ${newSession.color === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70'}`}
+                                    style={{ backgroundColor: color }}
+                                />
+                            ))}
                         </div>
-                        <div className="flex gap-2 relative z-10">
-                             <button 
-                                onClick={() => handleEditSessionClick(s)}
-                                className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 transition-colors"
-                            >
-                                ערוך
-                            </button>
-                            <button 
-                                onClick={() => handleDuplicateSession(s)}
-                                className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-500 transition-colors"
-                                title="שכפל לשבוע הבא"
-                            >
-                                שכפל
-                            </button>
-                            <Button variant="danger" size="sm" onClick={() => onDeleteSession(s.id)}>מחק</Button>
+                        
+                        <div className="flex gap-4">
+                            {/* Trial Session Toggle */}
+                            <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
+                                <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
+                                    <input 
+                                        type="checkbox" 
+                                        name="isTrial" 
+                                        id="isTrial" 
+                                        className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
+                                        style={{ right: newSession.isTrial ? '0' : 'auto', left: newSession.isTrial ? 'auto' : '0' }}
+                                        checked={newSession.isTrial || false}
+                                        onChange={e => setNewSession({...newSession, isTrial: e.target.checked})}
+                                    />
+                                    <label htmlFor="isTrial" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${newSession.isTrial ? 'bg-brand-primary' : 'bg-gray-600'}`}></label>
+                                </div>
+                                <span className="text-white font-bold select-none text-sm">אימון ניסיון</span>
+                            </label>
+
+                             {/* Zoom Toggle */}
+                             <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
+                                <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
+                                    <input 
+                                        type="checkbox" 
+                                        name="isZoom" 
+                                        id="isZoom" 
+                                        className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
+                                        style={{ right: isZoomSession ? '0' : 'auto', left: isZoomSession ? 'auto' : '0' }}
+                                        checked={isZoomSession}
+                                        onChange={e => {
+                                            setIsZoomSession(e.target.checked);
+                                            if (!e.target.checked) setNewSession({ ...newSession, zoomLink: '' });
+                                        }}
+                                    />
+                                    <label htmlFor="isZoom" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${isZoomSession ? 'bg-blue-600' : 'bg-gray-600'}`}></label>
+                                </div>
+                                <span className="text-white font-bold select-none text-sm">אימון ZOOM</span>
+                            </label>
+                        </div>
+
+                        {/* Zoom Link Input (Conditional) */}
+                        {isZoomSession && (
+                            <div className="mt-2 animate-in fade-in slide-in-from-top-2">
+                                 <input 
+                                    type="url" 
+                                    placeholder="הדבק כאן את הקישור ל-Zoom" 
+                                    className="w-full p-3 rounded bg-blue-900/20 border border-blue-500/50 text-white placeholder-blue-300/50"
+                                    value={newSession.zoomLink} 
+                                    onChange={e => setNewSession({...newSession, zoomLink: e.target.value})}
+                                />
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="flex gap-2 mt-2">
+                        <input 
+                            type="text" placeholder="תיאור (אופציונלי)" className="p-3 rounded bg-gray-800 border border-gray-700 text-white flex-grow"
+                            value={newSession.description} onChange={e => setNewSession({...newSession, description: e.target.value})}
+                        />
+                        <Button variant="secondary" onClick={handleGenerateDescription} isLoading={isGeneratingAi} type="button">
+                            ✨ נסח בעזרת AI
+                        </Button>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                        <Button onClick={handleSessionSubmit} className="flex-1">{editingSessionId ? 'עדכן אימון' : 'צור אימון'}</Button>
+                        {editingSessionId && (
+                            <Button variant="secondary" onClick={handleCancelEditSession} className="flex-1">ביטול עריכה</Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            <h3 className="text-xl text-brand-primary">רשימת אימונים</h3>
+            <div className="bg-gray-800 rounded p-2 max-h-[600px] overflow-y-auto no-scrollbar space-y-4">
+                
+                {/* Past Sessions Group */}
+                {recentPastSessions.length > 0 && (
+                    <div className="opacity-70 border-b border-gray-700 pb-4">
+                        <h4 className="text-gray-500 text-sm font-bold mb-2 sticky top-0 bg-gray-800 z-10 p-1">אימונים שהיו (30 ימים אחרונים)</h4>
+                        <div className="space-y-2">
+                            {recentPastSessions.reverse().map(s => ( // Show newest past first
+                                <div key={s.id} className="flex justify-between items-center border border-gray-700 bg-gray-800/50 p-2 rounded relative grayscale-[50%] hover:grayscale-0 transition-all">
+                                    <div className="pl-2 pr-3 relative z-10">
+                                        <div className="font-bold text-gray-300 flex items-center gap-2">
+                                            {s.type}
+                                            <span className="text-xs bg-gray-700 px-1 rounded">הסתיים</span>
+                                        </div>
+                                        <div className="text-xs text-gray-400 font-mono">
+                                            {getDayName(s.date)} | {s.date} | {s.time}
+                                        </div>
+                                        <div className="text-xs text-gray-500">{s.location}</div>
+                                    </div>
+                                    <div className="flex gap-2 relative z-10">
+                                        <button 
+                                            onClick={() => handleEditSessionClick(s)}
+                                            className="bg-gray-700 text-gray-300 px-3 py-1 rounded text-sm hover:bg-gray-600 transition-colors"
+                                        >
+                                            ערוך
+                                        </button>
+                                        <Button variant="danger" size="sm" onClick={() => onDeleteSession(s.id)}>מחק</Button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                ))}
+                )}
+
+                {/* Future Sessions Group */}
+                <div>
+                     <h4 className="text-brand-primary text-sm font-bold mb-2 sticky top-0 bg-gray-800 z-10 p-1">אימונים עתידיים</h4>
+                     <div className="space-y-2">
+                        {futureSessions.map(s => (
+                            <div key={s.id} className="flex justify-between items-center border border-gray-700 p-2 rounded relative overflow-hidden hover:border-brand-primary/50 transition-colors">
+                                <div 
+                                    className="absolute inset-0 opacity-10 pointer-events-none" 
+                                    style={{ backgroundColor: s.color || 'transparent' }}
+                                ></div>
+                                <div 
+                                    className="absolute right-0 top-0 bottom-0 w-1.5" 
+                                    style={{ backgroundColor: s.color || 'transparent' }}
+                                ></div>
+
+                                <div className="pl-2 pr-3 relative z-10">
+                                    <div className="font-bold text-white flex items-center gap-2">
+                                        {s.type}
+                                        {s.isTrial && <span className="text-[10px] bg-purple-600 text-white px-1.5 rounded-full">ניסיון</span>}
+                                        {s.zoomLink && <span className="text-[10px] bg-blue-600 text-white px-1.5 rounded-full">ZOOM</span>}
+                                    </div>
+                                    <div className="text-xs text-brand-primary font-bold font-mono mt-0.5">
+                                        {getDayName(s.date)} | {s.date} | {s.time}
+                                    </div>
+                                    <div className="text-xs text-gray-500">{s.location}</div>
+                                </div>
+                                <div className="flex gap-2 relative z-10">
+                                    <button 
+                                        onClick={() => handleEditSessionClick(s)}
+                                        className="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-500 transition-colors"
+                                    >
+                                        ערוך
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDuplicateSession(s)}
+                                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-500 transition-colors"
+                                        title="שכפל לשבוע הבא"
+                                    >
+                                        שכפל
+                                    </button>
+                                    <Button variant="danger" size="sm" onClick={() => onDeleteSession(s.id)}>מחק</Button>
+                                </div>
+                            </div>
+                        ))}
+                         {futureSessions.length === 0 && <p className="text-gray-500 text-sm italic">אין אימונים עתידיים</p>}
+                    </div>
+                </div>
             </div>
         </div>
       )}
