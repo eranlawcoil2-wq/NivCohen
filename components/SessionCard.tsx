@@ -55,23 +55,23 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           boxShadow: isRegistered ? `0 4px 14px 0 ${cardColor}20` : undefined
       }}
     >
-      <div className="absolute top-0 left-0 flex flex-col gap-1 p-1 z-10">
+      <div className="absolute top-0 left-0 flex flex-row gap-1 p-1 z-10 flex-wrap max-w-full">
         {session.isTrial && (
            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse">
                אימון ניסיון
            </div>
         )}
-      </div>
-      
-      {session.zoomLink && (
-           <div className="absolute top-2 right-2 text-blue-400 bg-blue-400/10 p-1 rounded-full border border-blue-400/20">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+        {session.zoomLink && (
+           <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 flex items-center gap-1">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
               </svg>
+              ZOOM
            </div>
-      )}
-
-      <div className="flex justify-between items-start mt-2">
+        )}
+      </div>
+      
+      <div className="flex justify-between items-start mt-4">
         <span className="text-xl font-black text-white font-mono tracking-tight">{session.time}</span>
         {isRegistered && (
             <span 
@@ -86,11 +86,14 @@ export const SessionCard: React.FC<SessionCardProps> = ({
               {session.type}
           </h3>
           
-          <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border ${locationBadgeClass} w-fit max-w-full`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-            </svg>
-            <span className="truncate">{session.location}</span>
+          <div className="flex flex-col gap-1 items-start">
+             {/* Physical Location Badge */}
+              <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border ${locationBadgeClass} w-fit max-w-full`}>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                </svg>
+                <span className="truncate">{session.location}</span>
+              </div>
           </div>
       </div>
 
