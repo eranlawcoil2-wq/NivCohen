@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Niv Cohen">
+    <title>ניב כהן - אימוני כושר</title>
+    
+    <!-- Dynamic Icon: Green Background with NIV text -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23A3E635%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23A3E635%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --brand-primary: #A3E635; /* Default Lime 400 */
+      }
+      body {
+        background-color: #121212;
+        color: #E5E7EB;
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* Hide scrollbar for clean horizontal scroll */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Heebo', 'sans-serif'],
+            },
+            colors: {
+              brand: {
+                black: '#121212',
+                dark: '#1E1E1E',
+                primary: 'var(--brand-primary)', 
+                secondary: '#3B82F6', // Blue 500
+                danger: '#EF4444',
+                text: '#E5E7EB'
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

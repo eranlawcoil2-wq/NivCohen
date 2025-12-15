@@ -1,0 +1,5 @@
+{
+  "name": "Niv Cohen Fitness",
+  "description": "A fitness scheduling app for Niv Cohen's trainees allowing registration via verified phone numbers.",
+  "requestFramePermissions": []
+}
