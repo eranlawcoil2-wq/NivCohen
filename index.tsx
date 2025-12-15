@@ -11,12 +11,8 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-// Simple Error Boundary to catch crashes
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+  public state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -30,7 +26,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     if (this.state.hasError) {
       return (
         <div style={{ padding: 20, color: '#fff', textAlign: 'center', direction: 'rtl', fontFamily: 'sans-serif' }}>
-          <h1 style={{color: '#A3E635'}}>משהו השתבש...</h1>
+          <h1 style={{color: '#A3E635', fontSize: '24px', marginBottom: '10px'}}>משהו השתבש...</h1>
           <p>אנא רענן את העמוד או נסה מאוחר יותר.</p>
           <button 
             onClick={() => { localStorage.clear(); window.location.reload(); }}
@@ -38,7 +34,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
           >
             נקה נתונים ורענן
           </button>
-          <pre style={{ fontSize: 10, opacity: 0.5, textAlign: 'left', marginTop: 20, overflow: 'auto' }}>{this.state.error?.toString()}</pre>
+          <pre style={{ fontSize: 10, opacity: 0.5, textAlign: 'left', marginTop: 20, overflow: 'auto', direction: 'ltr' }}>{this.state.error?.toString()}</pre>
         </div>
       );
     }
