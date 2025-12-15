@@ -1,4 +1,7 @@
+
 import { User, TrainingSession, PaymentStatus, WorkoutType } from './types';
+
+export const COACH_PHONE_NUMBER = '972500000000'; // החלף במספר שלך
 
 export const INITIAL_USERS: User[] = [
   {

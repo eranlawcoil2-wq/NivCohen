@@ -1,20 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { WorkoutType } from '../types';
 
-// Helper to safely get AI instance
-const getAiClient = () => {
-    // Check if API key exists to prevent crash
-    if (!process.env.API_KEY) {
-        console.warn("API Key is missing for Gemini");
-        return null;
-    }
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
-};
-
 export const generateWorkoutDescription = async (type: WorkoutType, location: string): Promise<string> => {
   try {
-    const ai = getAiClient();
-    if (!ai) return "אימון חזק ואיכותי שיקח אתכם לקצה!";
+    // API key must be obtained exclusively from process.env.API_KEY
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `
       כתוב תיאור קצר, אנרגטי ומזמין בעברית לאימון כושר מסוג "${type}" שיתקיים ב"${location}".
@@ -26,7 +16,7 @@ export const generateWorkoutDescription = async (type: WorkoutType, location: st
       contents: prompt,
     });
 
-    return response.text.trim();
+    return (response.text || "").trim();
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "אימון חזק ואיכותי שיקח אתכם לקצה!";
@@ -35,8 +25,7 @@ export const generateWorkoutDescription = async (type: WorkoutType, location: st
 
 export const getMotivationQuote = async (): Promise<string> => {
    try {
-    const ai = getAiClient();
-    if (!ai) return "הכאב הוא זמני, הגאווה היא נצחית.";
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `תן לי משפט מוטיבציה אחד בלבד, קצר וחזק בעברית לספורטאים. לא יותר מ-10 מילים. ללא מרכאות.`;
     
@@ -45,7 +34,7 @@ export const getMotivationQuote = async (): Promise<string> => {
       contents: prompt,
     });
 
-    return response.text.trim();
+    return (response.text || "").trim();
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "הכאב הוא זמני, הגאווה היא נצחית.";

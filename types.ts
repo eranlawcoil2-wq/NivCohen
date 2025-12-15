@@ -14,6 +14,12 @@ export enum WorkoutType {
   HYBRID = 'היברידי'
 }
 
+export interface LocationDef {
+  id: string;
+  name: string; // The display name (e.g., "Park Hayarkon")
+  address: string; // The physical address for Waze
+}
+
 export interface User {
   id: string;
   fullName: string;
@@ -30,12 +36,13 @@ export interface TrainingSession {
   type: string; 
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
-  location: string;
+  location: string; // Stores the Location Name
   maxCapacity: number;
   description?: string;
   registeredPhoneNumbers: string[];
   color?: string; // Hex color code for the session theme
   isTrial?: boolean; // Is this a trial session for new users?
+  zoomLink?: string; // Optional link for Zoom sessions
 }
 
 export interface WeatherLocation {

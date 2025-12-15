@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink } from '../types';
+import React, { useState, useEffect } from 'react';
+import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { getCityCoordinates } from '../services/weatherService';
@@ -9,7 +9,7 @@ interface AdminPanelProps {
   sessions: TrainingSession[];
   primaryColor: string;
   workoutTypes: string[];
-  locations: string[];
+  locations: LocationDef[];
   weatherLocation: WeatherLocation;
   paymentLinks: PaymentLink[];
   onAddUser: (user: User) => void;
@@ -20,7 +20,7 @@ interface AdminPanelProps {
   onDeleteSession: (id: string) => void;
   onColorChange: (color: string) => void;
   onUpdateWorkoutTypes: (types: string[]) => void;
-  onUpdateLocations: (locations: string[]) => void;
+  onUpdateLocations: (locations: LocationDef[]) => void;
   onUpdateWeatherLocation: (location: WeatherLocation) => void;
   onAddPaymentLink: (link: PaymentLink) => void;
   onDeletePaymentLink: (id: string) => void;
@@ -77,11 +77,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     type: workoutTypes[0] || '',
     date: new Date().toISOString().split('T')[0],
     time: '18:00',
-    location: locations[0] || '',
+    location: locations.length > 0 ? locations[0].name : '',
     maxCapacity: 15,
     description: '',
     color: SESSION_COLORS[0],
-    isTrial: false
+    isTrial: false,
+    zoomLink: ''
   });
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
@@ -89,16 +90,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [citySearch, setCitySearch] = useState('');
   const [isSearchingCity, setIsSearchingCity] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
+  
+  // Location Management State
   const [newLocationName, setNewLocationName] = useState('');
+  const [newLocationAddress, setNewLocationAddress] = useState('');
   
   // Payment Link State
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [isZoomSession, setIsZoomSession] = useState(false);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
+
+  // Sync zoom session toggle when editing
+  useEffect(() => {
+      if (newSession.zoomLink) {
+          setIsZoomSession(true);
+      } else {
+          setIsZoomSession(false);
+      }
+  }, [newSession.zoomLink]);
 
   // Helper to generate upcoming days for the select dropdown
   const getUpcomingDaysOptions = () => {
@@ -234,7 +248,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   // Preserve existing registered users if updating
                   registeredPhoneNumbers: sessions.find(s => s.id === editingSessionId)?.registeredPhoneNumbers || [],
                   color: newSession.color || SESSION_COLORS[0],
-                  isTrial: newSession.isTrial || false
+                  isTrial: newSession.isTrial || false,
+                  zoomLink: isZoomSession ? newSession.zoomLink : undefined
               } as TrainingSession);
               alert('האימון עודכן בהצלחה');
               setEditingSessionId(null);
@@ -250,7 +265,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   description: newSession.description || '',
                   registeredPhoneNumbers: [],
                   color: newSession.color || SESSION_COLORS[0],
-                  isTrial: newSession.isTrial || false
+                  isTrial: newSession.isTrial || false,
+                  zoomLink: isZoomSession ? newSession.zoomLink : undefined
               } as TrainingSession);
               alert('אימון נוסף בהצלחה');
           }
@@ -260,12 +276,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               type: workoutTypes[0] || '', 
               date: newSession.date, 
               time: '18:00', 
-              location: locations[0] || '', 
+              location: locations.length > 0 ? locations[0].name : '', 
               maxCapacity: 15, 
               description: '',
               color: SESSION_COLORS[0],
-              isTrial: false
+              isTrial: false,
+              zoomLink: ''
           });
+          setIsZoomSession(false);
       } else {
           alert('נא למלא את כל שדות החובה');
       }
@@ -283,12 +301,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           type: workoutTypes[0] || '', 
           date: new Date().toISOString().split('T')[0],
           time: '18:00', 
-          location: locations[0] || '', 
+          location: locations.length > 0 ? locations[0].name : '', 
           maxCapacity: 15, 
           description: '',
           color: SESSION_COLORS[0],
-          isTrial: false
+          isTrial: false,
+          zoomLink: ''
       });
+      setIsZoomSession(false);
   };
 
   const handleDuplicateSession = (session: TrainingSession) => {
@@ -337,17 +357,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleAddLocation = () => {
-      if (newLocationName.trim() && !locations.includes(newLocationName.trim())) {
-          onUpdateLocations([...locations, newLocationName.trim()]);
+      if (newLocationName.trim() && newLocationAddress.trim()) {
+          onUpdateLocations([...locations, { 
+              id: Date.now().toString(), 
+              name: newLocationName.trim(), 
+              address: newLocationAddress.trim() 
+          }]);
           setNewLocationName('');
+          setNewLocationAddress('');
+      } else {
+          alert('יש להזין שם מיקום וכתובת מלאה');
       }
   };
 
-  const handleDeleteLocation = (e: React.MouseEvent, loc: string) => {
+  const handleDeleteLocation = (e: React.MouseEvent, id: string) => {
        e.stopPropagation(); // Stop click from bubbling up
        e.preventDefault(); // Prevent form submission
-       if (confirm(`למחוק את המיקום "${loc}"?`)) {
-          onUpdateLocations(locations.filter(l => l !== loc));
+       if (confirm(`למחוק את המיקום הזה?`)) {
+          onUpdateLocations(locations.filter(l => l.id !== id));
       }
   };
 
@@ -504,8 +531,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
       
-      {/* (Other tabs 'new_users', 'settings', 'sessions' are rendered below...) */}
-      
       {activeTab === 'new_users' && (
            <div className="space-y-4">
                <h3 className="text-xl text-white">בקשות הצטרפות חדשות</h3>
@@ -650,24 +675,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                {/* Manage Locations */}
               <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                  <h3 className="text-xl text-brand-primary mb-3">ניהול מיקומים</h3>
-                  <div className="flex gap-2 mb-4">
+                  <h3 className="text-xl text-brand-primary mb-3">ניהול מיקומים וכתובות</h3>
+                  <div className="flex flex-col gap-2 mb-4">
                       <input 
                         type="text" 
-                        placeholder="מיקום חדש"
-                        className="flex-1 p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        placeholder="שם המיקום (מה שרואה המתאמן)"
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
                         value={newLocationName}
                         onChange={(e) => setNewLocationName(e.target.value)}
                       />
-                      <Button onClick={handleAddLocation} size="sm">הוסף</Button>
+                      <input 
+                        type="text" 
+                        placeholder="כתובת פיזית (עבור Waze)"
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        value={newLocationAddress}
+                        onChange={(e) => setNewLocationAddress(e.target.value)}
+                      />
+                      <Button onClick={handleAddLocation} size="sm">הוסף מיקום</Button>
                   </div>
                   <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar">
                       {locations.map(loc => (
-                          <div key={loc} className="flex items-center justify-between bg-gray-700 px-4 py-3 rounded text-white text-sm">
-                              <span>{loc}</span>
+                          <div key={loc.id} className="flex items-center justify-between bg-gray-700 px-4 py-3 rounded text-white text-sm">
+                              <div>
+                                  <span className="font-bold block">{loc.name}</span>
+                                  <span className="text-xs text-gray-400 block">{loc.address}</span>
+                              </div>
                               <button 
                                 type="button" 
-                                onClick={(e) => handleDeleteLocation(e, loc)} 
+                                onClick={(e) => handleDeleteLocation(e, loc.id)} 
                                 className="bg-red-500/20 text-red-300 p-1.5 rounded hover:bg-red-500 hover:text-white transition-colors"
                                 title="מחק מיקום"
                               >
@@ -721,7 +756,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     value={newSession.location} onChange={e => setNewSession({...newSession, location: e.target.value})}
                 >
                     <option value="" disabled>בחר מיקום</option>
-                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                    {locations.map(loc => <option key={loc.id} value={loc.name}>{loc.name}</option>)}
                 </select>
 
                 {/* Session Color Picker */}
@@ -739,22 +774,57 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         ))}
                     </div>
                     
-                    {/* Trial Session Toggle */}
-                    <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors">
-                        <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
-                            <input 
-                                type="checkbox" 
-                                name="isTrial" 
-                                id="isTrial" 
-                                className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
-                                style={{ right: newSession.isTrial ? '0' : 'auto', left: newSession.isTrial ? 'auto' : '0' }}
-                                checked={newSession.isTrial || false}
-                                onChange={e => setNewSession({...newSession, isTrial: e.target.checked})}
+                    <div className="flex gap-4">
+                        {/* Trial Session Toggle */}
+                        <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
+                            <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
+                                <input 
+                                    type="checkbox" 
+                                    name="isTrial" 
+                                    id="isTrial" 
+                                    className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
+                                    style={{ right: newSession.isTrial ? '0' : 'auto', left: newSession.isTrial ? 'auto' : '0' }}
+                                    checked={newSession.isTrial || false}
+                                    onChange={e => setNewSession({...newSession, isTrial: e.target.checked})}
+                                />
+                                <label htmlFor="isTrial" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${newSession.isTrial ? 'bg-brand-primary' : 'bg-gray-600'}`}></label>
+                            </div>
+                            <span className="text-white font-bold select-none text-sm">אימון ניסיון</span>
+                        </label>
+
+                         {/* Zoom Toggle */}
+                         <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
+                            <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
+                                <input 
+                                    type="checkbox" 
+                                    name="isZoom" 
+                                    id="isZoom" 
+                                    className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
+                                    style={{ right: isZoomSession ? '0' : 'auto', left: isZoomSession ? 'auto' : '0' }}
+                                    checked={isZoomSession}
+                                    onChange={e => {
+                                        setIsZoomSession(e.target.checked);
+                                        if (!e.target.checked) setNewSession({ ...newSession, zoomLink: '' });
+                                    }}
+                                />
+                                <label htmlFor="isZoom" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${isZoomSession ? 'bg-blue-600' : 'bg-gray-600'}`}></label>
+                            </div>
+                            <span className="text-white font-bold select-none text-sm">אימון ZOOM</span>
+                        </label>
+                    </div>
+
+                    {/* Zoom Link Input (Conditional) */}
+                    {isZoomSession && (
+                        <div className="mt-2 animate-in fade-in slide-in-from-top-2">
+                             <input 
+                                type="url" 
+                                placeholder="הדבק כאן את הקישור ל-Zoom" 
+                                className="w-full p-3 rounded bg-blue-900/20 border border-blue-500/50 text-white placeholder-blue-300/50"
+                                value={newSession.zoomLink} 
+                                onChange={e => setNewSession({...newSession, zoomLink: e.target.value})}
                             />
-                            <label htmlFor="isTrial" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${newSession.isTrial ? 'bg-brand-primary' : 'bg-gray-600'}`}></label>
                         </div>
-                        <span className="text-white font-bold select-none">הגדר כאימון ניסיון</span>
-                    </label>
+                    )}
                 </div>
                 
                 <div className="flex gap-2 mt-2">
@@ -796,6 +866,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <div className="font-bold text-white flex items-center gap-2">
                                 {s.type}
                                 {s.isTrial && <span className="text-[10px] bg-purple-600 text-white px-1.5 rounded-full">ניסיון</span>}
+                                {s.zoomLink && <span className="text-[10px] bg-blue-600 text-white px-1.5 rounded-full">ZOOM</span>}
                             </div>
                             <div className="text-xs text-gray-400">{s.date} | {s.time}</div>
                             <div className="text-xs text-gray-500">{s.location}</div>

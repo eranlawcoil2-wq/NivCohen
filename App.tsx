@@ -1,23 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink } from './types';
-import { INITIAL_USERS, INITIAL_SESSIONS } from './constants';
+import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef } from './types';
+import { INITIAL_USERS, INITIAL_SESSIONS, COACH_PHONE_NUMBER } from './constants';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
 import { getWeatherForDates, getWeatherIcon, getWeatherDescription } from './services/weatherService';
 
-// Safe LocalStorage Parser
-const safeJsonParse = <T,>(key: string, fallback: T): T => {
+// Safe LocalStorage Parser (Standard Function Syntax)
+function safeJsonParse<T>(key: string, fallback: T): T {
     try {
         const item = localStorage.getItem(key);
-        return item ? JSON.parse(item) : fallback;
+        if (!item) return fallback;
+        const parsed = JSON.parse(item);
+        // Basic check to ensure we don't get 'null' or mismatched types if possible
+        if (parsed === null || parsed === undefined) return fallback;
+        return parsed;
     } catch (error) {
         console.error(`Error parsing localStorage key "${key}":`, error);
-        // If error, return fallback to prevent crash
         return fallback;
     }
-};
+}
 
 // Install Prompt Component
 const InstallPrompt: React.FC<{ onClose: () => void }> = ({ onClose }) => {
@@ -57,28 +60,64 @@ const FloatingInstallButton: React.FC<{ onClick: () => void }> = ({ onClick }) =
     );
 };
 
+// WhatsApp Floating Button
+const WhatsAppButton: React.FC = () => {
+    return (
+        <a 
+            href={`https://wa.me/${COACH_PHONE_NUMBER}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="fixed bottom-20 right-4 z-40 bg-[#25D366] text-white p-3 rounded-full shadow-2xl border-2 border-white hover:scale-110 transition-transform"
+            title="צור קשר בוואטסאפ"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+            </svg>
+        </a>
+    );
+};
+
 const App: React.FC = () => {
   // State with Safe Parsing
-  const [users, setUsers] = useState<User[]>(() => safeJsonParse('niv_app_users', INITIAL_USERS));
-  const [sessions, setSessions] = useState<TrainingSession[]>(() => safeJsonParse('niv_app_sessions', INITIAL_SESSIONS));
+  const [users, setUsers] = useState<User[]>(() => safeJsonParse<User[]>('niv_app_users', INITIAL_USERS));
+  const [sessions, setSessions] = useState<TrainingSession[]>(() => safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS));
 
   // Dynamic Lists State
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(() => {
       const defaultTypes = Object.values(WorkoutType);
-      return safeJsonParse('niv_app_types', defaultTypes);
+      return safeJsonParse<string[]>('niv_app_types', defaultTypes);
   });
 
-  const [locations, setLocations] = useState<string[]>(() => {
-      const defaultLocations = ['פארק הירקון, תל אביב', 'סטודיו פיטנס, רמת גן', 'חוף הים, הרצליה', 'גן המייסדים, נס ציונה'];
-      return safeJsonParse('niv_app_locations', defaultLocations);
+  const [locations, setLocations] = useState<LocationDef[]>(() => {
+      // Handle legacy string array if exists, migrate to objects
+      const stored = localStorage.getItem('niv_app_locations');
+      if (stored) {
+          try {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed)) {
+                   if (parsed.length > 0 && typeof parsed[0] === 'string') {
+                       // Migration: Convert strings to LocationDef
+                       return parsed.map(locName => ({ id: locName, name: locName, address: locName }));
+                   }
+                   return parsed as LocationDef[];
+              }
+          } catch(e) { console.error('Migration error', e); }
+      }
+      
+      return [
+        { id: '1', name: 'פארק הירקון, תל אביב', address: 'שדרות רוקח, תל אביב יפו' },
+        { id: '2', name: 'סטודיו פיטנס, רמת גן', address: 'ביאליק 10, רמת גן' },
+        { id: '3', name: 'חוף הים, הרצליה', address: 'חוף אכדיה, הרצליה' },
+        { id: '4', name: 'גן המייסדים, נס ציונה', address: 'ויצמן 1, נס ציונה' }
+      ];
   });
 
   // Payment Links State
-  const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse<PaymentLink[]>('niv_app_payments', []));
 
   // Weather Settings
   const [weatherLocation, setWeatherLocation] = useState<WeatherLocation>(() => {
-      return safeJsonParse('niv_app_weather_loc', { name: 'נס ציונה', lat: 31.93, lon: 34.80 });
+      return safeJsonParse<WeatherLocation>('niv_app_weather_loc', { name: 'נס ציונה', lat: 31.93, lon: 34.80 });
   });
 
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(() => {
@@ -97,10 +136,14 @@ const App: React.FC = () => {
   const [showProfileModal, setShowProfileModal] = useState(false); // New Profile Modal
   const [showPaymentsModal, setShowPaymentsModal] = useState(false); // New Payments Modal
   const [showInstallPrompt, setShowInstallPrompt] = useState(false); // Mobile Install Prompt
+  
+  // Registration Form State
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [regName, setRegName] = useState('');
+  const [regPhone, setRegPhone] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+
   const [loginPhone, setLoginPhone] = useState('');
-  const [loginName, setLoginName] = useState(''); // For new users
-  const [loginEmail, setLoginEmail] = useState(''); // New Email Field
-  const [isNewUser, setIsNewUser] = useState(false);
   const [targetSessionId, setTargetSessionId] = useState<string | null>(null); 
   const [quote, setQuote] = useState<string>('טוען משפט מוטיבציה...');
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
@@ -111,21 +154,27 @@ const App: React.FC = () => {
 
   // Statistics Calculation Helpers
   const getMonthlyWorkoutsCount = (userPhone: string) => {
+    // Safety check if sessions is array
+    if (!Array.isArray(sessions)) return 0;
+
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
     return sessions.filter(session => {
+        if (!session || !session.date) return false;
         const sessionDate = new Date(session.date);
         return (
             sessionDate.getMonth() === currentMonth &&
             sessionDate.getFullYear() === currentYear &&
-            session.registeredPhoneNumbers.includes(userPhone)
+            session.registeredPhoneNumbers && session.registeredPhoneNumbers.includes(userPhone)
         );
     }).length;
   };
 
   const getChampionOfTheMonth = () => {
+      if (!Array.isArray(users)) return null;
+
       let maxWorkouts = 0;
       let champion: User | null = null;
 
@@ -142,7 +191,7 @@ const App: React.FC = () => {
 
   const championData = getChampionOfTheMonth();
   const currentUserMonthlyCount = currentUserPhone ? getMonthlyWorkoutsCount(currentUserPhone) : 0;
-  const currentUser = users.find(u => u.phone === currentUserPhone);
+  const currentUser = Array.isArray(users) ? users.find(u => u.phone === currentUserPhone) : undefined;
 
   // Helper to get current week dates (Sunday to Saturday) with offset
   const getCurrentWeekDates = (offset: number) => {
@@ -211,6 +260,12 @@ const App: React.FC = () => {
   }, [primaryColor]);
 
   useEffect(() => {
+    // Check for registration mode in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('register') === 'true') {
+        setIsRegisterMode(true);
+    }
+
     getMotivationQuote().then(setQuote);
     // Initial fetch
     getWeatherForDates(weekDates, weatherLocation.lat, weatherLocation.lon).then(setWeatherData);
@@ -268,52 +323,23 @@ const App: React.FC = () => {
 
       const existingUser = users.find(u => u.phone === normalizedPhone);
 
-      // Check if user exists. If not, ask for name (second step).
-      if (!existingUser && !isNewUser) {
-          setIsNewUser(true);
+      if (!existingUser) {
+          alert('משתמש לא קיים במערכת. אנא צור קשר עם המאמן להרשמה.');
           return;
-      }
-
-      // If new user and name provided, create user
-      if (isNewUser) {
-          if (!loginName.trim()) {
-              alert('אנא הזן שם מלא');
-              return;
-          }
-           if (!loginEmail.trim()) {
-              alert('אנא הזן כתובת אימייל');
-              return;
-          }
-          const newUser: User = {
-              id: Date.now().toString(),
-              fullName: loginName,
-              displayName: loginName, // Default display name
-              phone: normalizedPhone,
-              email: loginEmail,
-              startDate: new Date().toISOString().split('T')[0],
-              paymentStatus: PaymentStatus.PAID, // Default for auto-signup
-              isNew: true // Mark as new for admin review
-          };
-          setUsers(prev => [...prev, newUser]);
       }
 
       // Login success
       setCurrentUserPhone(normalizedPhone);
       setShowLoginModal(false);
       setLoginPhone('');
-      setLoginName('');
-      setLoginEmail('');
-      setIsNewUser(false);
       
       // Auto register if target session exists
       if (targetSessionId) {
         const session = sessions.find(s => s.id === targetSessionId);
-        // Only attempt registration if restrictions are met (need to re-check for new user here effectively)
-        const isUserActuallyNew = isNewUser; // Captured from local state before reset, or true if we just created them
         
         if (session) {
              // Logic check for new user restriction
-             if (isUserActuallyNew && !session.isTrial) {
+             if (existingUser.isNew && !session.isTrial) {
                  alert('נרשמת בהצלחה למערכת! שים לב: כמתאמן חדש, באפשרותך להירשם רק לאימוני ניסיון.');
                  setTargetSessionId(null);
                  return;
@@ -331,6 +357,37 @@ const App: React.FC = () => {
         }
         setTargetSessionId(null);
       }
+  };
+
+  const handleRegistrationSubmit = () => {
+      if (!regName.trim() || !regPhone.trim()) {
+          alert('נא למלא שם וטלפון');
+          return;
+      }
+      
+      const existing = users.find(u => u.phone === regPhone.trim());
+      if (existing) {
+          alert('מספר הטלפון כבר קיים במערכת');
+          return;
+      }
+
+      const newUser: User = {
+          id: Date.now().toString(),
+          fullName: regName.trim(),
+          displayName: regName.trim(),
+          phone: regPhone.trim(),
+          email: regEmail.trim(),
+          startDate: new Date().toISOString().split('T')[0],
+          paymentStatus: PaymentStatus.PAID,
+          isNew: true // Marked for admin approval
+      };
+
+      setUsers(prev => [...prev, newUser]);
+      alert('פרטייך נשלחו בהצלחה למאמן לאישור! תוכל להתחבר לאחר אישור ההרשמה.');
+      setIsRegisterMode(false); // Return to main screen
+      setRegName('');
+      setRegPhone('');
+      setRegEmail('');
   };
 
   const handleUpdateUser = (updatedUser: User) => {
@@ -394,6 +451,23 @@ const App: React.FC = () => {
       if (session) setViewingSession(session);
   };
 
+  const handleWazeClick = () => {
+      if (!viewingSession) return;
+      
+      const locationDef = locations.find(l => l.name === viewingSession.location);
+      // Use defined address if available, otherwise fallback to name
+      const query = locationDef ? locationDef.address : viewingSession.location;
+      
+      const wazeUrl = `https://waze.com/ul?q=${encodeURIComponent(query)}&navigate=yes`;
+      window.open(wazeUrl, '_blank');
+  };
+
+  const handleZoomClick = () => {
+      if (viewingSession?.zoomLink) {
+          window.open(viewingSession.zoomLink, '_blank');
+      }
+  };
+
   const getSessionAttendees = (session: TrainingSession) => {
       return session.registeredPhoneNumbers.map(phone => {
           const u = users.find(user => user.phone === phone);
@@ -402,7 +476,9 @@ const App: React.FC = () => {
   };
 
   // Group sessions by date
-  const groupedSessions = sessions.reduce((acc, session) => {
+  // Ensure sessions is array
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
+  const groupedSessions = safeSessions.reduce((acc, session) => {
       const date = session.date;
       if (!acc[date]) acc[date] = [];
       acc[date].push(session);
@@ -411,6 +487,65 @@ const App: React.FC = () => {
 
   // Determine session specific color for modal
   const modalColor = viewingSession?.color || primaryColor;
+
+  if (isRegisterMode) {
+      return (
+          <div className="min-h-screen bg-brand-black font-sans flex items-center justify-center p-4">
+              <div className="bg-gray-800 p-8 rounded-2xl w-full max-w-md border border-gray-700 shadow-2xl">
+                  <div className="text-center mb-8">
+                      <h1 className="text-3xl font-black text-white italic tracking-tighter mb-2">
+                        NIV <span className="text-brand-primary">COHEN</span>
+                      </h1>
+                      <h2 className="text-xl font-bold text-white">טופס הרשמה ראשוני</h2>
+                      <p className="text-gray-400 text-sm mt-2">מלא את פרטיך והמאמן יאשר את הרשמתך בהקדם.</p>
+                  </div>
+
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-gray-300 text-sm font-bold mb-2">שם מלא</label>
+                          <input 
+                              type="text" 
+                              value={regName}
+                              onChange={e => setRegName(e.target.value)}
+                              className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white focus:border-brand-primary focus:outline-none"
+                              placeholder="ישראל ישראלי"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-gray-300 text-sm font-bold mb-2">טלפון</label>
+                          <input 
+                              type="tel" 
+                              value={regPhone}
+                              onChange={e => setRegPhone(e.target.value)}
+                              className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white focus:border-brand-primary focus:outline-none"
+                              placeholder="0500000000"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-gray-300 text-sm font-bold mb-2">אימייל (אופציונלי)</label>
+                          <input 
+                              type="email" 
+                              value={regEmail}
+                              onChange={e => setRegEmail(e.target.value)}
+                              className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white focus:border-brand-primary focus:outline-none"
+                              placeholder="email@example.com"
+                          />
+                      </div>
+                      
+                      <Button onClick={handleRegistrationSubmit} className="w-full py-4 text-lg mt-4">
+                          שלח פרטים להרשמה
+                      </Button>
+                      
+                      <div className="text-center mt-4">
+                          <button onClick={() => setIsRegisterMode(false)} className="text-gray-400 hover:text-white underline text-sm">
+                              חזרה לדף הראשי
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-brand-black pb-20 font-sans">
@@ -516,7 +651,7 @@ const App: React.FC = () => {
                         onClick={() => setWeekOffset(prev => prev - 1)}
                         className="px-4 py-2 rounded-full hover:bg-gray-700 text-white transition-colors"
                     >
-                        ← שבוע שעבר
+                        ← השבוע שלפני
                     </button>
                     <span className="text-sm font-bold text-brand-primary">
                         {weekOffset === 0 ? 'השבוע הנוכחי' : (weekOffset === 1 ? 'שבוע הבא' : `עוד ${weekOffset} שבועות`)}
@@ -525,7 +660,7 @@ const App: React.FC = () => {
                         onClick={() => setWeekOffset(prev => prev + 1)}
                         className="px-4 py-2 rounded-full hover:bg-gray-700 text-white transition-colors"
                     >
-                        שבוע הבא →
+                        השבוע שאחרי →
                     </button>
                 </div>
 
@@ -631,15 +766,42 @@ const App: React.FC = () => {
                         {new Date(viewingSession.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' })}
                       </p>
                       
-                      <div className="flex items-start gap-3 text-gray-300 bg-gray-900 p-4 rounded-xl mb-4">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: modalColor }}>
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                           <div>
-                               <p className="font-bold">מיקום</p>
-                               <p>{viewingSession.location}</p>
-                           </div>
+                      <div className="flex flex-col gap-3 mb-4">
+                          {/* Location Info & Waze */}
+                          <div className="flex items-center justify-between bg-gray-900 p-4 rounded-xl border border-gray-800">
+                              <div className="flex items-start gap-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" style={{ color: modalColor }}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                <div>
+                                    <p className="font-bold text-white">מיקום</p>
+                                    <p className="text-gray-300">{viewingSession.location}</p>
+                                </div>
+                              </div>
+                              <button 
+                                onClick={handleWazeClick}
+                                className="flex items-center gap-2 bg-blue-500/10 text-blue-400 border border-blue-500/30 hover:bg-blue-500 hover:text-white px-3 py-2 rounded-lg transition-all text-sm font-bold"
+                              >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                                      <path d="M18.7 13.9c-.3.4-.8.5-1.2.3-.4-.2-.5-.8-.3-1.2.2-.3.7-.4 1.1-.2.4.2.5.7.4 1.1zM7 11.2c0 .4-.4.8-.8.8s-.8-.4-.8-.8c0-.5.4-.9.8-.9s.8.4.8.9zm8.9-2.3c-1.3-.9-3-.9-4.3 0-1 .7-2.3.8-3.4.3-1.4-.7-2.3-2.1-2.4-3.7-.1-1.6.7-3.1 2.1-3.9 1.4-.8 3-.8 4.5 0 1.4.8 2.3 2.3 2.1 3.9 0 1.6-1 3-2.4 3.7-1.1.5-2.4.4-3.4-.3 1.3-.9 3-.9 4.3 0 1.5.9 3.2.5 4.3-.9 1.1-1.4 1.1-3.4 0-4.8-.9-1.1-2.2-1.7-3.6-1.7-1.5 0-3 .7-3.9 1.9-.9-1.2-2.4-1.9-3.9-1.9-1.4 0-2.8.6-3.7 1.7-1.1 1.4-1.1 3.4 0 4.8 1.1 1.4 2.8 1.8 4.3.9zM12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/>
+                                  </svg>
+                                  נווט
+                              </button>
+                          </div>
+                          
+                          {/* Zoom Button if available */}
+                          {viewingSession.zoomLink && (
+                              <button 
+                                onClick={handleZoomClick}
+                                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold shadow-lg transition-all"
+                              >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+                                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.5 14.5L12 14l-4.5 2.5V8.5L12 11l4.5-2.5v8z"/>
+                                  </svg>
+                                  הצטרף לאימון ZOOM
+                              </button>
+                          )}
                       </div>
 
                       {viewingSession.description && (
@@ -709,6 +871,11 @@ const App: React.FC = () => {
       {!showInstallPrompt && (
           <FloatingInstallButton onClick={() => setShowInstallPrompt(true)} />
       )}
+      
+      {/* WhatsApp Contact Button */}
+      {!showInstallPrompt && !isRegisterMode && (
+          <WhatsAppButton />
+      )}
 
       {/* Profile Edit Modal */}
       {showProfileModal && (
@@ -769,56 +936,31 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* Login/Register Modal */}
+      {/* Login Modal */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
             <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-sm border border-gray-700 shadow-2xl">
                 <h3 className="text-2xl font-bold text-white mb-2">
-                    {isNewUser ? 'ברוך הבא! הרשמה מהירה' : 'הזדהות מתאמן'}
+                    הזדהות מתאמן
                 </h3>
                 <p className="text-gray-400 mb-6 text-sm">
-                    {isNewUser 
-                        ? 'נראה שזו הפעם הראשונה שלך כאן. השלם פרטים להרשמה.' 
-                        : 'הזן את מספר הטלפון שלך כדי להירשם לאימון.'}
+                    הזן את מספר הטלפון שלך כדי להירשם לאימון.
                 </p>
                 
-                {!isNewUser ? (
-                     <input 
-                        type="tel" 
-                        value={loginPhone}
-                        onChange={(e) => setLoginPhone(e.target.value)}
-                        placeholder="050-0000000"
-                        className="w-full p-4 bg-gray-900 border border-gray-600 rounded-lg text-white text-lg tracking-widest mb-4 focus:border-brand-primary focus:outline-none"
-                        autoFocus
-                    />
-                ) : (
-                    <div className="space-y-4 mb-4">
-                         <div className="bg-gray-900 p-3 rounded border border-gray-700 text-gray-400 text-sm">
-                            טלפון: {loginPhone}
-                        </div>
-                        <input 
-                            type="text" 
-                            value={loginName}
-                            onChange={(e) => setLoginName(e.target.value)}
-                            placeholder="שם מלא"
-                            className="w-full p-4 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-brand-primary focus:outline-none"
-                            autoFocus
-                        />
-                        <input 
-                            type="email" 
-                            value={loginEmail}
-                            onChange={(e) => setLoginEmail(e.target.value)}
-                            placeholder="כתובת אימייל"
-                            className="w-full p-4 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-brand-primary focus:outline-none"
-                        />
-                    </div>
-                )}
+                <input 
+                    type="tel" 
+                    value={loginPhone}
+                    onChange={(e) => setLoginPhone(e.target.value)}
+                    placeholder="050-0000000"
+                    className="w-full p-4 bg-gray-900 border border-gray-600 rounded-lg text-white text-lg tracking-widest mb-4 focus:border-brand-primary focus:outline-none"
+                    autoFocus
+                />
                 
                 <div className="flex gap-3">
                     <Button onClick={handleLoginSubmit} className="flex-1">
-                        {isNewUser ? 'סיים הרשמה' : 'המשך'}
+                        המשך
                     </Button>
-                    <Button variant="secondary" onClick={() => { setShowLoginModal(false); setTargetSessionId(null); setIsNewUser(false); setLoginPhone(''); setLoginEmail(''); }} className="flex-1">ביטול</Button>
+                    <Button variant="secondary" onClick={() => { setShowLoginModal(false); setTargetSessionId(null); setLoginPhone(''); }} className="flex-1">ביטול</Button>
                 </div>
             </div>
         </div>

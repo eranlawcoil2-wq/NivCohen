@@ -55,13 +55,23 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           boxShadow: isRegistered ? `0 4px 14px 0 ${cardColor}20` : undefined
       }}
     >
-      {session.isTrial && (
-         <div className="absolute -top-2 -left-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg border border-white/20 z-10 animate-pulse">
-             אימון ניסיון
-         </div>
+      <div className="absolute top-0 left-0 flex flex-col gap-1 p-1 z-10">
+        {session.isTrial && (
+           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse">
+               אימון ניסיון
+           </div>
+        )}
+      </div>
+      
+      {session.zoomLink && (
+           <div className="absolute top-2 right-2 text-blue-400 bg-blue-400/10 p-1 rounded-full border border-blue-400/20">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+              </svg>
+           </div>
       )}
 
-      <div className="flex justify-between items-start">
+      <div className="flex justify-between items-start mt-2">
         <span className="text-xl font-black text-white font-mono tracking-tight">{session.time}</span>
         {isRegistered && (
             <span 
