@@ -55,6 +55,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           boxShadow: isRegistered ? `0 4px 14px 0 ${cardColor}20` : undefined
       }}
     >
+      {session.isTrial && (
+         <div className="absolute -top-2 -left-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg border border-white/20 z-10 animate-pulse">
+             אימון ניסיון
+         </div>
+      )}
+
       <div className="flex justify-between items-start">
         <span className="text-xl font-black text-white font-mono tracking-tight">{session.time}</span>
         {isRegistered && (

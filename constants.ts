@@ -85,7 +85,8 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     location: 'פארק הירקון, תל אביב',
     maxCapacity: 15,
     description: 'אימון בדופק גבוה המשלב כוח וסיבולת.',
-    registeredPhoneNumbers: [...DEMO_ATTENDEES]
+    registeredPhoneNumbers: [...DEMO_ATTENDEES],
+    isTrial: false
   },
   {
     id: 's2',
@@ -95,7 +96,8 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     location: 'סטודיו פיטנס, רמת גן',
     maxCapacity: 10,
     description: 'עבודה על כוח מתפרץ ומשקולות.',
-    registeredPhoneNumbers: [...DEMO_ATTENDEES]
+    registeredPhoneNumbers: [...DEMO_ATTENDEES],
+    isTrial: false
   },
   {
     id: 's3',
@@ -105,7 +107,8 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     location: 'חוף הים, הרצליה',
     maxCapacity: 20,
     description: 'אימון אינטרוולים עצים בחול.',
-    registeredPhoneNumbers: ['0501234567', '0547654321', '0529998888', '0500000001', '0500000002']
+    registeredPhoneNumbers: ['0501234567', '0547654321', '0529998888', '0500000001', '0500000002'],
+    isTrial: true
   },
   {
     id: 's4',
@@ -115,6 +118,7 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     location: 'סטודיו פיטנס, רמת גן',
     maxCapacity: 8,
     description: 'חיזוק שרירי ליבה וגמישות.',
-    registeredPhoneNumbers: ['0501234567', '0547654321', '0529998888', '0500000001', '0500000002']
+    registeredPhoneNumbers: ['0501234567', '0547654321', '0529998888', '0500000001', '0500000002'],
+    isTrial: false
   }
 ];

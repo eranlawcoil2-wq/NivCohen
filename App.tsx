@@ -30,6 +30,21 @@ const InstallPrompt: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
+// Floating Action Button for Install
+const FloatingInstallButton: React.FC<{ onClick: () => void }> = ({ onClick }) => {
+    return (
+        <button 
+            onClick={onClick}
+            className="fixed bottom-20 left-4 z-40 bg-brand-primary text-brand-black p-3 rounded-full shadow-2xl border-2 border-white md:hidden hover:scale-110 transition-transform"
+            title="התקן אפליקציה"
+        >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+        </button>
+    );
+};
+
 const App: React.FC = () => {
   // State
   const [users, setUsers] = useState<User[]>(() => {
@@ -127,6 +142,7 @@ const App: React.FC = () => {
 
   const championData = getChampionOfTheMonth();
   const currentUserMonthlyCount = currentUserPhone ? getMonthlyWorkoutsCount(currentUserPhone) : 0;
+  const currentUser = users.find(u => u.phone === currentUserPhone);
 
   // Helper to get current week dates (Sunday to Saturday) with offset
   const getCurrentWeekDates = (offset: number) => {
@@ -211,26 +227,37 @@ const App: React.FC = () => {
 
   // Handlers
   const handleRegisterClick = (sessionId: string) => {
+    // 1. Check if user is logged in
     if (!currentUserPhone) {
       setTargetSessionId(sessionId);
       setShowLoginModal(true);
       return;
     }
 
-    setSessions(prevSessions => prevSessions.map(session => {
-      if (session.id === sessionId) {
-        const isRegistered = session.registeredPhoneNumbers.includes(currentUserPhone);
+    // 2. Find Session
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+
+    // 3. Check Trial Restrictions for New Users
+    if (currentUser?.isNew && !session.isTrial) {
+        alert('מתאמנים חדשים יכולים להירשם לאימוני ניסיון בלבד.');
+        return;
+    }
+
+    setSessions(prevSessions => prevSessions.map(s => {
+      if (s.id === sessionId) {
+        const isRegistered = s.registeredPhoneNumbers.includes(currentUserPhone);
         if (isRegistered) {
-          return { ...session, registeredPhoneNumbers: session.registeredPhoneNumbers.filter(p => p !== currentUserPhone) };
+          return { ...s, registeredPhoneNumbers: s.registeredPhoneNumbers.filter(p => p !== currentUserPhone) };
         } else {
-            if (session.registeredPhoneNumbers.length >= session.maxCapacity) {
+            if (s.registeredPhoneNumbers.length >= s.maxCapacity) {
                 alert('האימון מלא!');
-                return session;
+                return s;
             }
-          return { ...session, registeredPhoneNumbers: [...session.registeredPhoneNumbers, currentUserPhone] };
+          return { ...s, registeredPhoneNumbers: [...s.registeredPhoneNumbers, currentUserPhone] };
         }
       }
-      return session;
+      return s;
     }));
   };
 
@@ -280,21 +307,47 @@ const App: React.FC = () => {
       
       // Auto register if target session exists
       if (targetSessionId) {
-        setSessions(prevSessions => prevSessions.map(session => {
-            if (session.id === targetSessionId) {
-                if (session.registeredPhoneNumbers.includes(normalizedPhone) || session.registeredPhoneNumbers.length >= session.maxCapacity) {
-                    return session;
+        const session = sessions.find(s => s.id === targetSessionId);
+        // Only attempt registration if restrictions are met (need to re-check for new user here effectively)
+        const isUserActuallyNew = isNewUser; // Captured from local state before reset, or true if we just created them
+        
+        if (session) {
+             // Logic check for new user restriction
+             if (isUserActuallyNew && !session.isTrial) {
+                 alert('נרשמת בהצלחה למערכת! שים לב: כמתאמן חדש, באפשרותך להירשם רק לאימוני ניסיון.');
+                 setTargetSessionId(null);
+                 return;
+             }
+
+             setSessions(prevSessions => prevSessions.map(s => {
+                if (s.id === targetSessionId) {
+                    if (s.registeredPhoneNumbers.includes(normalizedPhone) || s.registeredPhoneNumbers.length >= s.maxCapacity) {
+                        return s;
+                    }
+                    return { ...s, registeredPhoneNumbers: [...s.registeredPhoneNumbers, normalizedPhone] };
                 }
-                return { ...session, registeredPhoneNumbers: [...session.registeredPhoneNumbers, normalizedPhone] };
-            }
-            return session;
-        }));
+                return s;
+            }));
+        }
         setTargetSessionId(null);
       }
   };
 
   const handleUpdateUser = (updatedUser: User) => {
     setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+  };
+  
+  const handleDeleteUser = (userId: string) => {
+      setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
+      
+      // Optional: Remove user from sessions (not strictly required if we just hide name, but cleaner)
+      const user = users.find(u => u.id === userId);
+      if (user) {
+          setSessions(prev => prev.map(s => ({
+              ...s,
+              registeredPhoneNumbers: s.registeredPhoneNumbers.filter(p => p !== user.phone)
+          })));
+      }
   };
   
   const handleUpdateSession = (updatedSession: TrainingSession) => {
@@ -304,8 +357,6 @@ const App: React.FC = () => {
   const handleLogout = () => {
       setCurrentUserPhone(null);
   };
-
-  const currentUser = users.find(u => u.phone === currentUserPhone);
 
   const handleProfileUpdate = () => {
     if (currentUser) {
@@ -443,6 +494,7 @@ const App: React.FC = () => {
                     paymentLinks={paymentLinks}
                     onAddUser={(u) => setUsers([...users, u])}
                     onUpdateUser={handleUpdateUser}
+                    onDeleteUser={handleDeleteUser} // Pass delete handler
                     onAddSession={(s) => setSessions([...sessions, s])}
                     onUpdateSession={handleUpdateSession}
                     onDeleteSession={(id) => setSessions(sessions.filter(s => s.id !== id))}
@@ -456,7 +508,7 @@ const App: React.FC = () => {
                 />
             </div>
         ) : (
-            <div className="overflow-x-auto pb-4 custom-scrollbar">
+            <div className="pb-4">
                 
                 {/* Week Navigation */}
                 <div className="flex justify-between items-center mb-4 min-w-[300px] max-w-sm mx-auto bg-gray-800 rounded-full p-1">
@@ -477,7 +529,8 @@ const App: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="grid grid-cols-7 gap-3 min-w-[1000px]">
+                {/* Mobile Grid (2 Columns) vs Desktop Grid (7 Columns) */}
+                <div className="grid grid-cols-2 md:grid-cols-7 gap-3">
                     {weekDates.map((date, index) => {
                         const dateObj = new Date(date);
                         const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'long' });
@@ -500,7 +553,7 @@ const App: React.FC = () => {
                                 </div>
 
                                 {/* Sessions Column */}
-                                <div className="flex-1 p-2 bg-gray-900/50 min-h-[300px]">
+                                <div className="flex-1 p-2 bg-gray-900/50 min-h-[150px] md:min-h-[300px]">
                                     {daySessions.length > 0 ? (
                                         daySessions
                                             .sort((a,b) => a.time.localeCompare(b.time))
@@ -651,6 +704,11 @@ const App: React.FC = () => {
       
       {/* Install App Prompt (Mobile Only) */}
       {showInstallPrompt && <InstallPrompt onClose={() => setShowInstallPrompt(false)} />}
+      
+      {/* Floating Install Button - Shown if prompt is closed on mobile */}
+      {!showInstallPrompt && (
+          <FloatingInstallButton onClick={() => setShowInstallPrompt(true)} />
+      )}
 
       {/* Profile Edit Modal */}
       {showProfileModal && (

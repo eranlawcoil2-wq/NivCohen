@@ -14,6 +14,7 @@ interface AdminPanelProps {
   paymentLinks: PaymentLink[];
   onAddUser: (user: User) => void;
   onUpdateUser: (user: User) => void;
+  onDeleteUser: (userId: string) => void; // Added Delete User Prop
   onAddSession: (session: TrainingSession) => void;
   onUpdateSession: (session: TrainingSession) => void;
   onDeleteSession: (id: string) => void;
@@ -23,7 +24,7 @@ interface AdminPanelProps {
   onUpdateWeatherLocation: (location: WeatherLocation) => void;
   onAddPaymentLink: (link: PaymentLink) => void;
   onDeletePaymentLink: (id: string) => void;
-  onExitAdmin: () => void; // New prop for exiting
+  onExitAdmin: () => void;
 }
 
 const SESSION_COLORS = [
@@ -47,6 +48,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     paymentLinks,
     onAddUser, 
     onUpdateUser,
+    onDeleteUser, // Destructure
     onAddSession, 
     onUpdateSession,
     onDeleteSession,
@@ -78,7 +80,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     location: locations[0] || '',
     maxCapacity: 15,
     description: '',
-    color: SESSION_COLORS[0]
+    color: SESSION_COLORS[0],
+    isTrial: false
   });
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
@@ -192,6 +195,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setActiveTab('users'); // Switch to main user tab to edit
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+  
+  const handleDeleteUserClick = (userId: string) => {
+      if(window.confirm('האם אתה בטוח שברצונך למחוק מתאמן זה? פעולה זו לא ניתנת לביטול.')) {
+          onDeleteUser(userId);
+      }
+  };
 
   const handleApproveUser = (user: User) => {
       onUpdateUser({ ...user, isNew: false });
@@ -224,7 +233,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   description: newSession.description || '',
                   // Preserve existing registered users if updating
                   registeredPhoneNumbers: sessions.find(s => s.id === editingSessionId)?.registeredPhoneNumbers || [],
-                  color: newSession.color || SESSION_COLORS[0]
+                  color: newSession.color || SESSION_COLORS[0],
+                  isTrial: newSession.isTrial || false
               } as TrainingSession);
               alert('האימון עודכן בהצלחה');
               setEditingSessionId(null);
@@ -239,7 +249,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   maxCapacity: newSession.maxCapacity || 15,
                   description: newSession.description || '',
                   registeredPhoneNumbers: [],
-                  color: newSession.color || SESSION_COLORS[0]
+                  color: newSession.color || SESSION_COLORS[0],
+                  isTrial: newSession.isTrial || false
               } as TrainingSession);
               alert('אימון נוסף בהצלחה');
           }
@@ -252,7 +263,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               location: locations[0] || '', 
               maxCapacity: 15, 
               description: '',
-              color: SESSION_COLORS[0]
+              color: SESSION_COLORS[0],
+              isTrial: false
           });
       } else {
           alert('נא למלא את כל שדות החובה');
@@ -274,7 +286,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           location: locations[0] || '', 
           maxCapacity: 15, 
           description: '',
-          color: SESSION_COLORS[0]
+          color: SESSION_COLORS[0],
+          isTrial: false
       });
   };
 
@@ -316,8 +329,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleDeleteType = (e: React.MouseEvent, type: string) => {
-      e.stopPropagation();
-      e.preventDefault();
+      e.stopPropagation(); // Stop click from bubbling up
+      e.preventDefault(); // Prevent form submission
       if (confirm(`למחוק את סוג האימון "${type}"?`)) {
           onUpdateWorkoutTypes(workoutTypes.filter(t => t !== type));
       }
@@ -331,8 +344,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleDeleteLocation = (e: React.MouseEvent, loc: string) => {
-       e.stopPropagation();
-       e.preventDefault();
+       e.stopPropagation(); // Stop click from bubbling up
+       e.preventDefault(); // Prevent form submission
        if (confirm(`למחוק את המיקום "${loc}"?`)) {
           onUpdateLocations(locations.filter(l => l !== loc));
       }
@@ -405,6 +418,116 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             הגדרות ומוצרים
         </button>
       </div>
+
+      {activeTab === 'users' && (
+        <div className="space-y-6">
+            <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
+                <h3 className="text-lg font-bold text-white mb-4">
+                    {editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן ידנית'}
+                </h3>
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                    <input 
+                        type="text" placeholder="שם מלא"
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        value={formUser.fullName} onChange={e => setFormUser({...formUser, fullName: e.target.value})}
+                    />
+                    <input 
+                        type="tel" placeholder="טלפון"
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        value={formUser.phone} onChange={e => setFormUser({...formUser, phone: e.target.value})}
+                    />
+                     <input 
+                        type="email" placeholder="אימייל (אופציונלי)"
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        value={formUser.email} onChange={e => setFormUser({...formUser, email: e.target.value})}
+                    />
+                    <select 
+                        className="p-3 rounded bg-gray-900 border border-gray-600 text-white"
+                        value={formUser.paymentStatus} onChange={e => setFormUser({...formUser, paymentStatus: e.target.value as PaymentStatus})}
+                    >
+                        <option value={PaymentStatus.PAID}>שולם</option>
+                        <option value={PaymentStatus.PENDING}>ממתין לתשלום</option>
+                        <option value={PaymentStatus.OVERDUE}>חוב</option>
+                    </select>
+                </div>
+                <div className="flex gap-2">
+                    <Button onClick={handleUserSubmit} className="flex-1">
+                        {editingUserId ? 'עדכן פרטים' : 'הוסף מתאמן'}
+                    </Button>
+                    {editingUserId && (
+                        <Button variant="secondary" onClick={() => { setEditingUserId(null); setFormUser({ fullName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID }); }}>
+                            ביטול
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700">
+                <div className="p-3 bg-gray-700 font-bold text-white flex justify-between">
+                    <span>רשימת מתאמנים ({sortedExistingUsers.length})</span>
+                </div>
+                <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                    {sortedExistingUsers.map((user, idx) => (
+                        <div key={user.id} className="p-3 border-b border-gray-700 hover:bg-gray-700/50 flex justify-between items-center group">
+                            <div className="flex items-center gap-3">
+                                <span className="text-gray-500 text-xs w-4">{idx + 1}</span>
+                                <div>
+                                    <div className="font-bold text-white">{user.fullName}</div>
+                                    <div className="text-xs text-gray-400">{user.phone}</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="text-center px-2">
+                                    <span className="block text-xs text-gray-400">אימונים החודש</span>
+                                    <span className="font-bold text-brand-primary">{getMonthlyWorkoutsCount(user.phone)}</span>
+                                </div>
+                                <button 
+                                    onClick={() => handleEditUserClick(user)}
+                                    className="bg-gray-600 hover:bg-gray-500 text-white p-2 rounded text-xs transition-colors"
+                                >
+                                    ערוך
+                                </button>
+                                <button 
+                                    onClick={() => handleDeleteUserClick(user.id)}
+                                    className="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white p-2 rounded text-xs transition-colors"
+                                    title="מחק מתאמן"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+      )}
+      
+      {/* (Other tabs 'new_users', 'settings', 'sessions' are rendered below...) */}
+      
+      {activeTab === 'new_users' && (
+           <div className="space-y-4">
+               <h3 className="text-xl text-white">בקשות הצטרפות חדשות</h3>
+               {newUsers.length === 0 ? (
+                   <p className="text-gray-500">אין בקשות חדשות</p>
+               ) : (
+                   newUsers.map(user => (
+                       <div key={user.id} className="bg-gray-800 p-4 rounded-xl border border-gray-700 flex justify-between items-center">
+                           <div>
+                               <p className="font-bold text-white text-lg">{user.fullName}</p>
+                               <p className="text-gray-400">{user.phone}</p>
+                               <p className="text-gray-500 text-sm">{user.email}</p>
+                           </div>
+                           <div className="flex gap-2">
+                               <Button size="sm" onClick={() => handleApproveUser(user)}>אשר</Button>
+                               <Button size="sm" variant="danger" onClick={() => handleDeleteUserClick(user.id)}>דחה</Button>
+                           </div>
+                       </div>
+                   ))
+               )}
+           </div>
+      )}
 
       {activeTab === 'settings' && (
           <div className="space-y-8">
@@ -604,7 +727,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {/* Session Color Picker */}
                 <div>
                     <label className="text-gray-400 text-sm mb-2 block">צבע האימון (משפיע על עיצוב הכרטיס)</label>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap mb-4">
                         {SESSION_COLORS.map(color => (
                             <button
                                 key={color}
@@ -615,6 +738,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             />
                         ))}
                     </div>
+                    
+                    {/* Trial Session Toggle */}
+                    <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors">
+                        <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
+                            <input 
+                                type="checkbox" 
+                                name="isTrial" 
+                                id="isTrial" 
+                                className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
+                                style={{ right: newSession.isTrial ? '0' : 'auto', left: newSession.isTrial ? 'auto' : '0' }}
+                                checked={newSession.isTrial || false}
+                                onChange={e => setNewSession({...newSession, isTrial: e.target.checked})}
+                            />
+                            <label htmlFor="isTrial" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${newSession.isTrial ? 'bg-brand-primary' : 'bg-gray-600'}`}></label>
+                        </div>
+                        <span className="text-white font-bold select-none">הגדר כאימון ניסיון</span>
+                    </label>
                 </div>
                 
                 <div className="flex gap-2 mt-2">
@@ -655,6 +795,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <div className="pl-2 pr-3 relative z-10">
                             <div className="font-bold text-white flex items-center gap-2">
                                 {s.type}
+                                {s.isTrial && <span className="text-[10px] bg-purple-600 text-white px-1.5 rounded-full">ניסיון</span>}
                             </div>
                             <div className="text-xs text-gray-400">{s.date} | {s.time}</div>
                             <div className="text-xs text-gray-500">{s.location}</div>

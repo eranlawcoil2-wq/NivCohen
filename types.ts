@@ -35,6 +35,7 @@ export interface TrainingSession {
   description?: string;
   registeredPhoneNumbers: string[];
   color?: string; // Hex color code for the session theme
+  isTrial?: boolean; // Is this a trial session for new users?
 }
 
 export interface WeatherLocation {
