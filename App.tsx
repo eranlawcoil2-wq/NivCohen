@@ -7,6 +7,23 @@ import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
 import { getWeatherForDates, getWeatherIcon, getWeatherDescription } from './services/weatherService';
 import { dataService } from './services/dataService';
+import { supabase } from './services/supabaseClient';
+
+// Helper: Normalize Phone Numbers (Remove dashes, spaces, +972, etc.)
+const normalizePhone = (phone: string): string => {
+    if (!phone) return '';
+    // Remove all non-digit characters
+    let cleaned = phone.replace(/\D/g, '');
+    
+    // Convert 972 to 0
+    if (cleaned.startsWith('972')) {
+        cleaned = '0' + cleaned.substring(3);
+    }
+    
+    // Ensure it looks like a standard israeli mobile/landline (approx length)
+    // You might want stricter validation, but this solves the 050-000 vs 050000 mismatch
+    return cleaned;
+};
 
 // Safe LocalStorage Parser (Standard Function Syntax) - kept for settings/preferences
 function safeJsonParse<T>(key: string, fallback: T): T {
@@ -100,8 +117,9 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
 
-  // Dynamic Lists State (kept local for preference simplicity, could also be DB)
+  // Dynamic Lists State
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(() => {
       const defaultTypes = Object.values(WorkoutType);
       return safeJsonParse<string[]>('niv_app_types', defaultTypes);
@@ -174,6 +192,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadData = async () => {
         setIsLoadingData(true);
+        setIsCloudConnected(!!supabase);
         try {
             const loadedUsers = await dataService.getUsers();
             const loadedSessions = await dataService.getSessions();
@@ -217,6 +236,7 @@ const App: React.FC = () => {
   const getMonthlyWorkoutsCount = (userPhone: string) => {
     if (!Array.isArray(sessions)) return 0;
 
+    const normalizedUserPhone = normalizePhone(userPhone);
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -227,7 +247,8 @@ const App: React.FC = () => {
         return (
             sessionDate.getMonth() === currentMonth &&
             sessionDate.getFullYear() === currentYear &&
-            session.registeredPhoneNumbers && session.registeredPhoneNumbers.includes(userPhone)
+            session.registeredPhoneNumbers && 
+            session.registeredPhoneNumbers.some(p => normalizePhone(p) === normalizedUserPhone)
         );
     }).length;
   };
@@ -251,7 +272,8 @@ const App: React.FC = () => {
 
   const championData = getChampionOfTheMonth();
   const currentUserMonthlyCount = currentUserPhone ? getMonthlyWorkoutsCount(currentUserPhone) : 0;
-  const currentUser = Array.isArray(users) ? users.find(u => u.phone === currentUserPhone) : undefined;
+  // Find current user with normalized phone check
+  const currentUser = Array.isArray(users) ? users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')) : undefined;
   
   const pendingUsersCount = users.filter(u => u.paymentStatus === PaymentStatus.PENDING).length;
 
@@ -330,6 +352,11 @@ const App: React.FC = () => {
     }
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
+    
+    // Normalize logic
+    const normalizedCurrent = normalizePhone(currentUserPhone);
+    const isAlreadyRegistered = session.registeredPhoneNumbers.some(p => normalizePhone(p) === normalizedCurrent);
+
     if (currentUser?.isNew && !session.isTrial) {
         alert('מתאמנים חדשים יכולים להירשם לאימוני ניסיון בלבד.');
         return;
@@ -340,14 +367,21 @@ const App: React.FC = () => {
     }
 
     let updatedSession: TrainingSession;
-    if (session.registeredPhoneNumbers.includes(currentUserPhone)) {
-        updatedSession = { ...session, registeredPhoneNumbers: session.registeredPhoneNumbers.filter(p => p !== currentUserPhone) };
+    if (isAlreadyRegistered) {
+        updatedSession = { 
+            ...session, 
+            registeredPhoneNumbers: session.registeredPhoneNumbers.filter(p => normalizePhone(p) !== normalizedCurrent) 
+        };
     } else {
         if (session.registeredPhoneNumbers.length >= session.maxCapacity) {
             alert('האימון מלא!');
             return;
         }
-        updatedSession = { ...session, registeredPhoneNumbers: [...session.registeredPhoneNumbers, currentUserPhone] };
+        // Save using the normalized phone number for consistency
+        updatedSession = { 
+            ...session, 
+            registeredPhoneNumbers: [...session.registeredPhoneNumbers, normalizedCurrent] 
+        };
     }
     
     // Update Optimistically
@@ -357,9 +391,15 @@ const App: React.FC = () => {
   };
 
   const handleLoginSubmit = async () => {
-      const normalizedPhone = loginPhone.trim();
-      if (!normalizedPhone) return;
-      const existingUser = users.find(u => u.phone === normalizedPhone);
+      const normalizedPhone = normalizePhone(loginPhone.trim());
+      if (!normalizedPhone || normalizedPhone.length < 9) {
+          alert('נא להזין מספר טלפון תקין');
+          return;
+      }
+
+      // Check against users with normalized phones
+      const existingUser = users.find(u => normalizePhone(u.phone) === normalizedPhone);
+      
       if (!existingUser) {
           alert('משתמש לא קיים במערכת. אנא צור קשר עם המאמן להרשמה.');
           return;
@@ -381,7 +421,10 @@ const App: React.FC = () => {
                  setTargetSessionId(null);
                  return;
              }
-             if (!session.registeredPhoneNumbers.includes(normalizedPhone) && session.registeredPhoneNumbers.length < session.maxCapacity) {
+             
+             const isRegistered = session.registeredPhoneNumbers.some(p => normalizePhone(p) === normalizedPhone);
+             
+             if (!isRegistered && session.registeredPhoneNumbers.length < session.maxCapacity) {
                  const updatedSession = { ...session, registeredPhoneNumbers: [...session.registeredPhoneNumbers, normalizedPhone] };
                  setSessions(prev => prev.map(s => s.id === targetSessionId ? updatedSession : s));
                  await dataService.updateSession(updatedSession);
@@ -396,7 +439,8 @@ const App: React.FC = () => {
           alert('נא למלא שם וטלפון');
           return;
       }
-      const existing = users.find(u => u.phone === regPhone.trim());
+      const normalizedReg = normalizePhone(regPhone.trim());
+      const existing = users.find(u => normalizePhone(u.phone) === normalizedReg);
       if (existing) {
           alert('מספר הטלפון כבר קיים במערכת');
           return;
@@ -405,7 +449,7 @@ const App: React.FC = () => {
           id: Date.now().toString(),
           fullName: regName.trim(),
           displayName: regName.trim(),
-          phone: regPhone.trim(),
+          phone: normalizedReg,
           email: regEmail.trim(),
           startDate: new Date().toISOString().split('T')[0],
           paymentStatus: PaymentStatus.PAID,
@@ -423,13 +467,15 @@ const App: React.FC = () => {
 
   // CRUD Wrappers
   const handleAddUser = async (u: User) => {
-      setUsers(prev => [...prev, u]);
-      await dataService.addUser(u);
+      const uNormalized = { ...u, phone: normalizePhone(u.phone) };
+      setUsers(prev => [...prev, uNormalized]);
+      await dataService.addUser(uNormalized);
   }
 
   const handleUpdateUser = async (updatedUser: User) => {
-    setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
-    await dataService.updateUser(updatedUser);
+    const uNormalized = { ...updatedUser, phone: normalizePhone(updatedUser.phone) };
+    setUsers(prevUsers => prevUsers.map(u => u.id === uNormalized.id ? uNormalized : u));
+    await dataService.updateUser(uNormalized);
   };
   
   const handleDeleteUser = async (userId: string) => {
@@ -439,9 +485,13 @@ const App: React.FC = () => {
       // Update sessions to remove user
       const user = users.find(u => u.id === userId);
       if (user) {
-          const sessionsToUpdate = sessions.filter(s => s.registeredPhoneNumbers.includes(user.phone));
+          const userPhoneNorm = normalizePhone(user.phone);
+          const sessionsToUpdate = sessions.filter(s => s.registeredPhoneNumbers.some(p => normalizePhone(p) === userPhoneNorm));
           for (const session of sessionsToUpdate) {
-              const updatedSession = { ...session, registeredPhoneNumbers: session.registeredPhoneNumbers.filter(p => p !== user.phone) };
+              const updatedSession = { 
+                  ...session, 
+                  registeredPhoneNumbers: session.registeredPhoneNumbers.filter(p => normalizePhone(p) !== userPhoneNorm) 
+              };
               setSessions(prev => prev.map(s => s.id === session.id ? updatedSession : s));
               await dataService.updateSession(updatedSession);
           }
@@ -528,7 +578,8 @@ const App: React.FC = () => {
 
   const getSessionAttendees = (session: TrainingSession) => {
       return session.registeredPhoneNumbers.map(phone => {
-          const u = users.find(user => user.phone === phone);
+          const phoneNorm = normalizePhone(phone);
+          const u = users.find(user => normalizePhone(user.phone) === phoneNorm);
           return u ? { name: u.displayName || u.fullName, color: u.userColor } : { name: `אורח (${phone})`, color: undefined };
       });
   };
@@ -704,7 +755,7 @@ const App: React.FC = () => {
                                                 key={session.id} 
                                                 session={session} 
                                                 allUsers={users}
-                                                isRegistered={!!currentUserPhone && session.registeredPhoneNumbers.includes(currentUserPhone)}
+                                                isRegistered={!!currentUserPhone && session.registeredPhoneNumbers.some(p => normalizePhone(p) === normalizePhone(currentUserPhone))}
                                                 weather={weatherData[date]}
                                                 onRegisterClick={handleRegisterClick}
                                                 onViewDetails={handleViewDetails}
@@ -760,7 +811,7 @@ const App: React.FC = () => {
                               </button>
                           </div>
                           {viewingSession.zoomLink && (
-                              <button onClick={handleZoomClick} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold shadow-lg transition-all">
+                              <button onClick={handleZoomClick} className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-xl font-bold shadow-lg transition-all animate-pulse">
                                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.5 14.5L12 14l-4.5 2.5V8.5L12 11l4.5-2.5v8z"/></svg> הצטרף לאימון ZOOM
                               </button>
                           )}
@@ -790,7 +841,7 @@ const App: React.FC = () => {
               </div>
               <div className="p-4 bg-brand-black border-t border-gray-800 w-full">
                 <div className="max-w-2xl mx-auto">
-                 {!!currentUserPhone && viewingSession.registeredPhoneNumbers.includes(currentUserPhone) ? (
+                 {!!currentUserPhone && viewingSession.registeredPhoneNumbers.some(p => normalizePhone(p) === normalizePhone(currentUserPhone)) ? (
                     <Button variant="danger" className="w-full py-4 text-lg" onClick={() => handleRegisterClick(viewingSession.id)}>ביטול הגעה לאימון</Button>
                  ) : (
                     <Button 
@@ -897,7 +948,13 @@ const App: React.FC = () => {
           </div>
       )}
       <footer className="fixed bottom-0 w-full bg-brand-black/90 backdrop-blur-md border-t border-gray-800 h-16 flex justify-between items-center px-6 z-40">
-          <button onClick={() => setShowTermsModal(true)} className="text-gray-500 text-xs hover:text-white transition-colors">מדיניות השימוש</button>
+          <div className="flex gap-4 items-center">
+            <button onClick={() => setShowTermsModal(true)} className="text-gray-500 text-xs hover:text-white transition-colors">מדיניות השימוש</button>
+            <div className="flex items-center gap-1.5" title={isCloudConnected ? "מחובר לענן (מסונכרן)" : "מצב מקומי (לא מסונכרן)"}>
+                <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-orange-500 animate-pulse'}`}></span>
+                {!isCloudConnected && <span className="text-[10px] text-orange-500 font-bold hidden md:inline">לא מסונכרן (מצב מקומי)</span>}
+            </div>
+          </div>
           <div className="relative">
               {pendingUsersCount > 0 && (
                   <span className="absolute -top-1 -right-1 flex h-3 w-3">

@@ -61,9 +61,18 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                אימון ניסיון
            </div>
         )}
+        {/* Always show Zoom badge if session has zoomLink */}
+        {session.zoomLink && (
+           <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                   <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+               </svg>
+               ZOOM
+           </div>
+        )}
       </div>
       
-      <div className="flex justify-between items-start mt-4">
+      <div className="flex justify-between items-start mt-5">
         <span className="text-xl font-black text-white font-mono tracking-tight">{session.time}</span>
         {isRegistered && (
             <span 
@@ -86,16 +95,6 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                 </svg>
                 <span className="truncate">{session.location}</span>
               </div>
-              
-             {/* Zoom Badge - Now shown separately if exists */}
-             {session.zoomLink && (
-               <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border bg-blue-600/20 text-blue-300 border-blue-500/30 w-full">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                     <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                  </svg>
-                  <span className="font-bold">משודר ב-ZOOM</span>
-               </div>
-             )}
           </div>
       </div>
 
