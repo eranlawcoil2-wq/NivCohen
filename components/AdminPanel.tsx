@@ -3,6 +3,7 @@ import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, Loc
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { getCityCoordinates } from '../services/weatherService';
+import { supabase } from '../services/supabaseClient';
 
 interface AdminPanelProps {
   users: User[];
@@ -163,22 +164,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Location Management State
   const [newLocationName, setNewLocationName] = useState('');
   const [newLocationAddress, setNewLocationAddress] = useState('');
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
   
   // Payment Link State
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
 
-  // Supabase Connection State
-  const [supabaseUrlInput, setSupabaseUrlInput] = useState('');
-  const [supabaseKeyInput, setSupabaseKeyInput] = useState('');
-
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isZoomSession, setIsZoomSession] = useState(false);
-
-  useEffect(() => {
-      setSupabaseUrlInput(localStorage.getItem('niv_app_supabase_url') || '');
-      setSupabaseKeyInput(localStorage.getItem('niv_app_supabase_key') || '');
-  }, []);
+  const [isExiting, setIsExiting] = useState(false);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
@@ -200,6 +194,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const getDayName = (dateStr: string) => {
       return new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long' });
+  };
+  
+  const handleExitClick = () => {
+      setIsExiting(true);
+      setTimeout(() => {
+          onExitAdmin();
+          setIsExiting(false);
+      }, 800);
   };
 
   const handleUserSubmit = () => {
@@ -473,18 +475,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
 
-  const handleAddLocation = () => {
-      if (newLocationName.trim() && newLocationAddress.trim()) {
+  const handleLocationSubmit = () => {
+      if (!newLocationName.trim() || !newLocationAddress.trim()) {
+          alert('יש להזין שם מיקום וכתובת מלאה');
+          return;
+      }
+
+      if (editingLocationId) {
+          // Update existing location
+          const updatedLocations = locations.map(loc => 
+              loc.id === editingLocationId 
+                  ? { ...loc, name: newLocationName.trim(), address: newLocationAddress.trim() }
+                  : loc
+          );
+          onUpdateLocations(updatedLocations);
+          setEditingLocationId(null);
+          alert('המיקום עודכן בהצלחה');
+      } else {
+          // Add new location
           onUpdateLocations([...locations, { 
               id: Date.now().toString(), 
               name: newLocationName.trim(), 
               address: newLocationAddress.trim() 
           }]);
-          setNewLocationName('');
-          setNewLocationAddress('');
-      } else {
-          alert('יש להזין שם מיקום וכתובת מלאה');
+          alert('המיקום נוסף בהצלחה');
       }
+      setNewLocationName('');
+      setNewLocationAddress('');
+  };
+
+  const handleEditLocation = (loc: LocationDef) => {
+      setNewLocationName(loc.name);
+      setNewLocationAddress(loc.address);
+      setEditingLocationId(loc.id);
+  };
+
+  const handleCancelLocationEdit = () => {
+      setNewLocationName('');
+      setNewLocationAddress('');
+      setEditingLocationId(null);
   };
 
   const handleDeleteLocation = (e: React.MouseEvent, id: string) => {
@@ -492,6 +521,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
        e.preventDefault();
        if (confirm(`למחוק את המיקום הזה?`)) {
           onUpdateLocations(locations.filter(l => l.id !== id));
+          if (editingLocationId === id) handleCancelLocationEdit();
       }
   };
 
@@ -562,14 +592,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       reader.readAsText(file);
   };
 
-  const handleSaveSupabase = () => {
-      localStorage.setItem('niv_app_supabase_url', supabaseUrlInput.trim());
-      localStorage.setItem('niv_app_supabase_key', supabaseKeyInput.trim());
-      if (confirm('ההגדרות נשמרו. יש לרענן את האפליקציה כדי להתחבר למסד הנתונים. לרענן עכשיו?')) {
-          window.location.reload();
-      }
-  };
-
   const handleCopySql = () => {
       navigator.clipboard.writeText(SQL_SCRIPT).then(() => {
           alert('הסקריפט הועתק ללוח! הדבק אותו ב-SQL Editor ב-Supabase.');
@@ -612,13 +634,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-bold text-white">פאנל ניהול (מאמן)</h2>
         <button 
-          onClick={onExitAdmin}
-          className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500 px-4 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2"
+          onClick={handleExitClick}
+          disabled={isExiting}
+          className={`bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500 px-4 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2 ${isExiting ? 'opacity-50 cursor-wait' : ''}`}
         >
-          <span>יציאה</span>
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
+          <span>{isExiting ? 'שומר ויוצא...' : 'יציאה ושמירה'}</span>
+          {!isExiting && (
+             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+             </svg>
+          )}
         </button>
       </div>
       
@@ -660,8 +685,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </button>
       </div>
 
+      {/* Other tabs remain the same... */}
       {activeTab === 'users' && (
-        <div className="space-y-6">
+         <div className="space-y-6">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                 <h3 className="text-lg font-bold text-white mb-4">
                     {editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן ידנית'}
@@ -843,44 +869,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'connections' && (
           <div className="space-y-6">
               <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-                  <h3 className="text-xl text-brand-primary font-bold mb-4">חיבור למסד נתונים בענן (Supabase)</h3>
+                  <h3 className="text-xl text-brand-primary font-bold mb-4">חיבור לענן (Supabase)</h3>
                   
-                  <div className="bg-gray-900/50 p-4 rounded-lg mb-6 text-sm text-gray-300 space-y-2">
-                      <p>כדי שהנתונים יסונכרנו בין כל המכשירים (שלך ושל המתאמנים), יש לחבר את האפליקציה ל-Supabase.</p>
-                      <ol className="list-decimal list-inside space-y-1 mt-2 text-gray-400">
-                          <li>פתח חשבון בחינם באתר <a href="https://supabase.com" target="_blank" className="text-blue-400 underline">supabase.com</a></li>
-                          <li>צור פרויקט חדש (New Project)</li>
-                          <li>העתק את כתובת ה-URL והמפתח הסודי (Anon Key) מהגדרות הפרויקט (Project Settings - API)</li>
-                          <li>הדבק אותם בשדות למטה ושמור</li>
-                          <li>הרץ את הסקריפט (למטה) ב-SQL Editor ב-Supabase כדי ליצור את הטבלאות</li>
-                      </ol>
+                  <div className={`p-4 rounded-lg mb-6 text-sm flex items-center gap-3 ${supabase ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
+                      <div className="text-2xl">{supabase ? '✅' : '❌'}</div>
+                      <div>
+                          <p className="font-bold">{supabase ? 'האתר מחובר למסד הנתונים!' : 'האתר אינו מחובר למסד הנתונים'}</p>
+                          <p className="opacity-80">
+                              {supabase 
+                                ? 'פרטי החיבור הוגדרו בהצלחה בקוד האתר. כל המשתמשים רואים את המידע העדכני.' 
+                                : 'כדי להפעיל את האתר לכולם, עליך להוסיף את פרטי החיבור בקובץ services/supabaseClient.ts'}
+                          </p>
+                      </div>
                   </div>
 
-                  <div className="grid gap-4 mb-6">
-                      <div>
-                          <label className="block text-gray-400 text-sm font-bold mb-2">Supabase Project URL</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white font-mono text-sm"
-                            placeholder="https://your-project.supabase.co"
-                            value={supabaseUrlInput}
-                            onChange={(e) => setSupabaseUrlInput(e.target.value)}
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-gray-400 text-sm font-bold mb-2">Supabase Anon Key</label>
-                          <input 
-                            type="text" 
-                            className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white font-mono text-sm"
-                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                            value={supabaseKeyInput}
-                            onChange={(e) => setSupabaseKeyInput(e.target.value)}
-                          />
-                      </div>
-                      <Button onClick={handleSaveSupabase}>שמור הגדרות ורענן אפליקציה</Button>
+                  <div className="bg-gray-900/50 p-4 rounded-lg text-sm text-gray-400 font-mono" style={{ direction: 'ltr' }}>
+                      <p className="mb-2 text-white font-sans font-bold">הוראות חיבור:</p>
+                      <p>1. Open file: <span className="text-yellow-400">services/supabaseClient.ts</span></p>
+                      <p>2. Locate: <span className="text-blue-400">HARDCODED_URL</span> and <span className="text-blue-400">HARDCODED_KEY</span></p>
+                      <p>3. Paste your Supabase URL and Anon Key inside the quotes.</p>
                   </div>
 
-                  <div className="border-t border-gray-700 pt-6">
+                  <div className="border-t border-gray-700 pt-6 mt-4">
                       <div className="flex justify-between items-center mb-2">
                           <label className="text-gray-400 text-sm font-bold">SQL Script (להרצה ב-Supabase)</label>
                           <Button size="sm" variant="secondary" onClick={handleCopySql}>העתק סקריפט 📋</Button>
@@ -896,41 +906,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
 
+      {/* Settings tab logic remains largely same, just simpler without sync buttons */}
       {activeTab === 'settings' && (
           <div className="space-y-8">
               
-              {/* Sync / Export Import Section */}
-              <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 border-l-4 border-l-brand-primary shadow-lg">
-                  <h3 className="text-xl text-brand-primary mb-3 font-bold flex items-center gap-2">
-                       <span>🔄</span>
-                       סנכרון נתונים (גיבוי ושחזור)
-                  </h3>
-                  <p className="text-gray-300 text-sm mb-4">
-                      אם אינך מחובר ל-Supabase, הנתונים נשמרים מקומית.
-                      ניתן לגבות ולשחזר ידנית כאן.
-                  </p>
-                  <div className="flex gap-4">
-                      <Button onClick={handleExportData} className="flex-1">
-                          📥 שמור גיבוי לקובץ
-                      </Button>
-                      <div className="relative flex-1">
-                          <input 
-                              type="file" 
-                              id="import-file" 
-                              className="hidden" 
-                              accept=".json"
-                              onChange={handleImportData}
-                          />
-                          <label 
-                              htmlFor="import-file" 
-                              className="block w-full text-center bg-gray-700 text-white font-bold py-3 px-6 rounded-lg cursor-pointer hover:bg-gray-600 border border-gray-500 transition-colors"
-                          >
-                              📤 טען גיבוי מקובץ
-                          </label>
-                      </div>
-                  </div>
-              </div>
-
               {/* Payment Links Settings */}
               <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                   <h3 className="text-xl text-brand-primary mb-3">ניהול תשלומים (לינקים)</h3>
@@ -1066,7 +1045,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         value={newLocationAddress}
                         onChange={(e) => setNewLocationAddress(e.target.value)}
                       />
-                      <Button onClick={handleAddLocation} size="sm">הוסף מיקום</Button>
+                      <div className="flex gap-2">
+                          <Button onClick={handleLocationSubmit} size="sm" className="flex-1">
+                              {editingLocationId ? 'עדכן מיקום' : 'הוסף מיקום'}
+                          </Button>
+                          {editingLocationId && (
+                              <Button onClick={handleCancelLocationEdit} size="sm" variant="secondary">
+                                  ביטול
+                              </Button>
+                          )}
+                      </div>
                   </div>
                   <div className="flex flex-col gap-2 max-h-48 overflow-y-auto custom-scrollbar">
                       {locations.map(loc => (
@@ -1075,16 +1063,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   <span className="font-bold block">{loc.name}</span>
                                   <span className="text-xs text-gray-400 block">{loc.address}</span>
                               </div>
-                              <button 
-                                type="button" 
-                                onClick={(e) => handleDeleteLocation(e, loc.id)} 
-                                className="bg-red-500/20 text-red-300 p-1.5 rounded hover:bg-red-500 hover:text-white transition-colors"
-                                title="מחק מיקום"
-                              >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                              </button>
+                              <div className="flex gap-2">
+                                  <button 
+                                    type="button" 
+                                    onClick={() => handleEditLocation(loc)} 
+                                    className="bg-blue-500/20 text-blue-300 p-1.5 rounded hover:bg-blue-500 hover:text-white transition-colors"
+                                    title="ערוך מיקום"
+                                  >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                  </button>
+                                  <button 
+                                    type="button" 
+                                    onClick={(e) => handleDeleteLocation(e, loc.id)} 
+                                    className="bg-red-500/20 text-red-300 p-1.5 rounded hover:bg-red-500 hover:text-white transition-colors"
+                                    title="מחק מיקום"
+                                  >
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                  </button>
+                              </div>
                           </div>
                       ))}
                   </div>

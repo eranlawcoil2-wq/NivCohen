@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef } from './types';
 import { COACH_PHONE_NUMBER } from './constants';
 import { SessionCard } from './components/SessionCard';
@@ -21,11 +21,10 @@ const normalizePhone = (phone: string): string => {
     }
     
     // Ensure it looks like a standard israeli mobile/landline (approx length)
-    // You might want stricter validation, but this solves the 050-000 vs 050000 mismatch
     return cleaned;
 };
 
-// Safe LocalStorage Parser (Standard Function Syntax) - kept for settings/preferences
+// Safe LocalStorage Parser
 function safeJsonParse<T>(key: string, fallback: T): T {
     try {
         const item = localStorage.getItem(key);
@@ -188,24 +187,34 @@ const App: React.FC = () => {
   const [editDisplayName, setEditDisplayName] = useState('');
   const [editUserColor, setEditUserColor] = useState('');
 
-  // Initial Data Load
+  const refreshData = useCallback(async () => {
+      setIsLoadingData(true);
+      setIsCloudConnected(!!supabase);
+      try {
+          const loadedUsers = await dataService.getUsers();
+          const loadedSessions = await dataService.getSessions();
+          setUsers(loadedUsers);
+          setSessions(loadedSessions);
+      } catch (error) {
+          console.error("Failed to load data", error);
+      } finally {
+          setIsLoadingData(false);
+      }
+  }, []);
+
+  // Initial Data Load & Visibility Listener
   useEffect(() => {
-    const loadData = async () => {
-        setIsLoadingData(true);
-        setIsCloudConnected(!!supabase);
-        try {
-            const loadedUsers = await dataService.getUsers();
-            const loadedSessions = await dataService.getSessions();
-            setUsers(loadedUsers);
-            setSessions(loadedSessions);
-        } catch (error) {
-            console.error("Failed to load data", error);
-        } finally {
-            setIsLoadingData(false);
+    refreshData();
+    
+    // Auto-refresh when app comes to foreground (fixes mobile sync issues)
+    const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+            refreshData();
         }
     };
-    loadData();
-  }, []);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [refreshData]);
 
   // PWA Install Event Listener
   useEffect(() => {
@@ -575,6 +584,12 @@ const App: React.FC = () => {
           window.open(viewingSession.zoomLink, '_blank');
       }
   };
+  
+  const handleAdminExit = () => {
+      // Re-fetch data on exit to ensure consistency
+      refreshData();
+      setIsAdminMode(false);
+  };
 
   const getSessionAttendees = (session: TrainingSession) => {
       return session.registeredPhoneNumbers.map(phone => {
@@ -715,7 +730,7 @@ const App: React.FC = () => {
                     onUpdateWeatherLocation={setWeatherLocation}
                     onAddPaymentLink={(link) => setPaymentLinks([...paymentLinks, link])}
                     onDeletePaymentLink={(id) => setPaymentLinks(paymentLinks.filter(p => p.id !== id))}
-                    onExitAdmin={() => setIsAdminMode(false)}
+                    onExitAdmin={handleAdminExit}
                 />
             </div>
         ) : (
@@ -954,6 +969,18 @@ const App: React.FC = () => {
                 <span className={`w-2 h-2 rounded-full ${isCloudConnected ? 'bg-green-500 shadow-[0_0_5px_#22c55e]' : 'bg-orange-500 animate-pulse'}`}></span>
                 {!isCloudConnected && <span className="text-[10px] text-orange-500 font-bold hidden md:inline">לא מסונכרן (מצב מקומי)</span>}
             </div>
+            {/* Manual Refresh Button */}
+            <button 
+                onClick={refreshData} 
+                disabled={isLoadingData}
+                className="text-xs text-gray-400 hover:text-white flex items-center gap-1 bg-gray-800/50 px-2 py-1 rounded border border-gray-700 transition-colors"
+                title="רענן נתונים"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 ${isLoadingData ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {isLoadingData ? 'טוען...' : 'רענן'}
+            </button>
           </div>
           <div className="relative">
               {pendingUsersCount > 0 && (
