@@ -15,18 +15,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&display=swap" rel="stylesheet">
     
-    <!-- Global Error Handler for Debugging "Black Screen" -->
+    <!-- Global Error Handler for Debugging -->
     <script>
       window.onerror = function(message, source, lineno, colno, error) {
         var root = document.getElementById('root');
-        if (root) {
-             root.innerHTML = '<div style="color:#ff5555;background:#1a1a1a;padding:20px;font-family:sans-serif;direction:ltr;height:100vh;">' +
-          '<h2 style="margin-top:0">System Error</h2>' +
-          '<p><strong>Message:</strong> ' + message + '</p>' +
-          '<p><strong>Source:</strong> ' + source + ':' + lineno + '</p>' +
-          '<pre style="background:#000;padding:10px;overflow:auto;">' + (error ? error.stack : 'No stack trace') + '</pre>' +
-          '<button onclick="window.location.reload()" style="padding:10px 20px;background:#333;color:white;border:1px solid #555;cursor:pointer;margin-top:20px;">Reload App</button>' +
-          '</div>';
+        if (root && root.innerHTML === '') { // Only show if nothing rendered
+             console.error(message);
         }
         return false;
       };
@@ -75,8 +69,8 @@
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.3",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
   }
 }
@@ -86,7 +80,6 @@
     <div id="root">
         <div style="padding: 20px; color: gray; text-align: center;">
             <h1>טוען את האפליקציה...</h1>
-            <p>אם הודעה זו לא נעלמת, ייתכן שיש בעיה בטעינת הקוד.</p>
         </div>
     </div>
   </body>
