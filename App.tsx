@@ -7,6 +7,18 @@ import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
 import { getWeatherForDates, getWeatherIcon, getWeatherDescription } from './services/weatherService';
 
+// Safe LocalStorage Parser
+const safeJsonParse = <T,>(key: string, fallback: T): T => {
+    try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : fallback;
+    } catch (error) {
+        console.error(`Error parsing localStorage key "${key}":`, error);
+        // If error, return fallback to prevent crash
+        return fallback;
+    }
+};
+
 // Install Prompt Component
 const InstallPrompt: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return (
@@ -46,39 +58,27 @@ const FloatingInstallButton: React.FC<{ onClick: () => void }> = ({ onClick }) =
 };
 
 const App: React.FC = () => {
-  // State
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('niv_app_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
-
-  const [sessions, setSessions] = useState<TrainingSession[]>(() => {
-    const saved = localStorage.getItem('niv_app_sessions');
-    return saved ? JSON.parse(saved) : INITIAL_SESSIONS;
-  });
+  // State with Safe Parsing
+  const [users, setUsers] = useState<User[]>(() => safeJsonParse('niv_app_users', INITIAL_USERS));
+  const [sessions, setSessions] = useState<TrainingSession[]>(() => safeJsonParse('niv_app_sessions', INITIAL_SESSIONS));
 
   // Dynamic Lists State
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(() => {
-      const saved = localStorage.getItem('niv_app_types');
-      // Default to Enum values if not saved
-      return saved ? JSON.parse(saved) : Object.values(WorkoutType);
+      const defaultTypes = Object.values(WorkoutType);
+      return safeJsonParse('niv_app_types', defaultTypes);
   });
 
   const [locations, setLocations] = useState<string[]>(() => {
-      const saved = localStorage.getItem('niv_app_locations');
-      return saved ? JSON.parse(saved) : ['פארק הירקון, תל אביב', 'סטודיו פיטנס, רמת גן', 'חוף הים, הרצליה', 'גן המייסדים, נס ציונה'];
+      const defaultLocations = ['פארק הירקון, תל אביב', 'סטודיו פיטנס, רמת גן', 'חוף הים, הרצליה', 'גן המייסדים, נס ציונה'];
+      return safeJsonParse('niv_app_locations', defaultLocations);
   });
 
   // Payment Links State
-  const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => {
-      const saved = localStorage.getItem('niv_app_payments');
-      return saved ? JSON.parse(saved) : [];
-  });
+  const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
 
   // Weather Settings
   const [weatherLocation, setWeatherLocation] = useState<WeatherLocation>(() => {
-      const saved = localStorage.getItem('niv_app_weather_loc');
-      return saved ? JSON.parse(saved) : { name: 'נס ציונה', lat: 31.93, lon: 34.80 };
+      return safeJsonParse('niv_app_weather_loc', { name: 'נס ציונה', lat: 31.93, lon: 34.80 });
   });
 
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(() => {
@@ -340,7 +340,7 @@ const App: React.FC = () => {
   const handleDeleteUser = (userId: string) => {
       setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
       
-      // Optional: Remove user from sessions (not strictly required if we just hide name, but cleaner)
+      // Optional: Remove user from sessions
       const user = users.find(u => u.id === userId);
       if (user) {
           setSessions(prev => prev.map(s => ({
