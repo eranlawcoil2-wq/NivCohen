@@ -12,11 +12,12 @@ const ANON_KEY: string = '';    // <-- הדבק כאן את ה-Anon Key
 
 // ==============================================================================
 
-// בדיקה האם המאמן הזין את הפרטים
-const isConfigured = PROJECT_URL.length > 10 && ANON_KEY.length > 20;
+const isConfigured = PROJECT_URL.length > 5 && ANON_KEY.length > 10;
 
 if (!isConfigured) {
-    console.warn('⚠️ Supabase credentials are missing in services/supabaseClient.ts');
+    console.warn('⚠️ Supabase credentials are missing or too short in services/supabaseClient.ts');
+} else {
+    console.log('✅ Supabase Client Initialized with URL:', PROJECT_URL);
 }
 
 export const supabase = isConfigured ? createClient(PROJECT_URL, ANON_KEY) : null;

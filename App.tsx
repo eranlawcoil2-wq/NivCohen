@@ -172,7 +172,7 @@ const App: React.FC = () => {
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
 
-  const [loginPhone, setLoginPhone] = useState('');
+  const [loginSearch, setLoginSearch] = useState('');
   const [targetSessionId, setTargetSessionId] = useState<string | null>(null); 
   const [quote, setQuote] = useState<string>('טוען משפט מוטיבציה...');
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
@@ -184,7 +184,14 @@ const App: React.FC = () => {
 
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
-      setIsCloudConnected(!!supabase);
+      
+      // Check cloud connection
+      const hasCloud = !!supabase;
+      setIsCloudConnected(hasCloud);
+      if (!hasCloud) {
+          console.warn("App running in local mode (LocalStorage).");
+      }
+
       try {
           const loadedUsers = await dataService.getUsers();
           const loadedSessions = await dataService.getSessions();
@@ -401,33 +408,22 @@ const App: React.FC = () => {
     await dataService.updateSession(updatedSession);
   };
 
-  const handleLoginSubmit = async () => {
-      const normalizedPhone = normalizePhone(loginPhone.trim());
-      if (!normalizedPhone || normalizedPhone.length < 9) {
-          alert('נא להזין מספר טלפון תקין');
-          return;
-      }
-
-      // Check against users with normalized phones
-      const existingUser = users.find(u => normalizePhone(u.phone) === normalizedPhone);
-      
-      if (!existingUser) {
-          alert('משתמש לא קיים במערכת. אנא צור קשר עם המאמן להרשמה.');
-          return;
-      }
+  const handleUserSelect = async (user: User) => {
+      const normalizedPhone = normalizePhone(user.phone);
       setCurrentUserPhone(normalizedPhone);
       setShowLoginModal(false);
-      setLoginPhone('');
+      setLoginSearch('');
       
+      // Auto-register if came from a click
       if (targetSessionId) {
         const session = sessions.find(s => s.id === targetSessionId);
         if (session) {
-             if (existingUser.isNew && !session.isTrial) {
+             if (user.isNew && !session.isTrial) {
                  alert('נרשמת בהצלחה למערכת! שים לב: כמתאמן חדש, באפשרותך להירשם רק לאימוני ניסיון.');
                  setTargetSessionId(null);
                  return;
              }
-             if (existingUser.paymentStatus === PaymentStatus.OVERDUE) {
+             if (user.paymentStatus === PaymentStatus.OVERDUE) {
                  alert('התחברת בהצלחה, אך לא ניתן להירשם לאימון עקב חוב.');
                  setTargetSessionId(null);
                  return;
@@ -469,14 +465,15 @@ const App: React.FC = () => {
       setUsers(prev => [...prev, newUser]);
       await dataService.addUser(newUser);
       
-      alert('פרטייך נשלחו בהצלחה למאמן לאישור! תוכל להתחבר לאחר אישור ההרשמה.');
+      alert('פרטייך נשלחו בהצלחה למאמן לאישור! תוכל להתחבר כעת.');
       setIsRegisterMode(false);
       setRegName('');
       setRegPhone('');
       setRegEmail('');
+      handleUserSelect(newUser); // Auto login after register
   };
 
-  // CRUD Wrappers
+  // CRUD Wrappers (same as before)
   const handleAddUser = async (u: User) => {
       const uNormalized = { ...u, phone: normalizePhone(u.phone) };
       setUsers(prev => [...prev, uNormalized]);
@@ -525,7 +522,9 @@ const App: React.FC = () => {
   }
 
   const handleLogout = () => {
-      setCurrentUserPhone(null);
+      if(confirm('האם אתה בטוח שברצונך להתנתק?')) {
+        setCurrentUserPhone(null);
+      }
   };
 
   const handleProfileUpdate = () => {
@@ -588,7 +587,6 @@ const App: React.FC = () => {
   };
   
   const handleAdminExit = () => {
-      // Re-fetch data on exit to ensure consistency
       refreshData();
       setIsAdminMode(false);
   };
@@ -610,6 +608,12 @@ const App: React.FC = () => {
   }, {} as Record<string, TrainingSession[]>);
 
   const modalColor = viewingSession?.color || primaryColor;
+
+  const filteredLoginUsers = users.filter(u => 
+      u.fullName.includes(loginSearch) || 
+      (u.displayName && u.displayName.includes(loginSearch)) ||
+      u.phone.includes(loginSearch)
+  ).sort((a,b) => a.fullName.localeCompare(b.fullName));
 
   if (isRegisterMode) {
       return (
@@ -636,7 +640,7 @@ const App: React.FC = () => {
                           <label className="block text-gray-300 text-sm font-bold mb-2">אימייל (אופציונלי)</label>
                           <input type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)} className="w-full p-3 rounded bg-gray-900 border border-gray-600 text-white focus:border-brand-primary focus:outline-none" placeholder="email@example.com" />
                       </div>
-                      <Button onClick={handleRegistrationSubmit} className="w-full py-4 text-lg mt-4">שלח פרטים להרשמה</Button>
+                      <Button onClick={handleRegistrationSubmit} className="w-full py-4 text-lg mt-4">שלח פרטים והתחבר</Button>
                       <div className="text-center mt-4"><button onClick={() => setIsRegisterMode(false)} className="text-gray-400 hover:text-white underline text-sm">חזרה לדף הראשי</button></div>
                   </div>
               </div>
@@ -675,7 +679,7 @@ const App: React.FC = () => {
                           </button>
                       </div>
                   </div>
-                  <button onClick={handleLogout} className="text-xs text-gray-500 underline mt-1">התנתק</button>
+                  <button onClick={handleLogout} className="text-xs text-gray-500 underline mt-1">התנתק (אינני {currentUser.displayName || currentUser.fullName.split(' ')[0]})</button>
               </div>
           )}
         </div>
@@ -792,6 +796,62 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* Select User Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowLoginModal(false)}>
+            <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-sm border border-gray-700 shadow-2xl flex flex-col max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                <h3 className="text-2xl font-bold text-white mb-2">מי מתאמן היום?</h3>
+                <p className="text-gray-400 mb-4 text-sm">בחר את השם שלך מהרשימה כדי להתחבר.</p>
+                
+                <input 
+                    type="text" 
+                    placeholder="חפש את השם שלך..." 
+                    value={loginSearch}
+                    onChange={(e) => setLoginSearch(e.target.value)}
+                    className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg text-white mb-4 focus:border-brand-primary focus:outline-none sticky top-0"
+                    autoFocus
+                />
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 mb-4">
+                    {filteredLoginUsers.length === 0 ? (
+                        <p className="text-gray-500 text-center py-4">לא נמצא מתאמן בשם זה</p>
+                    ) : (
+                        filteredLoginUsers.map(user => (
+                            <button 
+                                key={user.id}
+                                onClick={() => handleUserSelect(user)}
+                                className="w-full text-right p-3 rounded-lg hover:bg-brand-primary/10 hover:border-brand-primary border border-transparent transition-all flex items-center gap-3 group"
+                            >
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs" style={{ backgroundColor: user.userColor || '#374151', color: user.userColor ? 'black' : 'white' }}>
+                                    {user.fullName.charAt(0)}
+                                </div>
+                                <span className="text-white font-bold group-hover:text-brand-primary transition-colors">
+                                    {user.displayName || user.fullName}
+                                </span>
+                            </button>
+                        ))
+                    )}
+                </div>
+
+                <div className="border-t border-gray-700 pt-4 mt-auto">
+                    <button 
+                        onClick={() => { setShowLoginModal(false); setIsRegisterMode(true); }}
+                        className="w-full bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-lg font-bold text-sm transition-colors"
+                    >
+                        אני חדש! הרשמה ראשונית
+                    </button>
+                    <button 
+                        onClick={() => setShowLoginModal(false)}
+                        className="w-full text-gray-500 text-xs mt-3 hover:text-white"
+                    >
+                        ביטול
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Session Details Modal */}
       {viewingSession && (
            <div className="fixed inset-0 bg-black/95 z-50 flex flex-col overflow-hidden animate-in fade-in duration-200">
               <div className="p-4 flex justify-between items-center border-b border-gray-800 bg-brand-black max-w-2xl mx-auto w-full">
@@ -879,47 +939,6 @@ const App: React.FC = () => {
       {!showInstallPrompt && <FloatingInstallButton onClick={() => setShowInstallPrompt(true)} />}
       {!showInstallPrompt && !isRegisterMode && <WhatsAppButton />}
 
-      {/* Modals for Profile, Payments, Login, Terms remain the same... */}
-      {/* Profile Edit Modal */}
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowProfileModal(false)}>
-            <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-sm border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
-                <h3 className="text-xl font-bold text-white mb-4">עריכת פרופיל</h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-sm text-gray-400 block mb-1">שם תצוגה (כינוי)</label>
-                        <input type="text" value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)} className="w-full p-3 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-brand-primary focus:outline-none" placeholder="איך נקרא לך?" />
-                    </div>
-                    <div>
-                        <label className="text-sm text-gray-400 block mb-1">בחר צבע לשם שלך</label>
-                        <div className="flex gap-2 flex-wrap">
-                            {USER_COLORS.map(color => (
-                                <button key={color} type="button" onClick={() => setEditUserColor(color)} className={`w-8 h-8 rounded-full border-2 transition-all ${editUserColor === color ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-50'}`} style={{ backgroundColor: color }} />
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                        <Button onClick={handleProfileUpdate} className="flex-1">שמור שינויים</Button>
-                        <Button variant="secondary" onClick={() => setShowProfileModal(false)} className="flex-1">ביטול</Button>
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
-      {/* Other modals omitted for brevity, logic identical */}
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-sm border border-gray-700 shadow-2xl">
-                <h3 className="text-2xl font-bold text-white mb-2">הזדהות מתאמן</h3>
-                <p className="text-gray-400 mb-6 text-sm">הזן את מספר הטלפון שלך כדי להירשם לאימון.</p>
-                <input type="tel" value={loginPhone} onChange={(e) => setLoginPhone(e.target.value)} placeholder="050-0000000" className="w-full p-4 bg-gray-900 border border-gray-600 rounded-lg text-white text-lg tracking-widest mb-4 focus:border-brand-primary focus:outline-none" autoFocus />
-                <div className="flex gap-3">
-                    <Button onClick={handleLoginSubmit} className="flex-1">המשך</Button>
-                    <Button variant="secondary" onClick={() => { setShowLoginModal(false); setTargetSessionId(null); setLoginPhone(''); }} className="flex-1">ביטול</Button>
-                </div>
-            </div>
-        </div>
-      )}
       {/* Payments and Terms Modal render logic... */}
       {showPaymentsModal && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowPaymentsModal(false)}>

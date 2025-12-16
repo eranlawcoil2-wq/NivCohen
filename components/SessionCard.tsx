@@ -51,6 +51,39 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       onRegisterClick(session.id);
   };
 
+  const handleAddToCalendar = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      
+      // Calculate start and end times
+      const startDate = new Date(`${session.date}T${session.time}`);
+      const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Assume 1 hour duration
+
+      // Format date for ICS (YYYYMMDDTHHmmSSZ)
+      const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d+/g, '');
+
+      const icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'BEGIN:VEVENT',
+        `DTSTART:${formatDate(startDate)}`,
+        `DTEND:${formatDate(endDate)}`,
+        `SUMMARY:אימון ${session.type} עם ניב כהן`,
+        `DESCRIPTION:${session.description || ''}`,
+        `LOCATION:${session.location}`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+      ].join('\n');
+
+      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `workout_${session.date}.ics`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
+
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
@@ -62,17 +95,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       } as React.CSSProperties}
     >
       <div className="absolute top-0 left-0 flex flex-row gap-1 p-1 z-10 flex-wrap max-w-full">
-        {session.isTrial && (
-           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse">
-               אימון ניסיון
-           </div>
-        )}
         {session.zoomLink && (
-           <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+           <div className="bg-gradient-to-r from-blue-600 to-cyan-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                </svg>
-               ZOOM
+               אימון ZOOM
            </div>
         )}
       </div>
@@ -119,17 +147,26 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       </div>
 
       {/* Action Button Area */}
-      <div className="mt-2">
+      <div className="mt-2 grid grid-cols-1 gap-2">
           {isRegistered ? (
-              <button 
-                onClick={handleButtonClick}
-                className="w-full bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/50 py-2 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
-              >
-                  <span>ביטול רישום</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-              </button>
+              <>
+                <button 
+                    onClick={handleAddToCalendar}
+                    className="w-full bg-gray-700 hover:bg-gray-600 text-white border border-gray-600 py-2 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                    <span>הוסף ליומן</span>
+                    <span>🗓️</span>
+                </button>
+                <button 
+                    onClick={handleButtonClick}
+                    className="w-full bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/50 py-2 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2"
+                >
+                    <span>ביטול רישום</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+              </>
           ) : (
               <button 
                 onClick={handleButtonClick}

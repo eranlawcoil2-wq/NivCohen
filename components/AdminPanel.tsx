@@ -1273,23 +1273,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </div>
                         
                         <div className="flex gap-4">
-                            {/* Trial Session Toggle */}
-                            <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
-                                <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
-                                    <input 
-                                        type="checkbox" 
-                                        name="isTrial" 
-                                        id="isTrial" 
-                                        className="absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer peer checked:right-0 right-4"
-                                        style={{ right: newSession.isTrial ? '0' : 'auto', left: newSession.isTrial ? 'auto' : '0' }}
-                                        checked={newSession.isTrial || false}
-                                        onChange={e => setNewSession({...newSession, isTrial: e.target.checked})}
-                                    />
-                                    <label htmlFor="isTrial" className={`block overflow-hidden h-6 rounded-full cursor-pointer ${newSession.isTrial ? 'bg-brand-primary' : 'bg-gray-600'}`}></label>
-                                </div>
-                                <span className="text-white font-bold select-none text-sm">אימון ניסיון</span>
-                            </label>
-
                              {/* Zoom Toggle */}
                              <label className="flex items-center gap-3 bg-gray-800 p-3 rounded cursor-pointer border border-gray-700 hover:border-gray-500 transition-colors flex-1">
                                 <div className="relative inline-block w-10 h-6 align-middle select-none transition duration-200 ease-in">
