@@ -11,11 +11,6 @@ const HARDCODED_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
 // Access environment variables safely with fallback
 const env = (import.meta as any).env || {};
 
-// Priority: 
-// 1. Hardcoded in file (Best for public website)
-// 2. Environment Variables (Best for developers)
-// 3. LocalStorage (Fallback for testing)
-
 const localUrl = typeof window !== 'undefined' ? localStorage.getItem('niv_app_supabase_url') : null;
 const localKey = typeof window !== 'undefined' ? localStorage.getItem('niv_app_supabase_key') : null;
 
@@ -23,7 +18,10 @@ const localKey = typeof window !== 'undefined' ? localStorage.getItem('niv_app_s
 const supabaseUrl = (HARDCODED_URL && HARDCODED_URL !== 'PASTE_YOUR_URL_HERE') ? HARDCODED_URL : (env.VITE_SUPABASE_URL || localUrl);
 const supabaseKey = (HARDCODED_KEY && HARDCODED_KEY !== 'PASTE_YOUR_ANON_KEY_HERE') ? HARDCODED_KEY : (env.VITE_SUPABASE_ANON_KEY || localKey);
 
-// Create the client
-export const supabase = (supabaseUrl && supabaseKey) 
+// Helper to check if a URL is roughly valid to prevent crashes
+const isValidUrl = (url: string | null) => url && (url.startsWith('http://') || url.startsWith('https://'));
+
+// Create the client ONLY if we have valid-looking credentials
+export const supabase = (supabaseUrl && isValidUrl(supabaseUrl) && supabaseKey) 
   ? createClient(supabaseUrl, supabaseKey) 
   : null;

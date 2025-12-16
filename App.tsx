@@ -39,8 +39,6 @@ const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canI
     </div>
 );
 
-const USER_COLORS = ['#ffffff', '#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#8B5CF6', '#EC4899', '#A3E635'];
-
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
@@ -140,9 +138,6 @@ const App: React.FC = () => {
       setCurrentUserPhone(phone); localStorage.setItem('niv_app_current_phone', phone); setShowLoginModal(false);
   };
 
-  // ---------------------------------------------------------
-  // Updated Layout for Mobile: 2 Columns & Day Separation
-  // ---------------------------------------------------------
   const mainBackgroundClass = isAdminMode 
     ? 'min-h-screen pb-20 font-sans md:bg-[#330000] bg-brand-black transition-colors duration-500' 
     : 'min-h-screen bg-brand-black pb-20 font-sans transition-colors duration-500';
@@ -191,16 +186,16 @@ const App: React.FC = () => {
                         const isToday = new Date().toISOString().split('T')[0] === date;
                         return (
                             <div key={date} className={`rounded-xl border overflow-hidden flex flex-col md:flex-row shadow-lg ${isToday ? 'border-brand-primary bg-gray-800/50' : 'border-gray-800 bg-gray-900/40'}`}>
-                                {/* Date Header: Horizontal on Mobile, Sidebar on Desktop */}
-                                <div className={`p-3 md:w-24 flex md:flex-col justify-between items-center md:justify-center md:border-l border-gray-700 ${isToday?'bg-brand-primary/10 text-brand-primary':'bg-gray-800 text-gray-400'}`}>
+                                {/* Date Header - Full width on mobile, Sidebar on desktop */}
+                                <div className={`p-3 md:w-24 flex justify-between items-center md:flex-col md:justify-center border-b md:border-b-0 md:border-l border-gray-700 ${isToday?'bg-brand-primary/10 text-brand-primary':'bg-gray-800 text-gray-400'}`}>
                                     <div className="flex items-baseline gap-2 md:flex-col md:gap-0 md:text-center">
                                         <span className="font-bold text-lg">{new Date(date).toLocaleDateString('he-IL',{weekday:'short'})}</span>
                                         <span className="text-sm">{new Date(date).getDate()}/{new Date(date).getMonth()+1}</span>
                                     </div>
-                                    {weatherData[date] && <span className="text-xs">{Math.round(weatherData[date].maxTemp)}° {getWeatherIcon(weatherData[date].weatherCode)}</span>}
+                                    {weatherData[date] && <div className="text-xs font-mono bg-black/20 px-2 py-0.5 rounded">{Math.round(weatherData[date].maxTemp)}° {getWeatherIcon(weatherData[date].weatherCode)}</div>}
                                 </div>
                                 
-                                {/* Session Grid: 2 Columns on Mobile, 3 on Desktop */}
+                                {/* Session Grid - 2 Columns on Mobile */}
                                 <div className="flex-1 p-3">
                                     {daySessions.length>0 ? (
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -211,7 +206,7 @@ const App: React.FC = () => {
                                             ))}
                                         </div>
                                     ) : (
-                                        <div className="flex items-center justify-center text-gray-600 text-sm h-16 bg-black/20 rounded-lg border border-dashed border-gray-800">אין אימונים ביום זה</div>
+                                        <div className="flex items-center justify-center text-gray-500 text-sm h-20 bg-black/10 rounded border border-dashed border-gray-800 italic">אין אימונים היום</div>
                                     )}
                                 </div>
                             </div>
