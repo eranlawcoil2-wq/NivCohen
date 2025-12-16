@@ -624,6 +624,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       window.location.reload();
   };
 
+  const handleShareConnection = () => {
+    if (!manualUrl || !manualKey) {
+        alert('יש להתחבר קודם במחשב זה כדי לשתף את החיבור.');
+        return;
+    }
+    const baseUrl = window.location.origin + window.location.pathname;
+    const link = `${baseUrl}?setup_url=${encodeURIComponent(manualUrl)}&setup_key=${encodeURIComponent(manualKey)}`;
+    
+    if (navigator.share) {
+        navigator.share({
+            title: 'הגדרות חיבור - ניב כהן',
+            text: 'לחץ על הקישור כדי לחבר את האפליקציה בטלפון שלך',
+            url: link
+        });
+    } else {
+        navigator.clipboard.writeText(link).then(() => {
+            alert('הקישור הועתק! שלח אותו לעצמך בוואטסאפ ופתח אותו בטלפון.');
+        });
+    }
+  };
+
   const filteredUsers = existingUsers.filter(user => {
       const matchesText = 
         user.fullName.includes(filterText) || 
@@ -910,10 +931,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                        <h4 className="text-white font-bold mb-2">אפשרות א: חיבור מחשב זה בלבד (מקומי)</h4>
                        <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded mb-3 text-xs text-yellow-200">
                            ⚠️ <strong>שים לב:</strong> חיבור זה נשמר בדפדפן הנוכחי בלבד.
-                           <br/>
-                           הוא <strong>לא יעבור</strong> לטלפון שלך ולא ללקוחות שלך.
-                           <br/>
-                           כדי שזה יעבוד לכולם מהטלפון, עליך להשתמש באפשרות ב'.
                        </div>
                        <div className="grid gap-3">
                            <div>
@@ -940,18 +957,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                        </div>
                   </div>
 
-                  {/* Hardcode Instructions Section */}
-                  <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
-                      <h4 className="text-blue-300 font-bold mb-2">אפשרות ב: חיבור קבוע לכולם (כולל מהנייד) 📱</h4>
+                   {/* Magic Link Share Section */}
+                   <div className="bg-purple-900/20 p-4 rounded-lg border border-purple-500/30 mb-8 animate-pulse shadow-lg shadow-purple-900/20">
+                      <h4 className="text-purple-300 font-bold mb-2 flex items-center gap-2">
+                          <span>✨</span> שתף חיבור לנייד / למכשיר אחר
+                      </h4>
                       <p className="text-xs text-gray-400 mb-3">
-                          כדי שהאפליקציה תעבוד בנייד לכל המשתמשים ללא צורך בהזנת סיסמאות:
+                          לחץ על הכפתור כדי להעתיק קישור מיוחד. שלח אותו לטלפון שלך, פתח אותו שם, והחיבור יוגדר אוטומטית!
                       </p>
-                      <div className="bg-black/50 p-3 rounded border border-blue-500/20 text-sm text-gray-300">
-                          <strong>שלח למתכנת (בהודעה כאן) את ה-URL וה-Key שלך.</strong>
-                          <br/>
-                          המתכנת יטמיע אותם בקוד, ואז זה יעבוד אוטומטית לכולם.
-                      </div>
-                  </div>
+                      <Button onClick={handleShareConnection} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 shadow-lg">
+                          🔗 העתק קישור חיבור לנייד
+                      </Button>
+                   </div>
 
                   <div className="border-t border-gray-700 pt-6 mt-4">
                       <div className="flex justify-between items-center mb-2">

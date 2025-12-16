@@ -12,15 +12,10 @@ import { supabase } from './services/supabaseClient';
 // Helper: Normalize Phone Numbers (Remove dashes, spaces, +972, etc.)
 const normalizePhone = (phone: string): string => {
     if (!phone) return '';
-    // Remove all non-digit characters
     let cleaned = phone.replace(/\D/g, '');
-    
-    // Convert 972 to 0
     if (cleaned.startsWith('972')) {
         cleaned = '0' + cleaned.substring(3);
     }
-    
-    // Ensure it looks like a standard israeli mobile/landline (approx length)
     return cleaned;
 };
 
@@ -366,13 +361,20 @@ const App: React.FC = () => {
     const normalizedCurrent = normalizePhone(currentUserPhone);
     const isAlreadyRegistered = session.registeredPhoneNumbers.some(p => normalizePhone(p) === normalizedCurrent);
 
-    if (currentUser?.isNew && !session.isTrial) {
-        alert('מתאמנים חדשים יכולים להירשם לאימוני ניסיון בלבד.');
-        return;
-    }
-    if (currentUser?.paymentStatus === PaymentStatus.OVERDUE) {
-         alert('לא ניתן להירשם לאימון עקב חוב פתוח. אנא הסדר תשלום מול המאמן.');
-         return;
+    if (!isAlreadyRegistered) {
+        // Validation for new registration only
+        if (currentUser?.isNew && !session.isTrial) {
+            alert('מתאמנים חדשים יכולים להירשם לאימוני ניסיון בלבד.');
+            return;
+        }
+        if (currentUser?.paymentStatus === PaymentStatus.OVERDUE) {
+             alert('לא ניתן להירשם לאימון עקב חוב פתוח. אנא הסדר תשלום מול המאמן.');
+             return;
+        }
+        if (session.registeredPhoneNumbers.length >= session.maxCapacity) {
+            alert('האימון מלא!');
+            return;
+        }
     }
 
     let updatedSession: TrainingSession;
@@ -382,10 +384,6 @@ const App: React.FC = () => {
             registeredPhoneNumbers: session.registeredPhoneNumbers.filter(p => normalizePhone(p) !== normalizedCurrent) 
         };
     } else {
-        if (session.registeredPhoneNumbers.length >= session.maxCapacity) {
-            alert('האימון מלא!');
-            return;
-        }
         // Save using the normalized phone number for consistency
         updatedSession = { 
             ...session, 
@@ -395,6 +393,10 @@ const App: React.FC = () => {
     
     // Update Optimistically
     setSessions(prev => prev.map(s => s.id === sessionId ? updatedSession : s));
+    if (viewingSession && viewingSession.id === sessionId) {
+        setViewingSession(updatedSession);
+    }
+    
     // Persist
     await dataService.updateSession(updatedSession);
   };
