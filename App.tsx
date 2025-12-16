@@ -835,12 +835,6 @@ const App: React.FC = () => {
 
                 <div className="border-t border-gray-700 pt-4 mt-auto">
                     <button 
-                        onClick={() => { setShowLoginModal(false); setIsRegisterMode(true); }}
-                        className="w-full bg-gray-700 hover:bg-gray-600 text-white p-3 rounded-lg font-bold text-sm transition-colors"
-                    >
-                        אני חדש! הרשמה ראשונית
-                    </button>
-                    <button 
                         onClick={() => setShowLoginModal(false)}
                         className="w-full text-gray-500 text-xs mt-3 hover:text-white"
                     >

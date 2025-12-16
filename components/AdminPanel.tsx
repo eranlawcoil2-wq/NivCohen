@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { getCityCoordinates } from '../services/weatherService';
-import { supabase } from '../services/supabaseClient';
 
 interface AdminPanelProps {
   users: User[];
@@ -50,47 +49,6 @@ const USER_COLORS = [
     '#A3E635'  // Brand Lime
 ];
 
-const SQL_SCRIPT = `
--- יצירת טבלאות (אם לא קיימות)
-create table if not exists users (
-  id text primary key,
-  "fullName" text,
-  "displayName" text,
-  phone text unique,
-  email text,
-  "startDate" text,
-  "paymentStatus" text,
-  "isNew" boolean,
-  "userColor" text
-);
-
-create table if not exists sessions (
-  id text primary key,
-  type text,
-  date text,
-  time text,
-  location text,
-  "maxCapacity" int,
-  description text,
-  "registeredPhoneNumbers" text[],
-  color text,
-  "isTrial" boolean,
-  "zoomLink" text
-);
-
--- פתיחת גישה (Row Level Security)
-alter table users enable row level security;
-alter table sessions enable row level security;
-
--- ניקוי מדיניות ישנה למניעת כפילויות (פותר שגיאה 42710)
-drop policy if exists "Public Access Users" on users;
-drop policy if exists "Public Access Sessions" on sessions;
-
--- יצירת מדיניות גישה ציבורית חדשה
-create policy "Public Access Users" on users for all using (true);
-create policy "Public Access Sessions" on sessions for all using (true);
-`;
-
 const getSunday = (d: Date) => {
   const date = new Date(d);
   const day = date.getDay();
@@ -122,7 +80,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     onDeletePaymentLink,
     onExitAdmin
 }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'settings' | 'new_users' | 'connections'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'sessions' | 'settings' | 'new_users'>('users');
   
   // User Form State
   const [formUser, setFormUser] = useState<Partial<User>>({
@@ -173,21 +131,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
 
-  // Connection Manual State
-  const [manualUrl, setManualUrl] = useState('');
-  const [manualKey, setManualKey] = useState('');
-
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isZoomSession, setIsZoomSession] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    // Load existing manual keys if they exist
-    const savedUrl = localStorage.getItem('niv_app_supabase_url');
-    const savedKey = localStorage.getItem('niv_app_supabase_key');
-    if (savedUrl) setManualUrl(savedUrl);
-    if (savedKey) setManualKey(savedKey);
-  }, []);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
@@ -607,44 +553,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       reader.readAsText(file);
   };
 
-  const handleCopySql = () => {
-      navigator.clipboard.writeText(SQL_SCRIPT).then(() => {
-          alert('הסקריפט הועתק ללוח! הדבק אותו ב-SQL Editor ב-Supabase.');
-      });
-  };
-
-  const handleSaveLocalConnection = () => {
-      if (!manualUrl.trim() || !manualKey.trim()) {
-          alert('נא להזין URL ו-Key');
-          return;
-      }
-      localStorage.setItem('niv_app_supabase_url', manualUrl.trim());
-      localStorage.setItem('niv_app_supabase_key', manualKey.trim());
-      alert('החיבור נשמר מקומית! הדף יתרענן כעת.');
-      window.location.reload();
-  };
-
-  const handleShareConnection = () => {
-    if (!manualUrl || !manualKey) {
-        alert('יש להתחבר קודם במחשב זה כדי לשתף את החיבור.');
-        return;
-    }
-    const baseUrl = window.location.origin + window.location.pathname;
-    const link = `${baseUrl}?setup_url=${encodeURIComponent(manualUrl)}&setup_key=${encodeURIComponent(manualKey)}`;
-    
-    if (navigator.share) {
-        navigator.share({
-            title: 'הגדרות חיבור - ניב כהן',
-            text: 'לחץ על הקישור כדי לחבר את האפליקציה בטלפון שלך',
-            url: link
-        });
-    } else {
-        navigator.clipboard.writeText(link).then(() => {
-            alert('הקישור הועתק! שלח אותו לעצמך בוואטסאפ ופתח אותו בטלפון.');
-        });
-    }
-  };
-
   const filteredUsers = existingUsers.filter(user => {
       const matchesText = 
         user.fullName.includes(filterText) || 
@@ -724,15 +632,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         >
             הגדרות ומוצרים
         </button>
-        <button 
-            onClick={() => setActiveTab('connections')}
-            className={`px-4 py-2 rounded whitespace-nowrap ${activeTab === 'connections' ? 'bg-brand-primary text-brand-black' : 'bg-gray-700 text-gray-300'}`}
-        >
-            חיבורים (Supabase)
-        </button>
       </div>
 
-      {/* Other tabs remain the same... */}
+      {/* User Tab */}
       {activeTab === 'users' && (
          <div className="space-y-6">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
@@ -913,80 +815,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
            </div>
       )}
 
-      {activeTab === 'connections' && (
-          <div className="space-y-6">
-              <div className="bg-gray-800 p-6 rounded-xl border border-gray-700">
-                  <h3 className="text-xl text-brand-primary font-bold mb-4">חיבור לענן (Supabase)</h3>
-                  
-                  <div className={`p-4 rounded-lg mb-6 text-sm flex items-center gap-3 ${supabase ? 'bg-green-500/20 text-green-300 border border-green-500/30' : 'bg-red-500/20 text-red-300 border border-red-500/30'}`}>
-                      <div className="text-2xl">{supabase ? '✅' : '❌'}</div>
-                      <div>
-                          <p className="font-bold">{supabase ? 'האתר מחובר למסד הנתונים!' : 'האתר אינו מחובר למסד הנתונים'}</p>
-                          <p className="opacity-80">{supabase ? 'כל הנתונים נשמרים בענן ומסונכרנים.' : 'האתר עובד במצב מקומי בלבד.'}</p>
-                      </div>
-                  </div>
-
-                  {/* Manual Input Section (Fallback) */}
-                  <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-600 mb-8">
-                       <h4 className="text-white font-bold mb-2">אפשרות א: חיבור מחשב זה בלבד (מקומי)</h4>
-                       <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded mb-3 text-xs text-yellow-200">
-                           ⚠️ <strong>שים לב:</strong> חיבור זה נשמר בדפדפן הנוכחי בלבד.
-                       </div>
-                       <div className="grid gap-3">
-                           <div>
-                               <label className="text-xs text-gray-500 block mb-1">Project URL</label>
-                               <input 
-                                    type="text" 
-                                    className="w-full p-2 bg-black border border-gray-700 rounded text-gray-300 text-xs"
-                                    value={manualUrl}
-                                    onChange={e => setManualUrl(e.target.value)}
-                                    placeholder="https://your-project.supabase.co"
-                               />
-                           </div>
-                           <div>
-                               <label className="text-xs text-gray-500 block mb-1">Anon Key</label>
-                               <input 
-                                    type="text" 
-                                    className="w-full p-2 bg-black border border-gray-700 rounded text-gray-300 text-xs"
-                                    value={manualKey}
-                                    onChange={e => setManualKey(e.target.value)}
-                                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                               />
-                           </div>
-                           <Button size="sm" onClick={handleSaveLocalConnection}>שמור חיבור למחשב זה בלבד</Button>
-                       </div>
-                  </div>
-
-                   {/* Magic Link Share Section */}
-                   <div className="bg-purple-900/20 p-4 rounded-lg border border-purple-500/30 mb-8 animate-pulse shadow-lg shadow-purple-900/20">
-                      <h4 className="text-purple-300 font-bold mb-2 flex items-center gap-2">
-                          <span>✨</span> שתף חיבור לנייד / למכשיר אחר
-                      </h4>
-                      <p className="text-xs text-gray-400 mb-3">
-                          לחץ על הכפתור כדי להעתיק קישור מיוחד. שלח אותו לטלפון שלך, פתח אותו שם, והחיבור יוגדר אוטומטית!
-                      </p>
-                      <Button onClick={handleShareConnection} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 shadow-lg">
-                          🔗 העתק קישור חיבור לנייד
-                      </Button>
-                   </div>
-
-                  <div className="border-t border-gray-700 pt-6 mt-4">
-                      <div className="flex justify-between items-center mb-2">
-                          <label className="text-gray-400 text-sm font-bold">SQL Script (להרצה ב-Supabase)</label>
-                          <Button size="sm" variant="secondary" onClick={handleCopySql}>העתק סקריפט 📋</Button>
-                      </div>
-                      <textarea 
-                          readOnly
-                          value={SQL_SCRIPT}
-                          className="w-full h-48 p-3 rounded bg-black border border-gray-700 text-green-400 font-mono text-xs overflow-y-auto"
-                          style={{ direction: 'ltr' }}
-                      />
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Settings tab logic remains largely same, just simpler without sync buttons */}
       {activeTab === 'settings' && (
           <div className="space-y-8">
               
@@ -1331,11 +1159,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="bg-gray-800 rounded p-2 max-h-[600px] overflow-y-auto no-scrollbar space-y-4">
                 
                 {/* Past Sessions Group */}
-                {recentPastSessions.length > 0 && (
+                {/* Past Sessions Group */}
+                {/* Simplified logic for rendering - ensuring we access session.id correctly */}
+                {sessions
+                    .filter(s => s.date < new Date().toISOString().split('T')[0])
+                    .filter(s => {
+                         const d = new Date(s.date);
+                         const limit = new Date();
+                         limit.setDate(limit.getDate() - 30);
+                         return d > limit;
+                    })
+                    .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .length > 0 && (
                     <div className="opacity-70 border-b border-gray-700 pb-4">
                         <h4 className="text-gray-500 text-sm font-bold mb-2 sticky top-0 bg-gray-800 z-10 p-1">אימונים שהיו (30 ימים אחרונים)</h4>
                         <div className="space-y-2">
-                            {recentPastSessions.reverse().map(s => ( // Show newest past first
+                            {sessions
+                                .filter(s => s.date < new Date().toISOString().split('T')[0])
+                                .filter(s => {
+                                     const d = new Date(s.date);
+                                     const limit = new Date();
+                                     limit.setDate(limit.getDate() - 30);
+                                     return d > limit;
+                                })
+                                .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                                .map(s => (
                                 <div key={s.id} className="flex justify-between items-center border border-gray-700 bg-gray-800/50 p-2 rounded relative grayscale-[50%] hover:grayscale-0 transition-all">
                                     <div className="pl-2 pr-3 relative z-10">
                                         <div className="font-bold text-gray-300 flex items-center gap-2">
@@ -1366,7 +1214,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div>
                      <h4 className="text-brand-primary text-sm font-bold mb-2 sticky top-0 bg-gray-800 z-10 p-1">אימונים עתידיים</h4>
                      <div className="space-y-2">
-                        {futureSessions.map(s => (
+                        {sessions
+                            .filter(s => s.date >= new Date().toISOString().split('T')[0])
+                            .sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                            .map(s => (
                             <div key={s.id} className="flex justify-between items-center border border-gray-700 p-2 rounded relative overflow-hidden hover:border-brand-primary/50 transition-colors">
                                 <div 
                                     className="absolute inset-0 opacity-10 pointer-events-none" 
@@ -1406,7 +1257,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 </div>
                             </div>
                         ))}
-                         {futureSessions.length === 0 && <p className="text-gray-500 text-sm italic">אין אימונים עתידיים</p>}
+                         {sessions.filter(s => s.date >= new Date().toISOString().split('T')[0]).length === 0 && <p className="text-gray-500 text-sm italic">אין אימונים עתידיים</p>}
                     </div>
                 </div>
             </div>
