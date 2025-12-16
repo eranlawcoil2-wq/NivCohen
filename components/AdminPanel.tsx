@@ -37,7 +37,7 @@ const SESSION_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- יצירת טבלאות (למשתמשים חדשים)
+-- 1. יצירת טבלאות (אם לא קיימות)
 create table if not exists users (
   id text primary key, "fullName" text, "displayName" text, phone text unique,
   email text, "startDate" text, "paymentStatus" text, "isNew" boolean, "userColor" text, "monthlyRecord" int
@@ -50,17 +50,21 @@ create table if not exists sessions (
   "zoomLink" text, "isZoomSession" boolean
 );
 
--- עדכון טבלאות קיימות (הוספת עמודות חסרות למניעת שגיאות)
+-- 2. עדכון עמודות חסרות (מוסיף רק אם חסר - קריטי לתיקון שגיאות)
 alter table sessions add column if not exists "attendedPhoneNumbers" text[] default '{}';
 alter table sessions add column if not exists "isZoomSession" boolean default false;
 alter table sessions add column if not exists "zoomLink" text;
 alter table users add column if not exists "monthlyRecord" int default 0;
 alter table users add column if not exists "userColor" text;
 
--- הגדרות אבטחה
+-- 3. הגדרות אבטחה (מוחק ויוצר מחדש כדי למנוע שגיאות כפילות)
 alter table users enable row level security;
 alter table sessions enable row level security;
+
+drop policy if exists "Public Access Users" on users;
 create policy "Public Access Users" on users for all using (true);
+
+drop policy if exists "Public Access Sessions" on sessions;
 create policy "Public Access Sessions" on sessions for all using (true);
 `;
 
