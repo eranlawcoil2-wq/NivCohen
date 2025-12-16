@@ -77,6 +77,28 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => { refreshData(); }, [refreshData]);
+  
+  // URL Based Admin Mode
+  useEffect(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'admin') {
+          setIsAdminMode(true);
+      }
+  }, []);
+
+  const toggleAdminMode = () => {
+      const newMode = !isAdminMode;
+      setIsAdminMode(newMode);
+      
+      const url = new URL(window.location.href);
+      if (newMode) {
+          url.searchParams.set('mode', 'admin');
+      } else {
+          url.searchParams.delete('mode');
+      }
+      window.history.pushState({}, '', url);
+  };
+
   useEffect(() => { localStorage.setItem('niv_app_color', primaryColor); document.documentElement.style.setProperty('--brand-primary', primaryColor); }, [primaryColor]);
   useEffect(() => { getMotivationQuote().then(setQuote); getWeatherForDates(getCurrentWeekDates(0), weatherLocation.lat, weatherLocation.lon).then(setWeatherData); }, []);
   
@@ -170,7 +192,7 @@ const App: React.FC = () => {
                 onColorChange={setPrimaryColor} onUpdateWorkoutTypes={setWorkoutTypes} onUpdateLocations={setLocations}
                 onUpdateWeatherLocation={setWeatherLocation} onAddPaymentLink={l=>setPaymentLinks([...paymentLinks,l])}
                 onDeletePaymentLink={id=>setPaymentLinks(paymentLinks.filter(l=>l.id!==id))} onUpdateStreakGoal={setStreakGoal}
-                onExitAdmin={()=>{setIsAdminMode(false); refreshData();}}
+                onExitAdmin={()=>{toggleAdminMode(); refreshData();}}
             />
         ) : (
             <>
@@ -309,7 +331,7 @@ const App: React.FC = () => {
               <div className={`w-2 h-2 rounded-full ${isCloudConnected?'bg-green-500':'bg-red-500 animate-pulse'}`}/>
               <span className="text-xs text-gray-500">{isCloudConnected?'מחובר':'מקומי'}</span>
           </div>
-          <button onClick={()=>setIsAdminMode(!isAdminMode)} className="text-gray-600 hover:text-white p-2">⚙️</button>
+          <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2">⚙️</button>
       </footer>
     </div>
   );

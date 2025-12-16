@@ -172,7 +172,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const openAttendanceModal = (session: TrainingSession) => {
       setAttendanceSession(session);
-      const initialSet = new Set(session.attendedPhoneNumbers || []);
+      
+      // LOGIC CHANGE: 
+      // If attendedPhoneNumbers is undefined or null (never saved), AUTO-SELECT ALL registered users.
+      // If it exists (even if empty), respect the saved data.
+      let initialSet: Set<string>;
+      
+      if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
+          // First time opening attendance for this session -> Select everyone
+          initialSet = new Set(session.registeredPhoneNumbers);
+      } else {
+          // Use previously saved state
+          initialSet = new Set(session.attendedPhoneNumbers);
+      }
+      
       setMarkedAttendees(initialSet);
   };
 
@@ -214,7 +227,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
 
-  const handleInstallApp = () => alert("כדי להתקין את ממשק הניהול בדסקטופ, לחץ על סמל ההתקנה בשורת הכתובת של הדפדפן (Chrome/Edge).");
+  // Explanation for saving as separate app
+  const handleSaveAsApp = () => {
+      alert("כדי ליצור קיצור דרך למסך הבית שפותח ישר את הניהול:\n1. וודא שאתה במסך זה.\n2. לחץ על כפתור השיתוף בדפדפן (Share).\n3. בחר 'הוסף למסך הבית'.");
+  };
 
   const handleGenerateDescription = async () => {
       if (!newSession.type || !newSession.location) {
@@ -359,7 +375,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="flex justify-between items-center mb-4">
         <div className="flex items-center gap-3">
             <h2 className="text-2xl font-bold text-white">פאנל ניהול</h2>
-            <Button size="sm" variant="outline" onClick={handleInstallApp} className="hidden md:flex">📥 התקן</Button>
+            <Button size="sm" variant="outline" onClick={handleSaveAsApp} className="hidden md:flex bg-brand-primary/10 border-brand-primary text-brand-primary">📱 שמור אפליקציית ניהול</Button>
         </div>
         <button onClick={handleExitClick} disabled={isExiting} className={`bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500 px-4 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2 ${isExiting ? 'opacity-50' : ''}`}>
           {isExiting ? 'יוצא...' : 'יציאה ושמירה'}
