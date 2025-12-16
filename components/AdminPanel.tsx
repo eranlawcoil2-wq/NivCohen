@@ -51,7 +51,7 @@ const USER_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- טבלת משתמשים
+-- יצירת טבלאות (אם לא קיימות)
 create table if not exists users (
   id text primary key,
   "fullName" text,
@@ -64,7 +64,6 @@ create table if not exists users (
   "userColor" text
 );
 
--- טבלת אימונים
 create table if not exists sessions (
   id text primary key,
   type text,
@@ -83,7 +82,11 @@ create table if not exists sessions (
 alter table users enable row level security;
 alter table sessions enable row level security;
 
--- יצירת מדיניות גישה ציבורית (לפיתוח)
+-- ניקוי מדיניות ישנה למניעת כפילויות (פותר שגיאה 42710)
+drop policy if exists "Public Access Users" on users;
+drop policy if exists "Public Access Sessions" on sessions;
+
+-- יצירת מדיניות גישה ציבורית חדשה
 create policy "Public Access Users" on users for all using (true);
 create policy "Public Access Sessions" on sessions for all using (true);
 `;
@@ -905,9 +908,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   {/* Manual Input Section (Fallback) */}
                   <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-600 mb-8">
                        <h4 className="text-white font-bold mb-2">אפשרות א: חיבור מחשב זה בלבד (מקומי)</h4>
-                       <p className="text-xs text-gray-400 mb-3">
-                           השתמש באפשרות זו אם אינך יכול לערוך את הקוד כרגע. זה יחבר <strong>רק</strong> את המחשב הנוכחי שלך למסד הנתונים (נשמר בדפדפן). הנתונים לא יימחקו בעדכון גרסה.
-                       </p>
+                       <div className="bg-yellow-500/10 border border-yellow-500/20 p-3 rounded mb-3 text-xs text-yellow-200">
+                           ⚠️ <strong>שים לב:</strong> חיבור זה נשמר בדפדפן הנוכחי בלבד.
+                           <br/>
+                           הוא <strong>לא יעבור</strong> לטלפון שלך ולא ללקוחות שלך.
+                           <br/>
+                           כדי שזה יעבוד לכולם מהטלפון, עליך להשתמש באפשרות ב'.
+                       </div>
                        <div className="grid gap-3">
                            <div>
                                <label className="text-xs text-gray-500 block mb-1">Project URL</label>
@@ -929,21 +936,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                                />
                            </div>
-                           <Button size="sm" onClick={handleSaveLocalConnection}>שמור חיבור מקומי והתחבר</Button>
+                           <Button size="sm" onClick={handleSaveLocalConnection}>שמור חיבור למחשב זה בלבד</Button>
                        </div>
                   </div>
 
                   {/* Hardcode Instructions Section */}
                   <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
-                      <h4 className="text-blue-300 font-bold mb-2">אפשרות ב: חיבור קבוע לכולם (דרך הקוד)</h4>
+                      <h4 className="text-blue-300 font-bold mb-2">אפשרות ב: חיבור קבוע לכולם (כולל מהנייד) 📱</h4>
                       <p className="text-xs text-gray-400 mb-3">
-                          כדי שהאתר יעבוד אוטומטית לכל המתאמנים (בלי שיצטרכו להגדיר כלום), המתכנת חייב לעדכן את הקובץ הבא בקוד:
+                          כדי שהאפליקציה תעבוד בנייד לכל המשתמשים ללא צורך בהזנת סיסמאות:
                       </p>
-                      <div className="font-mono text-xs bg-black p-3 rounded border border-gray-800 overflow-x-auto text-left" style={{ direction: 'ltr' }}>
-                          <p className="text-yellow-500">// File: services/supabaseClient.ts</p>
-                          <p className="text-gray-500 mt-2">// Find these lines and paste your keys inside the quotes:</p>
-                          <p className="mt-1"><span className="text-purple-400">const</span> HARDCODED_URL = <span className="text-green-400">'PASTE_YOUR_URL_HERE'</span>;</p>
-                          <p><span className="text-purple-400">const</span> HARDCODED_KEY = <span className="text-green-400">'PASTE_YOUR_ANON_KEY_HERE'</span>;</p>
+                      <div className="bg-black/50 p-3 rounded border border-blue-500/20 text-sm text-gray-300">
+                          <strong>שלח למתכנת (בהודעה כאן) את ה-URL וה-Key שלך.</strong>
+                          <br/>
+                          המתכנת יטמיע אותם בקוד, ואז זה יעבוד אוטומטית לכולם.
                       </div>
                   </div>
 
