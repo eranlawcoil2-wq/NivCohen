@@ -906,7 +906,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-600 mb-8">
                        <h4 className="text-white font-bold mb-2">אפשרות א: חיבור מחשב זה בלבד (מקומי)</h4>
                        <p className="text-xs text-gray-400 mb-3">
-                           השתמש באפשרות זו אם אינך יכול לערוך את הקוד כרגע. זה יחבר <strong>רק</strong> את המחשב הנוכחי שלך למסד הנתונים.
+                           השתמש באפשרות זו אם אינך יכול לערוך את הקוד כרגע. זה יחבר <strong>רק</strong> את המחשב הנוכחי שלך למסד הנתונים (נשמר בדפדפן). הנתונים לא יימחקו בעדכון גרסה.
                        </p>
                        <div className="grid gap-3">
                            <div>
@@ -937,7 +937,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
                       <h4 className="text-blue-300 font-bold mb-2">אפשרות ב: חיבור קבוע לכולם (דרך הקוד)</h4>
                       <p className="text-xs text-gray-400 mb-3">
-                          כדי שהאתר יעבוד אוטומטית לכל המתאמנים (בלי שיצטרכו להגדיר כלום), עליך לערוך את הקובץ הבא בקוד:
+                          כדי שהאתר יעבוד אוטומטית לכל המתאמנים (בלי שיצטרכו להגדיר כלום), המתכנת חייב לעדכן את הקובץ הבא בקוד:
                       </p>
                       <div className="font-mono text-xs bg-black p-3 rounded border border-gray-800 overflow-x-auto text-left" style={{ direction: 'ltr' }}>
                           <p className="text-yellow-500">// File: services/supabaseClient.ts</p>
