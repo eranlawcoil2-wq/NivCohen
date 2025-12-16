@@ -36,11 +36,6 @@ const SESSION_COLORS = [
     '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'
 ];
 
-const USER_COLORS = [
-    '#ffffff', '#EF4444', '#F59E0B', '#10B981', 
-    '#3B82F6', '#8B5CF6', '#EC4899', '#A3E635'
-];
-
 const SQL_SCRIPT = `
 -- טבלת משתמשים
 create table if not exists users (
@@ -197,6 +192,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onUpdateSession(updatedSession);
       setAttendanceSession(null);
       alert('נוכחות עודכנה בהצלחה!');
+  };
+
+  const handleEditFromAttendance = () => {
+      if(!attendanceSession) return;
+      handleEditSessionClick(attendanceSession);
+      setAttendanceSession(null);
+  };
+
+  const handleDuplicateFromAttendance = () => {
+      if(!attendanceSession) return;
+      handleDuplicateSession(attendanceSession);
+      setAttendanceSession(null);
+  };
+
+  const handleDeleteFromAttendance = () => {
+      if(!attendanceSession) return;
+      if(confirm('האם אתה בטוח שברצונך למחוק אימון זה?')) {
+          onDeleteSession(attendanceSession.id);
+          setAttendanceSession(null);
+      }
   };
 
   const handleInstallApp = () => alert("כדי להתקין את ממשק הניהול בדסקטופ, לחץ על סמל ההתקנה בשורת הכתובת של הדפדפן (Chrome/Edge).");
@@ -402,24 +417,41 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {attendanceSession && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
               <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                  <h3 className="text-2xl font-bold text-white mb-2">נוכחות: {attendanceSession.time} - {attendanceSession.type}</h3>
-                  <div className="flex-1 overflow-y-auto space-y-2 mb-4">
-                      {attendanceSession.registeredPhoneNumbers.length === 0 ? <p className="text-center text-gray-500">אין נרשמים</p> :
+                  <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-2">
+                     <div>
+                        <h3 className="text-2xl font-bold text-white mb-1">{attendanceSession.type}</h3>
+                        <p className="text-brand-primary">{attendanceSession.time} | {attendanceSession.location}</p>
+                        {attendanceSession.isZoomSession && <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full mt-1 inline-block">ZOOM</span>}
+                     </div>
+                     <button onClick={() => setAttendanceSession(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+                  </div>
+                  
+                  {/* Management Tools Toolbar */}
+                  <div className="flex gap-2 mb-4">
+                      <Button size="sm" variant="secondary" onClick={handleEditFromAttendance} className="flex-1 text-xs">✏️ ערוך</Button>
+                      <Button size="sm" variant="secondary" onClick={handleDuplicateFromAttendance} className="flex-1 text-xs">📄 שכפל</Button>
+                      <Button size="sm" variant="danger" onClick={handleDeleteFromAttendance} className="flex-1 text-xs">🗑️ מחק</Button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded">
+                      <div className="text-xs text-gray-400 mb-2">סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</div>
+                      {attendanceSession.registeredPhoneNumbers.length === 0 ? <p className="text-center text-gray-500 py-4">אין נרשמים</p> :
                           attendanceSession.registeredPhoneNumbers.map(phone => {
                               const user = users.find(u => u.phone.replace(/\D/g,'') === phone.replace(/\D/g,''));
                               const isMarked = markedAttendees.has(phone);
                               return (
-                                  <div key={phone} onClick={() => toggleAttendance(phone)} className={`flex items-center justify-between p-3 rounded border cursor-pointer ${isMarked ? 'bg-green-900/30 border-green-500' : 'bg-gray-900 border-gray-700'}`}>
+                                  <div key={phone} onClick={() => toggleAttendance(phone)} className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-colors ${isMarked ? 'bg-green-900/30 border-green-500' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}>
                                       <div className="text-white font-bold">{user?.fullName || phone}</div>
-                                      <div className={`w-6 h-6 rounded-full border ${isMarked ? 'bg-green-500' : 'border-gray-500'}`}/>
+                                      <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${isMarked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-500'}`}>
+                                          {isMarked && '✓'}
+                                      </div>
                                   </div>
                               );
                           })
                       }
                   </div>
                   <div className="flex gap-2">
-                      <Button onClick={saveAttendance} className="flex-1">שמור ({markedAttendees.size})</Button>
-                      <Button variant="secondary" onClick={() => setAttendanceSession(null)}>ביטול</Button>
+                      <Button onClick={saveAttendance} className="flex-1">שמור שינויים</Button>
                   </div>
               </div>
           </div>
@@ -507,6 +539,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <input type="date" className="bg-gray-900 text-white p-2 rounded" value={newSession.date} onChange={e=>setNewSession({...newSession, date: e.target.value})}/>
                         <input type="time" className="bg-gray-900 text-white p-2 rounded" value={newSession.time} onChange={e=>setNewSession({...newSession, time: e.target.value})}/>
                     </div>
+                    
+                    {/* Extra fields added for completeness in edit form */}
+                    <div className="grid grid-cols-2 gap-2">
+                        <label className="flex items-center gap-2 text-white bg-gray-900 p-2 rounded">
+                            <input type="checkbox" checked={newSession.isZoomSession || false} onChange={e=>setNewSession({...newSession, isZoomSession: e.target.checked})} />
+                            <span className="text-sm">אימון זום?</span>
+                        </label>
+                        {newSession.isZoomSession && (
+                             <input type="text" placeholder="לינק לזום" className="bg-gray-900 text-white p-2 rounded" value={newSession.zoomLink || ''} onChange={e=>setNewSession({...newSession, zoomLink: e.target.value})}/>
+                        )}
+                    </div>
+
                     <div className="flex gap-2">
                         <input type="text" placeholder="תיאור" className="bg-gray-900 text-white p-2 rounded flex-1" value={newSession.description} onChange={e=>setNewSession({...newSession, description: e.target.value})}/>
                         <Button variant="secondary" onClick={handleGenerateDescription} isLoading={isGeneratingAi}>AI ✨</Button>

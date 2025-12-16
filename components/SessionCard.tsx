@@ -12,7 +12,6 @@ interface SessionCardProps {
   onViewDetails: (sessionId: string) => void;
 }
 
-// Helper to generate a consistent color from a string (for location badges)
 const stringToColor = (str: string) => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -42,11 +41,15 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const spotsLeft = session.maxCapacity - session.registeredPhoneNumbers.length;
   const isFull = spotsLeft <= 0;
   const registeredCount = session.registeredPhoneNumbers.length;
-  const cardColor = session.color || 'var(--brand-primary)'; // Fallback to brand primary
+  const cardColor = session.color || 'var(--brand-primary)'; 
 
   const locationBadgeClass = stringToColor(session.location);
-  // Show badge if it is explicitly a zoom session OR if there is a link
   const showZoomBadge = session.isZoomSession || !!session.zoomLink;
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onRegisterClick(session.id);
+  };
 
   return (
     <div 
@@ -75,11 +78,11 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       
       <div className="flex justify-between items-start mt-5">
         <span className="text-xl font-black text-white font-mono tracking-tight">{session.time}</span>
-        {isRegistered && (
-            <span 
-                className="w-2 h-2 rounded-full shadow-[0_0_8px]" 
-                style={{ backgroundColor: cardColor, boxShadow: `0 0 8px ${cardColor}` }} 
-            />
+        {weather && (
+            <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded-full">
+                <span>{Math.round(weather.maxTemp)}°</span>
+                <span>{getWeatherIcon(weather.weatherCode)}</span>
+            </div>
         )}
       </div>
 
@@ -88,8 +91,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
               {session.type}
           </h3>
           
-          <div className="flex flex-col gap-1.5 items-start w-full">
-             {/* Physical Location Badge */}
+          <div className="flex flex-col gap-1.5 items-start w-full mb-2">
               <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border ${locationBadgeClass} w-full`}>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
@@ -99,21 +101,22 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           </div>
       </div>
 
-      <div className="flex justify-between items-center mt-1 pt-2 border-t border-gray-700/50">
-          <div className="flex items-center gap-1">
-             <span className={`text-xs font-bold ${isFull ? 'text-red-400' : 'text-gray-300'}`}>
-                {registeredCount}/{session.maxCapacity}
+      <div className="mt-auto pt-2 border-t border-gray-800">
+          <div className="flex justify-between items-center mb-2 text-xs">
+             <span className={`font-bold ${isFull ? 'text-red-400' : 'text-gray-300'}`}>
+                {registeredCount}/{session.maxCapacity} רשומים
              </span>
-             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-             </svg>
           </div>
-          {weather && (
-               <div className="flex items-center gap-1 text-[10px] text-gray-400">
-                  <span>{Math.round(weather.maxTemp)}°</span>
-                  <span>{getWeatherIcon(weather.weatherCode)}</span>
-               </div>
-          )}
+          
+          <Button 
+            size="sm" 
+            variant={isRegistered ? 'outline' : 'primary'}
+            className={`w-full text-xs py-1.5 h-8 ${isRegistered ? 'bg-transparent border-gray-600 text-gray-300' : ''}`}
+            onClick={handleButtonClick}
+            disabled={!isRegistered && isFull}
+          >
+            {isRegistered ? 'רשום ✅' : isFull ? 'מלא ⛔' : 'הירשם +'}
+          </Button>
       </div>
     </div>
   );

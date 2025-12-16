@@ -201,7 +201,7 @@ const App: React.FC = () => {
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             {daySessions.sort((a,b)=>a.time.localeCompare(b.time)).map(s => (
                                                 <div key={s.id} onClick={()=>setViewingSession(s)} className="h-full">
-                                                    <SessionCard session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)}/>
+                                                    <SessionCard session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} weather={weatherData[s.date]}/>
                                                 </div>
                                             ))}
                                         </div>
@@ -218,20 +218,72 @@ const App: React.FC = () => {
       </main>
 
       {viewingSession && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-end md:items-center justify-center" onClick={()=>setViewingSession(null)}>
-              <div className="bg-gray-800 w-full md:max-w-md p-6 rounded-t-2xl md:rounded-2xl border-t border-brand-primary shadow-2xl animate-in slide-in-from-bottom duration-300" onClick={e=>e.stopPropagation()}>
-                  <h2 className="text-2xl text-white font-bold mb-1">{viewingSession.type}</h2>
-                  <p className="text-brand-primary mb-4 font-mono">{viewingSession.date} | {viewingSession.time}</p>
-                  <p className="text-gray-300 mb-4 bg-gray-900 p-3 rounded">{viewingSession.description || 'ללא תיאור'}</p>
-                  <div className="mb-4">
-                      <div className="text-xs text-gray-500 mb-1 font-bold">נרשמים ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</div>
-                      <div className="flex flex-wrap gap-1">
-                          {viewingSession.registeredPhoneNumbers.map((p,i)=><div key={i} className="bg-gray-700 text-white text-xs px-2 py-1 rounded">{users.find(u=>normalizePhone(u.phone)===p)?.fullName || 'אורח'}</div>)}
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-end md:items-center justify-center backdrop-blur-sm" onClick={()=>setViewingSession(null)}>
+              <div className="bg-gray-800 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t border-brand-primary shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                  
+                  {/* Header Section with Weather and Info (TOP) */}
+                  <div className="p-6 bg-gradient-to-b from-gray-700/50 to-gray-800 border-b border-gray-700 relative overflow-hidden">
+                      <div className="relative z-10 flex justify-between items-start mb-2">
+                           <div>
+                               <h2 className="text-3xl text-white font-black leading-none mb-1">{viewingSession.type}</h2>
+                               <div className="flex items-center gap-2 mt-2">
+                                   <div className="text-brand-primary font-mono font-bold text-lg bg-brand-primary/10 px-2 py-1 rounded">{viewingSession.time}</div>
+                                   <div className="text-gray-400 text-sm border border-gray-600 px-2 py-1 rounded">{viewingSession.date}</div>
+                               </div>
+                           </div>
+                           {/* Weather Widget inside Modal */}
+                           {weatherData[viewingSession.date] && (
+                               <div className="flex flex-col items-center bg-gray-900/50 p-2 rounded-lg border border-gray-600/50 shadow-sm">
+                                   <span className="text-2xl">{getWeatherIcon(weatherData[viewingSession.date].weatherCode)}</span>
+                                   <span className="text-white font-bold text-sm">{Math.round(weatherData[viewingSession.date].maxTemp)}°</span>
+                               </div>
+                           )}
                       </div>
+                      
+                      <div className="relative z-10 flex items-center gap-1.5 text-gray-300 text-sm mb-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                        </svg>
+                        <span>{viewingSession.location}</span>
+                      </div>
+
+                      <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">
+                        {viewingSession.description || 'ללא תיאור'}
+                      </p>
                   </div>
-                  <Button onClick={()=>handleRegisterClick(viewingSession.id)} className="w-full py-3 text-lg font-bold">
-                      {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'ביטול הרשמה' : 'הירשם לאימון'}
-                  </Button>
+
+                  {/* Participants List (BOTTOM) */}
+                  <div className="flex-1 overflow-y-auto p-4 bg-gray-800">
+                      <div className="flex justify-between items-center mb-3">
+                          <div className="text-sm font-bold text-white">רשימת משתתפים</div>
+                          <div className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">
+                              {viewingSession.registeredPhoneNumbers.length} / {viewingSession.maxCapacity}
+                          </div>
+                      </div>
+                      
+                      {viewingSession.registeredPhoneNumbers.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-2">
+                              {viewingSession.registeredPhoneNumbers.map((p,i) => {
+                                  const u = users.find(user => normalizePhone(user.phone) === p);
+                                  return (
+                                    <div key={i} className="bg-gray-700/50 text-gray-200 text-xs px-3 py-2 rounded flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-primary"></div>
+                                        {u?.fullName || 'אורח'}
+                                    </div>
+                                  );
+                              })}
+                          </div>
+                      ) : (
+                          <div className="text-center text-gray-600 text-sm py-8">טרם נרשמו מתאמנים</div>
+                      )}
+                  </div>
+
+                  {/* Action Footer */}
+                  <div className="p-4 border-t border-gray-700 bg-gray-900/50">
+                      <Button onClick={()=>handleRegisterClick(viewingSession.id)} className="w-full py-3 text-lg font-bold shadow-xl">
+                          {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'בטל הרשמה ✕' : 'אשר הגעה ✓'}
+                      </Button>
+                  </div>
               </div>
           </div>
       )}
