@@ -170,9 +170,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
 
+  // Connection Manual State
+  const [manualUrl, setManualUrl] = useState('');
+  const [manualKey, setManualKey] = useState('');
+
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isZoomSession, setIsZoomSession] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+
+  useEffect(() => {
+    // Load existing manual keys if they exist
+    const savedUrl = localStorage.getItem('niv_app_supabase_url');
+    const savedKey = localStorage.getItem('niv_app_supabase_key');
+    if (savedUrl) setManualUrl(savedUrl);
+    if (savedKey) setManualKey(savedKey);
+  }, []);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
@@ -598,6 +610,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
   };
 
+  const handleSaveLocalConnection = () => {
+      if (!manualUrl.trim() || !manualKey.trim()) {
+          alert('נא להזין URL ו-Key');
+          return;
+      }
+      localStorage.setItem('niv_app_supabase_url', manualUrl.trim());
+      localStorage.setItem('niv_app_supabase_key', manualKey.trim());
+      alert('החיבור נשמר מקומית! הדף יתרענן כעת.');
+      window.location.reload();
+  };
+
   const filteredUsers = existingUsers.filter(user => {
       const matchesText = 
         user.fullName.includes(filterText) || 
@@ -875,19 +898,53 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="text-2xl">{supabase ? '✅' : '❌'}</div>
                       <div>
                           <p className="font-bold">{supabase ? 'האתר מחובר למסד הנתונים!' : 'האתר אינו מחובר למסד הנתונים'}</p>
-                          <p className="opacity-80">
-                              {supabase 
-                                ? 'פרטי החיבור הוגדרו בהצלחה בקוד האתר. כל המשתמשים רואים את המידע העדכני.' 
-                                : 'כדי להפעיל את האתר לכולם, עליך להוסיף את פרטי החיבור בקובץ services/supabaseClient.ts'}
-                          </p>
+                          <p className="opacity-80">{supabase ? 'כל הנתונים נשמרים בענן ומסונכרנים.' : 'האתר עובד במצב מקומי בלבד.'}</p>
                       </div>
                   </div>
 
-                  <div className="bg-gray-900/50 p-4 rounded-lg text-sm text-gray-400 font-mono" style={{ direction: 'ltr' }}>
-                      <p className="mb-2 text-white font-sans font-bold">הוראות חיבור:</p>
-                      <p>1. Open file: <span className="text-yellow-400">services/supabaseClient.ts</span></p>
-                      <p>2. Locate: <span className="text-blue-400">HARDCODED_URL</span> and <span className="text-blue-400">HARDCODED_KEY</span></p>
-                      <p>3. Paste your Supabase URL and Anon Key inside the quotes.</p>
+                  {/* Manual Input Section (Fallback) */}
+                  <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-600 mb-8">
+                       <h4 className="text-white font-bold mb-2">אפשרות א: חיבור מחשב זה בלבד (מקומי)</h4>
+                       <p className="text-xs text-gray-400 mb-3">
+                           השתמש באפשרות זו אם אינך יכול לערוך את הקוד כרגע. זה יחבר <strong>רק</strong> את המחשב הנוכחי שלך למסד הנתונים.
+                       </p>
+                       <div className="grid gap-3">
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Project URL</label>
+                               <input 
+                                    type="text" 
+                                    className="w-full p-2 bg-black border border-gray-700 rounded text-gray-300 text-xs"
+                                    value={manualUrl}
+                                    onChange={e => setManualUrl(e.target.value)}
+                                    placeholder="https://your-project.supabase.co"
+                               />
+                           </div>
+                           <div>
+                               <label className="text-xs text-gray-500 block mb-1">Anon Key</label>
+                               <input 
+                                    type="text" 
+                                    className="w-full p-2 bg-black border border-gray-700 rounded text-gray-300 text-xs"
+                                    value={manualKey}
+                                    onChange={e => setManualKey(e.target.value)}
+                                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                               />
+                           </div>
+                           <Button size="sm" onClick={handleSaveLocalConnection}>שמור חיבור מקומי והתחבר</Button>
+                       </div>
+                  </div>
+
+                  {/* Hardcode Instructions Section */}
+                  <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-500/30">
+                      <h4 className="text-blue-300 font-bold mb-2">אפשרות ב: חיבור קבוע לכולם (דרך הקוד)</h4>
+                      <p className="text-xs text-gray-400 mb-3">
+                          כדי שהאתר יעבוד אוטומטית לכל המתאמנים (בלי שיצטרכו להגדיר כלום), עליך לערוך את הקובץ הבא בקוד:
+                      </p>
+                      <div className="font-mono text-xs bg-black p-3 rounded border border-gray-800 overflow-x-auto text-left" style={{ direction: 'ltr' }}>
+                          <p className="text-yellow-500">// File: services/supabaseClient.ts</p>
+                          <p className="text-gray-500 mt-2">// Find these lines and paste your keys inside the quotes:</p>
+                          <p className="mt-1"><span className="text-purple-400">const</span> HARDCODED_URL = <span className="text-green-400">'PASTE_YOUR_URL_HERE'</span>;</p>
+                          <p><span className="text-purple-400">const</span> HARDCODED_KEY = <span className="text-green-400">'PASTE_YOUR_ANON_KEY_HERE'</span>;</p>
+                      </div>
                   </div>
 
                   <div className="border-t border-gray-700 pt-6 mt-4">
