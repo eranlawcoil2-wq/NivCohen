@@ -71,7 +71,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     onUpdateWorkoutTypes, onUpdateLocations, onUpdateWeatherLocation,
     onAddPaymentLink, onDeletePaymentLink, onUpdateStreakGoal, onExitAdmin
 }) => {
-  const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'sessions' | 'settings' | 'new_users' | 'connections'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'new_users' | 'connections'>('attendance');
   
   // User Form State
   const [formUser, setFormUser] = useState<Partial<User>>({
@@ -85,17 +85,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [filterText, setFilterText] = useState('');
   const [filterStatus, setFilterStatus] = useState<PaymentStatus | 'ALL'>('ALL');
   const [sortByWorkouts, setSortByWorkouts] = useState(false);
-
-  // Session Form State
-  const [newSession, setNewSession] = useState<Partial<TrainingSession>>({
-    type: workoutTypes[0] || '',
-    date: new Date().toISOString().split('T')[0],
-    time: '18:00',
-    location: locations.length > 0 ? locations[0].name : '',
-    maxCapacity: 15, description: '', color: SESSION_COLORS[0],
-    isTrial: false, zoomLink: '', isZoomSession: false
-  });
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   
   // Template & Settings State
   const [templateSourceDate, setTemplateSourceDate] = useState(formatDateForInput(new Date()));
@@ -115,13 +104,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [sbUrl, setSbUrl] = useState(localStorage.getItem('niv_app_supabase_url') || '');
   const [sbKey, setSbKey] = useState(localStorage.getItem('niv_app_supabase_key') || '');
 
-  // Attendance State
+  // Attendance & Session Edit State
   const [weekOffset, setWeekOffset] = useState(0);
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
   const [markedAttendees, setMarkedAttendees] = useState<Set<string>>(new Set());
+  const [isEditingInModal, setIsEditingInModal] = useState(false);
+  const [editSessionForm, setEditSessionForm] = useState<Partial<TrainingSession>>({});
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
@@ -145,9 +136,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const getDayName = (dateStr: string) => new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long' });
   
-  const handleExitClick = () => {
-      setIsExiting(true);
-      setTimeout(() => { onExitAdmin(); setIsExiting(false); }, 800);
+  // This button now just saves/refreshes without exiting
+  const handleGlobalSave = () => {
+      setIsReloading(true);
+      setTimeout(() => {
+          window.location.reload();
+      }, 500);
   };
 
   // --- Attendance Logic ---
@@ -176,6 +170,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const openAttendanceModal = (session: TrainingSession) => {
       setAttendanceSession(session);
+      setIsEditingInModal(false); // Start in view mode
       let initialSet: Set<string>;
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
           initialSet = new Set(session.registeredPhoneNumbers);
@@ -192,36 +187,92 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMarkedAttendees(newSet);
   };
 
-  const saveAttendance = () => {
+  const saveAttendance = async () => {
       if (!attendanceSession) return;
       const updatedSession: TrainingSession = {
           ...attendanceSession,
           attendedPhoneNumbers: Array.from(markedAttendees)
       };
-      onUpdateSession(updatedSession);
-      setAttendanceSession(null);
+      await onUpdateSession(updatedSession);
       alert('נוכחות עודכנה בהצלחה!');
+      setAttendanceSession(null);
   };
 
+  // --- In-Modal Editing Logic ---
   const handleEditFromAttendance = () => {
       if(!attendanceSession) return;
-      handleEditSessionClick(attendanceSession);
-      setAttendanceSession(null);
+      setEditSessionForm({ ...attendanceSession });
+      setIsEditingInModal(true);
   };
 
-  const handleDuplicateFromAttendance = () => {
+  const handleSaveEditedSession = async () => {
+      if (!editSessionForm.id || !editSessionForm.type || !editSessionForm.date) return;
+      
+      const updatedSession = { 
+          ...attendanceSession, 
+          ...editSessionForm 
+      } as TrainingSession;
+
+      try {
+          await onUpdateSession(updatedSession);
+          alert('האימון עודכן ונשמר בהצלחה! ✅');
+          setAttendanceSession(null);
+          setIsEditingInModal(false);
+      } catch (error) {
+          alert('שגיאה בשמירה, נסה שוב.');
+      }
+  };
+
+  const handleDuplicateFromAttendance = async () => {
       if(!attendanceSession) return;
-      handleDuplicateSession(attendanceSession);
+      // Logic: Same Day, +1 Hour
+      const [h, m] = attendanceSession.time.split(':').map(Number);
+      const dateObj = new Date();
+      dateObj.setHours(h, m);
+      dateObj.setHours(dateObj.getHours() + 1);
+      const newTime = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      
+      const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      
+      const newSession: TrainingSession = { 
+          ...attendanceSession, 
+          id: uniqueId, 
+          date: attendanceSession.date, 
+          time: newTime,
+          registeredPhoneNumbers: [], 
+          attendedPhoneNumbers: [] 
+      };
+      
+      await onAddSession(newSession);
+      alert(`האימון שוכפל לשעה ${newTime}`);
       setAttendanceSession(null);
   };
 
-  const handleDeleteFromAttendance = () => {
+  const handleDeleteFromAttendance = async () => {
       if(!attendanceSession) return;
       if(confirm('האם אתה בטוח שברצונך למחוק אימון זה?')) {
-          onDeleteSession(attendanceSession.id);
+          await onDeleteSession(attendanceSession.id);
           setAttendanceSession(null);
       }
   };
+
+  const handleGenerateDescription = async () => {
+      if (!editSessionForm.type || !editSessionForm.location) {
+          alert('נא למלא סוג אימון ומיקום');
+          return;
+      }
+      setIsGeneratingAi(true);
+      try {
+        const desc = await generateWorkoutDescription(editSessionForm.type as any, editSessionForm.location);
+        setEditSessionForm(prev => ({ ...prev, description: desc }));
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsGeneratingAi(false);
+      }
+  };
+
+  // --- Other Handlers ---
 
   const handleSaveAsApp = () => {
       alert("כדי ליצור קיצור דרך למסך הבית שפותח ישר את הניהול:\n1. וודא שאתה במסך זה.\n2. לחץ על כפתור השיתוף בדפדפן (Share).\n3. בחר 'הוסף למסך הבית'.");
@@ -245,23 +296,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           setSbUrl('');
           setSbKey('');
           window.location.reload();
-      }
-  };
-
-  const handleGenerateDescription = async () => {
-      if (!newSession.type || !newSession.location) {
-          alert('נא למלא סוג אימון ומיקום לפני שימוש ב-AI');
-          return;
-      }
-      setIsGeneratingAi(true);
-      try {
-        const desc = await generateWorkoutDescription(newSession.type as any, newSession.location);
-        setNewSession(prev => ({ ...prev, description: desc }));
-      } catch (error) {
-        console.error(error);
-        alert('שגיאה ביצירת תיאור');
-      } finally {
-        setIsGeneratingAi(false);
       }
   };
 
@@ -294,50 +328,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleApproveUser = (user: User) => onUpdateUser({ ...user, isNew: false });
   const handlePaymentStatusChange = (user: User, newStatus: PaymentStatus) => onUpdateUser({ ...user, paymentStatus: newStatus });
 
-  const handleSessionSubmit = () => {
-      if (!newSession.type || !newSession.date || !newSession.location) { alert('נא למלא שדות חובה'); return; }
-      const sessionData = {
-          id: editingSessionId || Date.now().toString(),
-          type: newSession.type!, date: newSession.date!, time: newSession.time!,
-          location: newSession.location!, maxCapacity: newSession.maxCapacity || 15,
-          description: newSession.description || '',
-          registeredPhoneNumbers: editingSessionId ? (sessions.find(s => s.id === editingSessionId)?.registeredPhoneNumbers || []) : [],
-          attendedPhoneNumbers: editingSessionId ? (sessions.find(s => s.id === editingSessionId)?.attendedPhoneNumbers || []) : [],
-          color: newSession.color || SESSION_COLORS[0], isTrial: newSession.isTrial || false,
-          zoomLink: newSession.isZoomSession ? newSession.zoomLink : undefined, isZoomSession: newSession.isZoomSession || false
-      } as TrainingSession;
-
-      if (editingSessionId) { onUpdateSession(sessionData); alert('אימון עודכן'); setEditingSessionId(null); }
-      else { onAddSession(sessionData); alert('אימון נוסף'); }
-      
-      setNewSession({ type: workoutTypes[0] || '', date: newSession.date, time: '18:00', location: locations[0]?.name || '', maxCapacity: 15, description: '', color: SESSION_COLORS[0], isTrial: false, zoomLink: '', isZoomSession: false });
-  };
-
-  const handleEditSessionClick = (session: TrainingSession) => { setNewSession({ ...session }); setEditingSessionId(session.id); setActiveTab('sessions'); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-  const handleCancelEditSession = () => { setEditingSessionId(null); setNewSession({ type: workoutTypes[0] || '', date: new Date().toISOString().split('T')[0], time: '18:00', location: locations[0]?.name || '', maxCapacity: 15, description: '', color: SESSION_COLORS[0], isTrial: false, zoomLink: '', isZoomSession: false }); };
-
-  const handleDuplicateSession = (session: TrainingSession) => {
-      // Logic: Same Day, +1 Hour
-      const [h, m] = session.time.split(':').map(Number);
-      const dateObj = new Date();
-      dateObj.setHours(h, m);
-      dateObj.setHours(dateObj.getHours() + 1);
-      const newTime = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-      
-      const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-      
-      const newSession: TrainingSession = { 
-          ...session, 
-          id: uniqueId, 
-          date: session.date, // Same Date
-          time: newTime,      // +1 Hour
-          registeredPhoneNumbers: [], 
-          attendedPhoneNumbers: [] 
-      };
-      
-      onAddSession(newSession);
-      alert(`האימון שוכפל לשעה ${newTime}`);
-  };
 
   const handleSaveTemplate = () => {
       const startOfWeek = getSunday(new Date(templateSourceDate));
@@ -388,18 +378,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleAddType = () => { if (newTypeName.trim() && !workoutTypes.includes(newTypeName.trim())) { onUpdateWorkoutTypes([...workoutTypes, newTypeName.trim()]); setNewTypeName(''); } };
   const handleDeleteType = (e: React.MouseEvent, type: string) => { e.stopPropagation(); if (confirm('למחוק?')) onUpdateWorkoutTypes(workoutTypes.filter(t => t !== type)); };
 
-  const handleLocationSubmit = () => {
-      if (!newLocationName.trim()) return;
-      if (editingLocationId) {
-          onUpdateLocations(locations.map(l => l.id === editingLocationId ? { ...l, name: newLocationName, address: newLocationAddress } : l));
-          setEditingLocationId(null);
-      } else onUpdateLocations([...locations, { id: Date.now().toString(), name: newLocationName, address: newLocationAddress }]);
-      setNewLocationName(''); setNewLocationAddress('');
-  };
-  const handleEditLocation = (loc: LocationDef) => { setNewLocationName(loc.name); setNewLocationAddress(loc.address); setEditingLocationId(loc.id); };
-  const handleCancelLocationEdit = () => { setNewLocationName(''); setNewLocationAddress(''); setEditingLocationId(null); };
-  const handleDeleteLocation = (e: React.MouseEvent, id: string) => { e.stopPropagation(); if (confirm('למחוק?')) onUpdateLocations(locations.filter(l => l.id !== id)); };
-
   const handleAddPaymentLink = () => { if(newPaymentTitle && newPaymentUrl) { onAddPaymentLink({ id: Date.now().toString(), title: newPaymentTitle, url: newPaymentUrl }); setNewPaymentTitle(''); setNewPaymentUrl(''); } };
   const handleCopySql = () => { navigator.clipboard.writeText(SQL_SCRIPT).then(() => alert('הועתק ללוח')); };
 
@@ -409,41 +387,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   ).sort((a, b) => sortByWorkouts ? getMonthlyWorkoutsCount(b.phone) - getMonthlyWorkoutsCount(a.phone) : a.fullName.localeCompare(b.fullName));
 
   const sortedSessions = sessions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const todayStr = new Date().toISOString().split('T')[0];
-  // Note: We show ALL sessions (past and future) in the list to allow editing past ones as requested, but we sort future first
-  const futureSessions = sortedSessions.filter(s => s.date >= todayStr);
-  const pastSessions = sortedSessions.filter(s => s.date < todayStr).reverse(); // Most recent past first
+  
+  // Quick Add Logic
+  const handleQuickAddSession = () => {
+      const today = new Date().toISOString().split('T')[0];
+      const newSession: TrainingSession = {
+          id: Date.now().toString(),
+          type: workoutTypes[0] || 'אימון',
+          date: today,
+          time: '18:00',
+          location: locations[0]?.name || '',
+          maxCapacity: 15,
+          registeredPhoneNumbers: [],
+          attendedPhoneNumbers: [],
+          description: '',
+          color: SESSION_COLORS[0]
+      };
+      setAttendanceSession(newSession); // Open modal with this new session
+      setEditSessionForm(newSession);   // Prepare form
+      setIsEditingInModal(true);        // Go straight to edit mode
+  };
 
   return (
-    <div className="p-4 bg-gray-900 rounded-lg">
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-3">
+    <div className="p-4 bg-gray-900 rounded-lg pb-24">
+      <div className="flex justify-between items-center mb-4 sticky top-0 bg-gray-900 z-10 py-2 border-b border-gray-800">
+        <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold text-white">פאנל ניהול</h2>
-            <Button size="sm" variant="outline" onClick={handleSaveAsApp} className="hidden md:flex bg-brand-primary/10 border-brand-primary text-brand-primary">📱 שמור אפליקציית ניהול</Button>
         </div>
-        <button onClick={handleExitClick} disabled={isExiting} className={`bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500 px-4 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2 ${isExiting ? 'opacity-50' : ''}`}>
-          {isExiting ? 'יוצא...' : 'יציאה ושמירה'}
-        </button>
+        <div className="flex gap-2">
+            <button onClick={onExitAdmin} className="text-gray-500 text-xs font-bold border border-gray-700 px-3 py-2 rounded hover:text-white">
+                יציאה
+            </button>
+            <button onClick={handleGlobalSave} disabled={isReloading} className={`bg-green-500 hover:bg-green-600 text-white border border-green-600 px-6 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2 shadow-lg ${isReloading ? 'opacity-50' : ''}`}>
+               {isReloading ? 'מרענן...' : 'שמירה 💾'}
+            </button>
+        </div>
       </div>
       
       <div className="flex gap-4 mb-6 overflow-x-auto no-scrollbar pb-2">
-         {['attendance', 'users', 'sessions', 'settings', 'connections'].map(tab => (
+         {['attendance', 'users', 'settings', 'connections'].map(tab => (
              <button key={tab} onClick={() => setActiveTab(tab as any)} className={`px-4 py-2 rounded whitespace-nowrap ${activeTab === tab ? 'bg-brand-primary text-brand-black' : 'bg-gray-700 text-gray-300'}`}>
-                 {tab === 'attendance' ? 'יומן ונוכחות' : tab === 'users' ? 'מתאמנים' : tab === 'sessions' ? 'ניהול אימונים' : tab === 'settings' ? 'הגדרות' : 'חיבורים'}
+                 {tab === 'attendance' ? 'יומן ונוכחות' : tab === 'users' ? 'מתאמנים' : tab === 'settings' ? 'הגדרות' : 'חיבורים'}
              </button>
          ))}
          {newUsers.length > 0 && <button onClick={() => setActiveTab('new_users')} className="px-4 py-2 rounded whitespace-nowrap bg-red-500 text-white relative">חדשים ({newUsers.length})</button>}
       </div>
 
       {activeTab === 'attendance' && (
-          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
+          <div className="bg-gray-800 p-4 rounded-xl border border-gray-700 relative">
               <div className="flex justify-between items-center mb-4">
                   <h3 className="text-xl font-bold text-white">יומן אימונים</h3>
-                  <div className="flex gap-2">
-                      <button onClick={() => setWeekOffset(prev => prev - 1)} className="px-3 py-1 bg-gray-700 rounded text-white">שבוע קודם</button>
-                      <button onClick={() => setWeekOffset(prev => prev + 1)} className="px-3 py-1 bg-gray-700 rounded text-white">שבוע הבא</button>
-                  </div>
+                  <Button size="sm" onClick={handleQuickAddSession} className="text-xs">+ אימון חדש</Button>
               </div>
+              <div className="flex gap-2 mb-4 justify-center">
+                  <button onClick={() => setWeekOffset(prev => prev - 1)} className="px-3 py-1 bg-gray-700 rounded text-white text-xs">שבוע קודם</button>
+                  <span className="text-white text-sm font-bold pt-1">{weekOffset === 0 ? 'השבוע' : weekOffset}</span>
+                  <button onClick={() => setWeekOffset(prev => prev + 1)} className="px-3 py-1 bg-gray-700 rounded text-white text-xs">שבוע הבא</button>
+              </div>
+
               <div className="grid gap-4">
                   {/* Changed to 7 days to include Saturday */}
                   {weekDates.map((date) => {
@@ -475,45 +476,88 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
 
+      {/* Unified Modal for View / Edit / Attendance */}
       {attendanceSession && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
-              <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                  <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-2">
-                     <div>
-                        <h3 className="text-2xl font-bold text-white mb-1">{attendanceSession.type}</h3>
-                        <p className="text-brand-primary">{attendanceSession.time} | {attendanceSession.location}</p>
-                        {attendanceSession.isZoomSession && <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full mt-1 inline-block">ZOOM</span>}
-                     </div>
-                     <button onClick={() => setAttendanceSession(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
-                  </div>
+              <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                   
-                  {/* Management Tools Toolbar */}
-                  <div className="flex gap-2 mb-4">
-                      <Button size="sm" variant="secondary" onClick={handleEditFromAttendance} className="flex-1 text-xs">✏️ ערוך</Button>
-                      <Button size="sm" variant="secondary" onClick={handleDuplicateFromAttendance} className="flex-1 text-xs">📄 שכפל</Button>
-                      <Button size="sm" variant="danger" onClick={handleDeleteFromAttendance} className="flex-1 text-xs">🗑️ מחק</Button>
-                  </div>
+                  {isEditingInModal ? (
+                      // --- EDIT MODE ---
+                      <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                          <h3 className="text-xl font-bold text-white mb-2">עריכת אימון</h3>
+                          <div className="grid grid-cols-2 gap-2">
+                              <select className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.type} onChange={e=>setEditSessionForm({...editSessionForm, type: e.target.value})}>
+                                  {workoutTypes.map(t=><option key={t} value={t}>{t}</option>)}
+                              </select>
+                              <select className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.location} onChange={e=>setEditSessionForm({...editSessionForm, location: e.target.value})}>
+                                  {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
+                              </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                              <input type="date" className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.date} onChange={e=>setEditSessionForm({...editSessionForm, date: e.target.value})}/>
+                              <input type="time" className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.time} onChange={e=>setEditSessionForm({...editSessionForm, time: e.target.value})}/>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                              <div className="flex items-center bg-gray-900 p-2 rounded border border-gray-700">
+                                  <input type="checkbox" checked={editSessionForm.isZoomSession || false} onChange={e=>setEditSessionForm({...editSessionForm, isZoomSession: e.target.checked})} className="w-5 h-5 mr-2"/>
+                                  <span className="text-white text-sm">אימון זום</span>
+                              </div>
+                              <input type="number" placeholder="מקסימום משתתפים" className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.maxCapacity} onChange={e=>setEditSessionForm({...editSessionForm, maxCapacity: parseInt(e.target.value)})}/>
+                          </div>
+                          {editSessionForm.isZoomSession && (
+                             <input type="text" placeholder="לינק לזום" className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 dir-ltr" value={editSessionForm.zoomLink || ''} onChange={e=>setEditSessionForm({...editSessionForm, zoomLink: e.target.value})}/>
+                          )}
+                          <div className="flex gap-2">
+                              <textarea placeholder="תיאור האימון..." className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 h-24" value={editSessionForm.description || ''} onChange={e=>setEditSessionForm({...editSessionForm, description: e.target.value})}/>
+                              <Button variant="secondary" onClick={handleGenerateDescription} isLoading={isGeneratingAi} className="h-24 px-2">AI ✨</Button>
+                          </div>
+                          
+                          <div className="flex gap-2 pt-2 border-t border-gray-700 mt-4">
+                              <Button onClick={handleSaveEditedSession} className="flex-1 py-3 text-lg">עדכן פרטים 💾</Button>
+                              <Button variant="secondary" onClick={()=>setIsEditingInModal(false)} className="px-4">ביטול</Button>
+                          </div>
+                      </div>
+                  ) : (
+                      // --- VIEW / ATTENDANCE MODE ---
+                      <>
+                          <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-2">
+                             <div>
+                                <h3 className="text-2xl font-bold text-white mb-1">{attendanceSession.type}</h3>
+                                <p className="text-brand-primary font-mono">{attendanceSession.time} | {attendanceSession.location}</p>
+                                <p className="text-xs text-gray-500 mt-1">{attendanceSession.date}</p>
+                             </div>
+                             <button onClick={() => setAttendanceSession(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
+                          </div>
+                          
+                          {/* Toolbar */}
+                          <div className="flex gap-2 mb-4 bg-gray-900 p-2 rounded-lg">
+                              <Button size="sm" variant="secondary" onClick={handleEditFromAttendance} className="flex-1 text-xs">✏️ ערוך פרטים</Button>
+                              <Button size="sm" variant="secondary" onClick={handleDuplicateFromAttendance} className="flex-1 text-xs">📄 שכפל (+1 שעה)</Button>
+                              <Button size="sm" variant="danger" onClick={handleDeleteFromAttendance} className="flex-1 text-xs">🗑️ מחק</Button>
+                          </div>
 
-                  <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded">
-                      <div className="text-xs text-gray-400 mb-2">סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</div>
-                      {attendanceSession.registeredPhoneNumbers.length === 0 ? <p className="text-center text-gray-500 py-4">אין נרשמים</p> :
-                          attendanceSession.registeredPhoneNumbers.map(phone => {
-                              const user = users.find(u => u.phone.replace(/\D/g,'') === phone.replace(/\D/g,''));
-                              const isMarked = markedAttendees.has(phone);
-                              return (
-                                  <div key={phone} onClick={() => toggleAttendance(phone)} className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-colors ${isMarked ? 'bg-green-900/30 border-green-500' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}>
-                                      <div className="text-white font-bold">{user?.fullName || phone}</div>
-                                      <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${isMarked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-500'}`}>
-                                          {isMarked && '✓'}
-                                      </div>
-                                  </div>
-                              );
-                          })
-                      }
-                  </div>
-                  <div className="flex gap-2">
-                      <Button onClick={saveAttendance} className="flex-1">שמור שינויים</Button>
-                  </div>
+                          <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded max-h-60">
+                              <div className="text-xs text-gray-400 mb-2 sticky top-0 bg-gray-900 p-1">סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</div>
+                              {attendanceSession.registeredPhoneNumbers.length === 0 ? <p className="text-center text-gray-500 py-4">אין נרשמים</p> :
+                                  attendanceSession.registeredPhoneNumbers.map(phone => {
+                                      const user = users.find(u => u.phone.replace(/\D/g,'') === phone.replace(/\D/g,''));
+                                      const isMarked = markedAttendees.has(phone);
+                                      return (
+                                          <div key={phone} onClick={() => toggleAttendance(phone)} className={`flex items-center justify-between p-3 rounded border cursor-pointer transition-colors ${isMarked ? 'bg-green-900/30 border-green-500' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}>
+                                              <div className="text-white font-bold">{user?.fullName || phone}</div>
+                                              <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${isMarked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-500'}`}>
+                                                  {isMarked && '✓'}
+                                              </div>
+                                          </div>
+                                      );
+                                  })
+                              }
+                          </div>
+                          <div className="flex gap-2">
+                              <Button onClick={saveAttendance} className="flex-1">שמור נוכחות</Button>
+                          </div>
+                      </>
+                  )}
               </div>
           </div>
       )}
@@ -526,7 +570,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <input type="text" placeholder="שם מלא" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.fullName} onChange={e => setFormUser({...formUser, fullName: e.target.value})}/>
                     <input type="tel" placeholder="טלפון" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.phone} onChange={e => setFormUser({...formUser, phone: e.target.value})}/>
                 </div>
-                {/* Added Monthly Record Input */}
                 <div className="grid grid-cols-2 gap-2 mb-2">
                    <div className="flex flex-col">
                        <label className="text-xs text-gray-400 mb-1">שיא חודשי</label>
@@ -625,76 +668,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <Button onClick={handleSearchCity}>{isSearchingCity?'...':'עדכן מיקום'}</Button>
               </div>
           </div>
-      )}
-
-      {activeTab === 'sessions' && (
-        <div className="space-y-4">
-            <div className="bg-gray-800 p-4 rounded border border-gray-700">
-                <h3 className="text-brand-primary mb-2">{editingSessionId ? 'עריכה' : 'אימון חדש'}</h3>
-                <div className="grid gap-2">
-                    <div className="grid grid-cols-2 gap-2">
-                        <select className="bg-gray-900 text-white p-2 rounded" value={newSession.type} onChange={e=>setNewSession({...newSession, type: e.target.value})}>
-                            {workoutTypes.map(t=><option key={t} value={t}>{t}</option>)}
-                        </select>
-                        <select className="bg-gray-900 text-white p-2 rounded" value={newSession.location} onChange={e=>setNewSession({...newSession, location: e.target.value})}>
-                            {locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        {/* Note: Standard date input allows past dates by default unless 'min' is set. We do NOT set min here. */}
-                        <input type="date" className="bg-gray-900 text-white p-2 rounded" value={newSession.date} onChange={e=>setNewSession({...newSession, date: e.target.value})}/>
-                        <input type="time" className="bg-gray-900 text-white p-2 rounded" value={newSession.time} onChange={e=>setNewSession({...newSession, time: e.target.value})}/>
-                    </div>
-                    
-                    {/* Extra fields added for completeness in edit form */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <label className="flex items-center gap-2 text-white bg-gray-900 p-2 rounded">
-                            <input type="checkbox" checked={newSession.isZoomSession || false} onChange={e=>setNewSession({...newSession, isZoomSession: e.target.checked})} />
-                            <span className="text-sm">אימון זום?</span>
-                        </label>
-                        {newSession.isZoomSession && (
-                             <input type="text" placeholder="לינק לזום" className="bg-gray-900 text-white p-2 rounded" value={newSession.zoomLink || ''} onChange={e=>setNewSession({...newSession, zoomLink: e.target.value})}/>
-                        )}
-                    </div>
-
-                    <div className="flex gap-2">
-                        <input type="text" placeholder="תיאור" className="bg-gray-900 text-white p-2 rounded flex-1" value={newSession.description} onChange={e=>setNewSession({...newSession, description: e.target.value})}/>
-                        <Button variant="secondary" onClick={handleGenerateDescription} isLoading={isGeneratingAi}>AI ✨</Button>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button onClick={handleSessionSubmit} className="flex-1">{editingSessionId?'עדכן':'צור'}</Button>
-                        {editingSessionId && <Button onClick={handleCancelEditSession} variant="secondary">ביטול</Button>}
-                    </div>
-                </div>
-            </div>
-            
-            <div className="bg-gray-800 rounded p-2 max-h-96 overflow-y-auto">
-                <h4 className="text-white font-bold mb-2">עתידיים ({futureSessions.length})</h4>
-                {futureSessions.map(s => (
-                    <div key={s.id} className="flex justify-between items-center bg-gray-900 p-2 rounded mb-2 border border-gray-700">
-                        {/* Added location to list */}
-                        <div className="text-white text-sm">{s.date} | {s.time} | {s.type} | {s.location}</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => handleEditSessionClick(s)} className="text-blue-400 text-xs">ערוך</button>
-                            <button onClick={() => handleDuplicateSession(s)} className="text-green-400 text-xs">שכפל</button>
-                            <button onClick={() => onDeleteSession(s.id)} className="text-red-400 text-xs">מחק</button>
-                        </div>
-                    </div>
-                ))}
-                
-                <h4 className="text-white font-bold mb-2 mt-4">עבר ({pastSessions.length})</h4>
-                {pastSessions.map(s => (
-                    <div key={s.id} className="flex justify-between items-center bg-gray-900 p-2 rounded mb-2 border border-gray-700 opacity-70">
-                        <div className="text-white text-sm">{s.date} | {s.time} | {s.type} | {s.location}</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => handleEditSessionClick(s)} className="text-blue-400 text-xs">ערוך</button>
-                            <button onClick={() => handleDuplicateSession(s)} className="text-green-400 text-xs">שכפל</button>
-                            <button onClick={() => onDeleteSession(s.id)} className="text-red-400 text-xs">מחק</button>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
       )}
     </div>
   );
