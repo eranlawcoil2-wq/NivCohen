@@ -1,9 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // --- הוראות חשובות ---
-// כדי שהאתר יעבוד לכולם (בנייד ובמחשב) ללא צורך בהגדרות:
-// 1. מחק את הטקסט 'PASTE_YOUR_URL_HERE' והדבק במקומו את ה-URL של הפרויקט שלך מ-Supabase.
-// 2. מחק את הטקסט 'PASTE_YOUR_ANON_KEY_HERE' והדבק במקומו את ה-Anon Key שלך.
+// 1. מחק את הטקסט 'PASTE_YOUR_URL_HERE' (כולל הגרש) והדבק במקומו את ה-URL שהעתקת מ-Supabase.
+// 2. מחק את הטקסט 'PASTE_YOUR_ANON_KEY_HERE' (כולל הגרש) והדבק במקומו את ה-Anon Key שהעתקת.
 // --------------------
 
 const HARDCODED_URL = 'PASTE_YOUR_URL_HERE'; 
