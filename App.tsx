@@ -57,9 +57,18 @@ const App: React.FC = () => {
   const [primaryColor, setPrimaryColor] = useState<string>(localStorage.getItem('niv_app_color') || '#A3E635');
   const [weekOffset, setWeekOffset] = useState(0); 
   const [isAdminMode, setIsAdminMode] = useState(false);
+  
+  // Modals State
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  
+  // Login State
   const [loginPhone, setLoginPhone] = useState('');
   const [newUserName, setNewUserName] = useState('');
+  
+  // Profile Edit State
+  const [editProfileData, setEditProfileData] = useState({ fullName: '', email: '' });
+
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, { maxTemp: number; weatherCode: number }>>({});
@@ -168,6 +177,7 @@ const App: React.FC = () => {
   const handleLogin = async () => {
       if (!loginPhone) return;
       const phone = normalizePhone(loginPhone);
+      // Check if user exists (was added by trainer or self-registered before)
       if (!users.find(u => normalizePhone(u.phone) === phone)) {
           if (!newUserName) { alert('הזן שם להרשמה'); return; }
           const newUser = { id: Date.now().toString(), fullName: newUserName, phone, email: '', startDate: new Date().toISOString(), paymentStatus: PaymentStatus.PAID, isNew: true } as User;
@@ -175,6 +185,24 @@ const App: React.FC = () => {
           setUsers([...users, newUser]);
       }
       setCurrentUserPhone(phone); localStorage.setItem('niv_app_current_phone', phone); setShowLoginModal(false);
+  };
+
+  const handleOpenProfile = () => {
+      if (currentUser) {
+          setEditProfileData({ fullName: currentUser.fullName, email: currentUser.email });
+          setShowProfileModal(true);
+      }
+  };
+
+  const handleUpdateProfile = async () => {
+      if (!currentUser) return;
+      if (!editProfileData.fullName) return alert('שם חובה');
+      
+      const updatedUser = { ...currentUser, fullName: editProfileData.fullName, email: editProfileData.email };
+      await dataService.updateUser(updatedUser);
+      setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+      setShowProfileModal(false);
+      alert('פרופיל עודכן!');
   };
 
   const mainBackgroundClass = isAdminMode 
@@ -185,7 +213,18 @@ const App: React.FC = () => {
     <div className={mainBackgroundClass}>
       <header className="bg-brand-dark p-4 sticky top-0 z-20 border-b border-gray-800 flex justify-between items-center shadow-lg">
           <div><h1 className="text-2xl font-black text-white italic">NIV <span className="text-brand-primary">COHEN</span></h1></div>
-          {currentUser && <div className="text-right"><p className="text-white text-xs">היי {currentUser.fullName}</p><button onClick={()=>{setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone');}} className="text-xs text-gray-500">התנתק</button></div>}
+          {currentUser && (
+              <div className="text-right flex items-center gap-3">
+                  <div>
+                    <p className="text-white text-xs font-bold">היי {currentUser.fullName}</p>
+                    <div className="flex gap-2 justify-end">
+                        <button onClick={handleOpenProfile} className="text-[10px] text-brand-primary hover:underline">ערוך פרופיל</button>
+                        <span className="text-gray-600 text-[10px]">|</span>
+                        <button onClick={()=>{setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone');}} className="text-[10px] text-gray-500 hover:text-white">התנתק</button>
+                    </div>
+                  </div>
+              </div>
+          )}
       </header>
 
       <main className="max-w-4xl mx-auto p-4">
@@ -347,10 +386,37 @@ const App: React.FC = () => {
               <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
                   <h3 className="text-white font-bold mb-4 text-xl">התחברות / הרשמה</h3>
                   <input type="tel" placeholder="מספר טלפון" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-2 text-lg border border-gray-700 focus:border-brand-primary outline-none" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)}/>
-                  <input type="text" placeholder="שם מלא (לנרשמים חדשים)" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 border border-gray-700 focus:border-brand-primary outline-none" value={newUserName} onChange={e=>setNewUserName(e.target.value)}/>
+                  
+                  {/* Logic Change: Only show name input if phone not found in system */}
+                  {(!users.find(u => normalizePhone(u.phone) === normalizePhone(loginPhone)) && loginPhone.length >= 9) && (
+                      <input type="text" placeholder="שם מלא (לנרשמים חדשים)" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 border border-gray-700 focus:border-brand-primary outline-none" value={newUserName} onChange={e=>setNewUserName(e.target.value)}/>
+                  )}
+                  
                   <div className="flex gap-2">
                       <Button onClick={handleLogin} className="flex-1 py-3">אישור</Button>
                       <Button onClick={()=>setShowLoginModal(false)} variant="secondary" className="flex-1 py-3">ביטול</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {showProfileModal && (
+           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
+                  <h3 className="text-white font-bold mb-4 text-xl">עריכת פרופיל</h3>
+                  <div className="space-y-4 mb-6">
+                      <div>
+                          <label className="text-xs text-gray-400 mb-1 block">שם מלא</label>
+                          <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.fullName} onChange={e=>setEditProfileData({...editProfileData, fullName: e.target.value})}/>
+                      </div>
+                      <div>
+                          <label className="text-xs text-gray-400 mb-1 block">אימייל</label>
+                          <input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/>
+                      </div>
+                  </div>
+                  <div className="flex gap-2">
+                      <Button onClick={handleUpdateProfile} className="flex-1 py-3">שמור</Button>
+                      <Button onClick={()=>setShowProfileModal(false)} variant="secondary" className="flex-1 py-3">ביטול</Button>
                   </div>
               </div>
           </div>

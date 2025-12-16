@@ -111,6 +111,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
 
+  // Cloud Config State
+  const [sbUrl, setSbUrl] = useState(localStorage.getItem('niv_app_supabase_url') || '');
+  const [sbKey, setSbKey] = useState(localStorage.getItem('niv_app_supabase_key') || '');
+
   // Attendance State
   const [weekOffset, setWeekOffset] = useState(0);
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
@@ -172,20 +176,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const openAttendanceModal = (session: TrainingSession) => {
       setAttendanceSession(session);
-      
-      // LOGIC CHANGE: 
-      // If attendedPhoneNumbers is undefined or null (never saved), AUTO-SELECT ALL registered users.
-      // If it exists (even if empty), respect the saved data.
       let initialSet: Set<string>;
-      
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
-          // First time opening attendance for this session -> Select everyone
           initialSet = new Set(session.registeredPhoneNumbers);
       } else {
-          // Use previously saved state
           initialSet = new Set(session.attendedPhoneNumbers);
       }
-      
       setMarkedAttendees(initialSet);
   };
 
@@ -227,9 +223,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
 
-  // Explanation for saving as separate app
   const handleSaveAsApp = () => {
       alert("כדי ליצור קיצור דרך למסך הבית שפותח ישר את הניהול:\n1. וודא שאתה במסך זה.\n2. לחץ על כפתור השיתוף בדפדפן (Share).\n3. בחר 'הוסף למסך הבית'.");
+  };
+
+  const handleSaveCloudConfig = () => {
+      if (!sbUrl || !sbKey) {
+          alert('נא להזין URL ו-Key');
+          return;
+      }
+      localStorage.setItem('niv_app_supabase_url', sbUrl);
+      localStorage.setItem('niv_app_supabase_key', sbKey);
+      alert('הגדרות נשמרו. הטעינה תתבצע מחדש.');
+      window.location.reload();
+  };
+  
+  const handleClearCloudConfig = () => {
+      if(confirm('האם למחוק את חיבור הענן ולחזור למצב מקומי?')) {
+          localStorage.removeItem('niv_app_supabase_url');
+          localStorage.removeItem('niv_app_supabase_key');
+          setSbUrl('');
+          setSbKey('');
+          window.location.reload();
+      }
   };
 
   const handleGenerateDescription = async () => {
@@ -512,12 +528,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {activeTab === 'connections' && (
-          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 text-white">
-              <h3 className="text-xl font-bold mb-4">חיבור ל-Supabase</h3>
+          <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 text-white space-y-4">
+              <h3 className="text-xl font-bold mb-4">חיבור ל-Supabase (ענן)</h3>
               <div className={`p-4 rounded mb-4 ${supabase ? 'bg-green-900/30 border-green-500' : 'bg-red-900/30 border-red-500'} border`}>
-                  {supabase ? '✅ מחובר למסד הנתונים' : '❌ לא מחובר'}
+                  {supabase ? '✅ מחובר למסד הנתונים' : '❌ עובד מקומית בלבד'}
               </div>
-              <Button size="sm" variant="secondary" onClick={handleCopySql}>העתק SQL להתקנה</Button>
+              
+              <div className="space-y-2">
+                  <label className="text-xs text-gray-400">Project URL</label>
+                  <input type="text" className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white text-sm" value={sbUrl} onChange={e => setSbUrl(e.target.value)} placeholder="https://example.supabase.co" />
+              </div>
+              <div className="space-y-2">
+                  <label className="text-xs text-gray-400">Project API Key (Anon)</label>
+                  <input type="password" className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white text-sm" value={sbKey} onChange={e => setSbKey(e.target.value)} placeholder="eyJhbG..." />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                  <Button onClick={handleSaveCloudConfig} className="flex-1">שמור והתחבר</Button>
+                  {supabase && <Button variant="danger" onClick={handleClearCloudConfig}>התנתק</Button>}
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-gray-700">
+                 <h4 className="text-sm font-bold mb-2">הוראות התקנה (חד פעמי):</h4>
+                 <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">העתק סקריפט SQL ליצירת טבלאות</Button>
+              </div>
           </div>
       )}
 
