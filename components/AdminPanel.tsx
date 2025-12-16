@@ -40,7 +40,7 @@ const SQL_SCRIPT = `
 -- טבלת משתמשים
 create table if not exists users (
   id text primary key, "fullName" text, "displayName" text, phone text unique,
-  email text, "startDate" text, "paymentStatus" text, "isNew" boolean, "userColor" text
+  email text, "startDate" text, "paymentStatus" text, "isNew" boolean, "userColor" text, "monthlyRecord" int
 );
 -- טבלת אימונים
 create table if not exists sessions (
@@ -77,7 +77,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [formUser, setFormUser] = useState<Partial<User>>({
     fullName: '', displayName: '', phone: '', email: '',
     startDate: new Date().toISOString().split('T')[0],
-    paymentStatus: PaymentStatus.PAID, userColor: ''
+    paymentStatus: PaymentStatus.PAID, userColor: '', monthlyRecord: 0
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
@@ -276,13 +276,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           startDate: formUser.startDate!,
           paymentStatus: formUser.paymentStatus!,
           userColor: formUser.userColor,
+          monthlyRecord: formUser.monthlyRecord || 0,
           isNew: false 
       } as User;
 
       if (editingUserId) { onUpdateUser(userData); alert('פרטי משתמש עודכנו'); setEditingUserId(null); } 
       else { onAddUser(userData); alert('משתמש נוסף בהצלחה'); }
       
-      setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '' });
+      setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '', monthlyRecord: 0 });
   };
 
   const handleEditUserClick = (user: User) => {
@@ -383,8 +384,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const sortedSessions = sessions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const todayStr = new Date().toISOString().split('T')[0];
+  // Note: We show ALL sessions (past and future) in the list to allow editing past ones as requested, but we sort future first
   const futureSessions = sortedSessions.filter(s => s.date >= todayStr);
-  const pastSessions = sortedSessions.filter(s => s.date < todayStr && new Date(s.date) > new Date(Date.now() - 30*24*60*60*1000));
+  const pastSessions = sortedSessions.filter(s => s.date < todayStr).reverse(); // Most recent past first
 
   return (
     <div className="p-4 bg-gray-900 rounded-lg">
@@ -417,7 +419,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
               </div>
               <div className="grid gap-4">
-                  {weekDates.slice(0, 6).map((date) => {
+                  {/* Changed to 7 days to include Saturday */}
+                  {weekDates.map((date) => {
                       const daySessions = groupedSessions[date] || [];
                       const isToday = new Date().toISOString().split('T')[0] === date;
                       return (
@@ -497,6 +500,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <input type="text" placeholder="שם מלא" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.fullName} onChange={e => setFormUser({...formUser, fullName: e.target.value})}/>
                     <input type="tel" placeholder="טלפון" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.phone} onChange={e => setFormUser({...formUser, phone: e.target.value})}/>
                 </div>
+                {/* Added Monthly Record Input */}
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                   <div className="flex flex-col">
+                       <label className="text-xs text-gray-400 mb-1">שיא חודשי</label>
+                       <input type="number" placeholder="שיא אימונים" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.monthlyRecord || 0} onChange={e => setFormUser({...formUser, monthlyRecord: parseInt(e.target.value) || 0})}/>
+                   </div>
+                </div>
                 <Button onClick={handleUserSubmit} className="w-full">{editingUserId ? 'עדכן' : 'הוסף'}</Button>
             </div>
             <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 max-h-96 overflow-y-auto">
@@ -504,7 +514,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div key={user.id} className="p-3 border-b border-gray-700 flex justify-between items-center hover:bg-gray-700/50">
                         <div>
                             <div className="font-bold text-white">{user.fullName} <span className={`text-xs px-2 rounded ${user.paymentStatus === 'PAID' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>{user.paymentStatus}</span></div>
-                            <div className="text-xs text-gray-400">{user.phone} | אימונים החודש: {getMonthlyWorkoutsCount(user.phone)}</div>
+                            <div className="text-xs text-gray-400">{user.phone} | שיא חודשי: {user.monthlyRecord || 0}</div>
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => handleEditUserClick(user)} className="bg-gray-600 text-white px-2 py-1 rounded text-xs">ערוך</button>
@@ -561,6 +571,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <h3 className="text-white mb-2">צבע ראשי</h3>
                   <div className="flex gap-2">{SESSION_COLORS.map(c => <button key={c} onClick={() => onColorChange(c)} className={`w-8 h-8 rounded-full ${primaryColor===c?'border-2 border-white':''}`} style={{backgroundColor:c}}/>)}</div>
               </div>
+              
+              {/* Template Management */}
+              <div className="bg-gray-800 p-4 rounded border border-gray-700 space-y-2">
+                  <h3 className="text-white mb-2 font-bold">תבניות שבועיות</h3>
+                  <p className="text-xs text-gray-400">שמור את השבוע שבתאריך המקור כתבנית, או טען תבנית לשבוע שבתאריך היעד.</p>
+                  <div className="flex flex-col gap-2">
+                      <div className="flex gap-2 items-center">
+                          <label className="text-xs text-gray-400 w-12">מקור:</label>
+                          <input type="date" className="bg-gray-900 text-white p-2 rounded flex-1" value={templateSourceDate} onChange={e=>setTemplateSourceDate(e.target.value)}/>
+                          <Button size="sm" onClick={handleSaveTemplate} variant="secondary">שמור כתבנית</Button>
+                      </div>
+                      <div className="flex gap-2 items-center">
+                          <label className="text-xs text-gray-400 w-12">יעד:</label>
+                          <input type="date" className="bg-gray-900 text-white p-2 rounded flex-1" value={templateTargetDate} onChange={e=>setTemplateTargetDate(e.target.value)}/>
+                          <Button size="sm" onClick={handleLoadTemplate}>טען תבנית</Button>
+                      </div>
+                  </div>
+              </div>
+
               <div className="bg-gray-800 p-4 rounded border border-gray-700 flex gap-2">
                   <input type="text" placeholder="הוסף סוג אימון" className="bg-gray-900 text-white p-2 rounded flex-1" value={newTypeName} onChange={e=>setNewTypeName(e.target.value)}/>
                   <Button onClick={handleAddType}>הוסף</Button>
@@ -586,6 +615,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </select>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
+                        {/* Note: Standard date input allows past dates by default unless 'min' is set. We do NOT set min here. */}
                         <input type="date" className="bg-gray-900 text-white p-2 rounded" value={newSession.date} onChange={e=>setNewSession({...newSession, date: e.target.value})}/>
                         <input type="time" className="bg-gray-900 text-white p-2 rounded" value={newSession.time} onChange={e=>setNewSession({...newSession, time: e.target.value})}/>
                     </div>
@@ -613,10 +643,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             
             <div className="bg-gray-800 rounded p-2 max-h-96 overflow-y-auto">
-                <h4 className="text-white font-bold mb-2">עתידיים</h4>
+                <h4 className="text-white font-bold mb-2">עתידיים ({futureSessions.length})</h4>
                 {futureSessions.map(s => (
                     <div key={s.id} className="flex justify-between items-center bg-gray-900 p-2 rounded mb-2 border border-gray-700">
-                        <div className="text-white text-sm">{s.date} | {s.time} | {s.type}</div>
+                        {/* Added location to list */}
+                        <div className="text-white text-sm">{s.date} | {s.time} | {s.type} | {s.location}</div>
+                        <div className="flex gap-2">
+                            <button onClick={() => handleEditSessionClick(s)} className="text-blue-400 text-xs">ערוך</button>
+                            <button onClick={() => handleDuplicateSession(s)} className="text-green-400 text-xs">שכפל</button>
+                            <button onClick={() => onDeleteSession(s.id)} className="text-red-400 text-xs">מחק</button>
+                        </div>
+                    </div>
+                ))}
+                
+                <h4 className="text-white font-bold mb-2 mt-4">עבר ({pastSessions.length})</h4>
+                {pastSessions.map(s => (
+                    <div key={s.id} className="flex justify-between items-center bg-gray-900 p-2 rounded mb-2 border border-gray-700 opacity-70">
+                        <div className="text-white text-sm">{s.date} | {s.time} | {s.type} | {s.location}</div>
                         <div className="flex gap-2">
                             <button onClick={() => handleEditSessionClick(s)} className="text-blue-400 text-xs">ערוך</button>
                             <button onClick={() => handleDuplicateSession(s)} className="text-green-400 text-xs">שכפל</button>

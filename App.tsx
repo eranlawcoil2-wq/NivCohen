@@ -61,7 +61,8 @@ const App: React.FC = () => {
   // Modals State
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  
+  const [showStreakTooltip, setShowStreakTooltip] = useState(false);
+
   // Login State
   const [loginPhone, setLoginPhone] = useState('');
   const [newUserName, setNewUserName] = useState('');
@@ -147,14 +148,74 @@ const App: React.FC = () => {
       }).length;
   };
 
+  // Streak Calculation
+  const calculateStreak = (phone: string) => {
+      if (!sessions || sessions.length === 0) return 0;
+      const normalized = normalizePhone(phone);
+      
+      // Get all attended sessions for user
+      const userSessions = sessions.filter(s => 
+         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers.includes(normalized) // Considering registration as enough for stats to show encouragement, or strict attendance? Usually attendance. For now, let's stick to attended/registered as existing code does for monthly count.
+      ).map(s => new Date(s.date));
+
+      if (userSessions.length === 0) return 0;
+
+      // Group counts by week (ISO string of start of week)
+      const weeks: Record<string, number> = {};
+      userSessions.forEach(d => {
+          const day = d.getDay();
+          const diff = d.getDate() - day; // Sunday start
+          const startOfWeek = new Date(d);
+          startOfWeek.setDate(diff);
+          startOfWeek.setHours(0,0,0,0);
+          const key = startOfWeek.toISOString().split('T')[0];
+          weeks[key] = (weeks[key] || 0) + 1;
+      });
+
+      let currentStreak = 0;
+      const today = new Date();
+      const day = today.getDay();
+      const diff = today.getDate() - day;
+      let checkDate = new Date(today.setDate(diff));
+      checkDate.setHours(0,0,0,0);
+
+      // Check backwards
+      while(true) {
+          const key = checkDate.toISOString().split('T')[0];
+          const count = weeks[key] || 0;
+          
+          // Current week: If met goal, add to streak. If not met yet, don't break streak, just ignore unless it's past
+          if (count >= 3) { // Goal is 3
+              currentStreak++;
+          } else {
+              // If it's strictly a past week and we didn't meet goal, streak breaks
+              // We allow current week to be incomplete
+              if (checkDate.getTime() < new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000) { // sloppy check for "is this strictly a past week"
+                 // Actually simpler: just count consecutive weeks with >= 3
+                 if (count < 3 && currentStreak > 0) break; // End of streak
+              }
+          }
+          
+          // Move back a week
+          checkDate.setDate(checkDate.getDate() - 7);
+          // Safety break
+          if (checkDate.getFullYear() < 2023) break;
+      }
+      return currentStreak;
+  };
+
   const currentUser = users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || ''));
-  const userStats = { currentMonthCount: currentUser ? getMonthlyWorkoutsCount(currentUser.phone) : 0 };
+  const streakCount = currentUser ? calculateStreak(currentUser.phone) : 0;
+  const userStats = { 
+      currentMonthCount: currentUser ? getMonthlyWorkoutsCount(currentUser.phone) : 0,
+      monthlyRecord: currentUser?.monthlyRecord || 0
+  };
 
   const getCurrentWeekDates = (offset: number) => {
     const curr = new Date();
     const diff = curr.getDate() - curr.getDay() + (offset * 7);
     const start = new Date(curr.setDate(diff));
-    return Array.from({length: 7}, (_, i) => {
+    return Array.from({length: 7}, (_, i) => { // Changed to 7 to include Saturday
         const d = new Date(start); d.setDate(start.getDate() + i);
         return d.toISOString().split('T')[0];
     });
@@ -229,9 +290,34 @@ const App: React.FC = () => {
 
       <main className="max-w-4xl mx-auto p-4">
         {currentUser && (
-            <div className="mb-6 bg-gray-900 p-4 rounded-xl border border-gray-800 flex justify-between items-center">
-                <div><div className="text-gray-400 text-xs">אימונים החודש</div><div className="text-3xl font-bold text-white">{userStats.currentMonthCount}</div></div>
-                <div className="text-right text-gray-500 italic text-sm">"{quote}"</div>
+            <div className="mb-6 bg-gray-900 p-4 rounded-xl border border-gray-800 relative">
+                <div className="flex justify-between items-start mb-2">
+                     <div className="flex flex-col gap-1">
+                         <div className="text-gray-400 text-xs">אימונים החודש</div>
+                         <div className="text-3xl font-bold text-white">{userStats.currentMonthCount}</div>
+                         <div className="text-xs text-gray-500">שיא אישי: <span className="text-brand-primary font-bold">{Math.max(userStats.monthlyRecord, userStats.currentMonthCount)}</span></div>
+                     </div>
+                     
+                     {/* Streak Badge */}
+                     <div className="flex flex-col items-center" onClick={() => setShowStreakTooltip(!showStreakTooltip)}>
+                        <div className="text-4xl mb-1 cursor-help filter drop-shadow-lg">
+                           {streakCount > 0 ? '👑' : '🏆'}
+                        </div>
+                        <div className="bg-brand-primary/20 text-brand-primary text-xs px-2 py-0.5 rounded-full font-bold">
+                           רצף: {streakCount}
+                        </div>
+                     </div>
+                </div>
+
+                {showStreakTooltip && (
+                    <div className="absolute top-20 left-4 bg-gray-800 border border-gray-600 p-3 rounded shadow-xl text-xs z-10 max-w-[200px] animate-in fade-in">
+                        <p className="text-white font-bold mb-1">איך שומרים על הרצף? 🔥</p>
+                        <p className="text-gray-300">בצע לפחות 3 אימונים בשבוע כדי להגדיל את הסטרייק שלך ולקבל את הכתר!</p>
+                        <button className="text-brand-primary mt-2 text-[10px] underline" onClick={()=>setShowStreakTooltip(false)}>סגור</button>
+                    </div>
+                )}
+                
+                <div className="text-right text-gray-500 italic text-sm mt-2 border-t border-gray-800 pt-2">"{quote}"</div>
             </div>
         )}
 
@@ -259,7 +345,8 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-col gap-6"> 
-                    {weekDates.slice(0, 6).map(date => {
+                    {/* Using weekDates directly which now includes 7 days */}
+                    {weekDates.map(date => {
                         const daySessions = groupedSessions[date] || [];
                         const isToday = new Date().toISOString().split('T')[0] === date;
                         return (

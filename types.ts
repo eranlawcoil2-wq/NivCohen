@@ -30,6 +30,7 @@ export interface User {
   paymentStatus: PaymentStatus;
   isNew?: boolean; // Flag for self-registered users pending coach review
   userColor?: string; // Custom color for the user name in lists
+  monthlyRecord?: number; // Personal best: max workouts in a month
 }
 
 export interface TrainingSession {
