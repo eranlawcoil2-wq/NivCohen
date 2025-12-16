@@ -39,33 +39,6 @@ const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canI
     </div>
 );
 
-const ConnectionBlocker: React.FC = () => {
-    const [url, setUrl] = useState('');
-    const [key, setKey] = useState('');
-
-    const handleSave = () => {
-        if (!url || !key) return alert('חובה להזין את כל השדות');
-        localStorage.setItem('niv_app_supabase_url', url);
-        localStorage.setItem('niv_app_supabase_key', key);
-        window.location.reload();
-    };
-
-    return (
-        <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center p-6 text-center">
-            <h1 className="text-3xl font-black text-brand-primary mb-2">NIV COHEN</h1>
-            <h2 className="text-xl text-white font-bold mb-4">חיבור לשרת נדרש</h2>
-            <p className="text-gray-400 mb-6 text-sm">האפליקציה עובדת כעת במצב מקוון בלבד. נא להזין פרטי התחברות לשרת.</p>
-            
-            <div className="w-full max-w-sm space-y-3">
-                <input type="text" placeholder="Supabase URL" className="w-full p-3 bg-gray-800 border border-gray-700 rounded text-white text-left dir-ltr" value={url} onChange={e=>setUrl(e.target.value)} />
-                <input type="password" placeholder="Supabase Key" className="w-full p-3 bg-gray-800 border border-gray-700 rounded text-white text-left dir-ltr" value={key} onChange={e=>setKey(e.target.value)} />
-                <Button onClick={handleSave} className="w-full py-3">התחבר לשרת 🚀</Button>
-            </div>
-            <p className="mt-8 text-xs text-gray-600">צור קשר עם המאמן לקבלת פרטי גישה.</p>
-        </div>
-    );
-};
-
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
@@ -107,6 +80,8 @@ const App: React.FC = () => {
       setIsLoadingData(true);
       const connected = !!supabase;
       setIsCloudConnected(connected);
+      
+      // Since keys are now hardcoded, we should always be able to try to connect.
       if (connected) {
           try {
               const u = await dataService.getUsers();
@@ -114,6 +89,7 @@ const App: React.FC = () => {
               setUsers(u); setSessions(s);
           } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
       } else {
+          // If supabase object is null, connection failed config-side
           setIsLoadingData(false);
       }
   }, []);
@@ -216,20 +192,15 @@ const App: React.FC = () => {
           const key = checkDate.toISOString().split('T')[0];
           const count = weeks[key] || 0;
           
-          // Current week: If met goal, add to streak. If not met yet, don't break streak, just ignore unless it's past
           if (count >= 3) { // Goal is 3
               currentStreak++;
           } else {
-              // If it's strictly a past week and we didn't meet goal, streak breaks
-              // We allow current week to be incomplete
-              if (checkDate.getTime() < new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000) { // sloppy check for "is this strictly a past week"
+              if (checkDate.getTime() < new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000) { 
                  if (count < 3 && currentStreak > 0) break; // End of streak
               }
           }
           
-          // Move back a week
           checkDate.setDate(checkDate.getDate() - 7);
-          // Safety break
           if (checkDate.getFullYear() < 2023) break;
       }
       return currentStreak;
@@ -263,7 +234,12 @@ const App: React.FC = () => {
       if (!isReg && session.registeredPhoneNumbers.length >= session.maxCapacity) { alert('מלא'); return; }
       const updated = { ...session, registeredPhoneNumbers: isReg ? session.registeredPhoneNumbers.filter(p => p !== phone) : [...session.registeredPhoneNumbers, phone] };
       setSessions(prev => prev.map(s => s.id === sid ? updated : s));
-      await dataService.updateSession(updated);
+      try {
+          await dataService.updateSession(updated);
+      } catch (e) {
+          alert('שגיאה בעדכון ההרשמה, נסה שנית');
+          refreshData();
+      }
   };
 
   const handleLogin = async () => {
@@ -310,7 +286,6 @@ const App: React.FC = () => {
           await dataService.updateUser(updatedUser);
           setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
           
-          // If phone number changed, update session storage so user isn't logged out
           if (newPhone !== normalizePhone(currentUserPhone || '')) {
               localStorage.setItem('niv_app_current_phone', newPhone);
               setCurrentUserPhone(newPhone);
@@ -326,10 +301,6 @@ const App: React.FC = () => {
   const mainBackgroundClass = isAdminMode 
     ? 'min-h-screen pb-20 font-sans md:bg-[#330000] bg-brand-black transition-colors duration-500' 
     : 'min-h-screen bg-brand-black pb-20 font-sans transition-colors duration-500';
-
-  if (!isCloudConnected && !isLoadingData) {
-      return <ConnectionBlocker />;
-  }
 
   return (
     <div className={mainBackgroundClass}>
@@ -359,13 +330,13 @@ const App: React.FC = () => {
                          <div className="text-xs text-gray-500">שיא אישי: <span className="text-brand-primary font-bold">{Math.max(userStats.monthlyRecord, userStats.currentMonthCount)}</span></div>
                      </div>
                      
-                     {/* Streak Badge */}
+                     {/* Streak Badge - UPDATED to Trophy and Text */}
                      <div className="flex flex-col items-center" onClick={() => setShowStreakTooltip(!showStreakTooltip)}>
                         <div className="text-4xl mb-1 cursor-help filter drop-shadow-lg">
-                           {streakCount > 0 ? '👑' : '🏆'}
+                           🏆
                         </div>
                         <div className="bg-brand-primary/20 text-brand-primary text-xs px-2 py-0.5 rounded-full font-bold">
-                           רצף: {streakCount}
+                           רצפים: {streakCount}
                         </div>
                      </div>
                 </div>
@@ -389,8 +360,20 @@ const App: React.FC = () => {
                 onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
-                onAddSession={async s => { await dataService.addSession(s); setSessions([...sessions, s]); }}
-                onUpdateSession={async s => { await dataService.updateSession(s); setSessions(sessions.map(x=>x.id===s.id?s:x)); }}
+                onAddSession={async s => { 
+                    try {
+                        await dataService.addSession(s); 
+                        setSessions(prev => [...prev, s]); 
+                    } catch(e) {
+                        alert('שגיאה בשמירת האימון. בדוק חיבור לרשת.');
+                    }
+                }}
+                onUpdateSession={async s => { 
+                    try {
+                        await dataService.updateSession(s); 
+                        setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
+                    } catch(e) { alert('שגיאה בעדכון.'); }
+                }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(sessions.filter(x=>x.id!==id)); }}
                 onColorChange={setPrimaryColor} onUpdateWorkoutTypes={setWorkoutTypes} onUpdateLocations={setLocations}
                 onUpdateWeatherLocation={setWeatherLocation} onAddPaymentLink={l=>setPaymentLinks([...paymentLinks,l])}

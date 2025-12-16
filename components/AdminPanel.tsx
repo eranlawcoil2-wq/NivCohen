@@ -317,9 +317,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCancelEditSession = () => { setEditingSessionId(null); setNewSession({ type: workoutTypes[0] || '', date: new Date().toISOString().split('T')[0], time: '18:00', location: locations[0]?.name || '', maxCapacity: 15, description: '', color: SESSION_COLORS[0], isTrial: false, zoomLink: '', isZoomSession: false }); };
 
   const handleDuplicateSession = (session: TrainingSession) => {
-      const nextWeekDate = new Date(new Date(session.date)); nextWeekDate.setDate(nextWeekDate.getDate() + 7);
-      onAddSession({ ...session, id: Date.now().toString(), date: nextWeekDate.toISOString().split('T')[0], registeredPhoneNumbers: [], attendedPhoneNumbers: [] });
-      alert('האימון שוכפל');
+      // Logic: Same Day, +1 Hour
+      const [h, m] = session.time.split(':').map(Number);
+      const dateObj = new Date();
+      dateObj.setHours(h, m);
+      dateObj.setHours(dateObj.getHours() + 1);
+      const newTime = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      
+      const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+      
+      const newSession: TrainingSession = { 
+          ...session, 
+          id: uniqueId, 
+          date: session.date, // Same Date
+          time: newTime,      // +1 Hour
+          registeredPhoneNumbers: [], 
+          attendedPhoneNumbers: [] 
+      };
+      
+      onAddSession(newSession);
+      alert(`האימון שוכפל לשעה ${newTime}`);
   };
 
   const handleSaveTemplate = () => {
@@ -342,8 +359,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       template.forEach((t: any) => {
           const newDate = new Date(targetStartOfWeek); newDate.setDate(newDate.getDate() + t.dayIndex);
           const dateStr = newDate.toISOString().split('T')[0];
+          // Use unique ID for template items too
+          const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9) + count;
+          
           if (!sessions.some(s => s.date === dateStr && s.time === t.time && s.location === t.location)) {
-              onAddSession({ ...t, id: Date.now().toString() + Math.random().toString().slice(2,5), date: dateStr, registeredPhoneNumbers: [], attendedPhoneNumbers: [] });
+              onAddSession({ 
+                  ...t, 
+                  id: uniqueId, 
+                  date: dateStr, 
+                  registeredPhoneNumbers: [], 
+                  attendedPhoneNumbers: [] 
+              });
               count++;
           }
       });
