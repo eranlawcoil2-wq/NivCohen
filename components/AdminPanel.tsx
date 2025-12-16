@@ -258,10 +258,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveEditedSession = async () => {
       if (!editSessionForm.id || !editSessionForm.type || !editSessionForm.date) return;
       
+      // Ensure we are not sending undefined arrays
       const sessionToSave = { 
           ...attendanceSession, 
-          ...editSessionForm 
+          ...editSessionForm,
+          registeredPhoneNumbers: attendanceSession?.registeredPhoneNumbers || [],
+          attendedPhoneNumbers: attendanceSession?.attendedPhoneNumbers || [],
       } as TrainingSession;
+
+      // Ensure ID is valid string
+      if (!sessionToSave.id) {
+           sessionToSave.id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
+      }
 
       const isExistingSession = sessions.some(s => s.id === sessionToSave.id);
 
@@ -276,9 +284,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           
           setAttendanceSession(null);
           setIsEditingInModal(false);
-      } catch (error) {
+      } catch (error: any) {
           console.error(error);
-          alert('שגיאה בשמירה, נסה שוב.');
+          alert('שגיאה בשמירה: ' + (error.message || 'אנא בדוק את החיבור'));
       }
   };
 
@@ -301,9 +309,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           attendedPhoneNumbers: [] 
       };
       
-      await onAddSession(newSession);
-      alert(`האימון שוכפל לשעה ${newTime}`);
-      setAttendanceSession(null);
+      try {
+        await onAddSession(newSession);
+        alert(`האימון שוכפל לשעה ${newTime}`);
+        setAttendanceSession(null);
+      } catch (error: any) {
+        alert('שגיאה בשכפול: ' + (error.message || ''));
+      }
   };
 
   const handleDeleteFromAttendance = async () => {

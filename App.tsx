@@ -387,14 +387,15 @@ const App: React.FC = () => {
                         await dataService.addSession(s); 
                         setSessions(prev => [...prev, s]); 
                     } catch(e) {
-                        alert('שגיאה בשמירת האימון. בדוק חיבור לרשת.');
+                        // Alert handled in AdminPanel usually, but this is a fallback if called from somewhere else
+                         throw e; 
                     }
                 }}
                 onUpdateSession={async s => { 
                     try {
                         await dataService.updateSession(s); 
                         setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
-                    } catch(e) { alert('שגיאה בעדכון.'); }
+                    } catch(e) { throw e; }
                 }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(sessions.filter(x=>x.id!==id)); }}
                 onColorChange={setPrimaryColor} onUpdateWorkoutTypes={setWorkoutTypes} onUpdateLocations={setLocations}

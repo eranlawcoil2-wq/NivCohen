@@ -21,14 +21,16 @@ export const dataService = {
   getUsers: async (): Promise<User[]> => {
     if (supabase) {
       const { data, error } = await supabase.from('users').select('*');
-      if (!error && data) return data as User[];
+      if (error) throw error;
+      if (data) return data as User[];
     }
     return safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
   },
 
   addUser: async (user: User): Promise<void> => {
     if (supabase) {
-      await supabase.from('users').insert([user]);
+      const { error } = await supabase.from('users').insert([user]);
+      if (error) throw error;
     } else {
       const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
       localStorage.setItem('niv_app_users', JSON.stringify([...users, user]));
@@ -37,7 +39,8 @@ export const dataService = {
 
   updateUser: async (user: User): Promise<void> => {
     if (supabase) {
-      await supabase.from('users').update(user).eq('id', user.id);
+      const { error } = await supabase.from('users').update(user).eq('id', user.id);
+      if (error) throw error;
     } else {
       const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
       const updated = users.map(u => u.id === user.id ? user : u);
@@ -47,7 +50,8 @@ export const dataService = {
 
   deleteUser: async (userId: string): Promise<void> => {
     if (supabase) {
-      await supabase.from('users').delete().eq('id', userId);
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (error) throw error;
     } else {
       const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
       localStorage.setItem('niv_app_users', JSON.stringify(users.filter(u => u.id !== userId)));
@@ -58,14 +62,22 @@ export const dataService = {
   getSessions: async (): Promise<TrainingSession[]> => {
     if (supabase) {
       const { data, error } = await supabase.from('sessions').select('*');
-      if (!error && data) return data as TrainingSession[];
+      if (error) throw error;
+      if (data) return data as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
   },
 
   addSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-      await supabase.from('sessions').insert([session]);
+      // Ensure arrays are never undefined for Supabase
+      const safeSession = {
+          ...session,
+          registeredPhoneNumbers: session.registeredPhoneNumbers || [],
+          attendedPhoneNumbers: session.attendedPhoneNumbers || []
+      };
+      const { error } = await supabase.from('sessions').insert([safeSession]);
+      if (error) throw error;
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
       localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, session]));
@@ -74,7 +86,13 @@ export const dataService = {
 
   updateSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-      await supabase.from('sessions').update(session).eq('id', session.id);
+       const safeSession = {
+          ...session,
+          registeredPhoneNumbers: session.registeredPhoneNumbers || [],
+          attendedPhoneNumbers: session.attendedPhoneNumbers || []
+      };
+      const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);
+      if (error) throw error;
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
       const updated = sessions.map(s => s.id === session.id ? session : s);
@@ -84,7 +102,8 @@ export const dataService = {
 
   deleteSession: async (sessionId: string): Promise<void> => {
     if (supabase) {
-      await supabase.from('sessions').delete().eq('id', sessionId);
+      const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
+      if (error) throw error;
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
       localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.filter(s => s.id !== sessionId)));
