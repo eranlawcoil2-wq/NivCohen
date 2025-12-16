@@ -81,7 +81,6 @@ const App: React.FC = () => {
       const connected = !!supabase;
       setIsCloudConnected(connected);
       
-      // Since keys are now hardcoded, we should always be able to try to connect.
       if (connected) {
           try {
               const u = await dataService.getUsers();
@@ -89,14 +88,12 @@ const App: React.FC = () => {
               setUsers(u); setSessions(s);
           } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
       } else {
-          // If supabase object is null, connection failed config-side
           setIsLoadingData(false);
       }
   }, []);
 
   useEffect(() => { refreshData(); }, [refreshData]);
   
-  // URL Based Admin Mode + Dynamic Icon
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const isParamAdmin = params.get('mode') === 'admin';
@@ -105,9 +102,8 @@ const App: React.FC = () => {
           setIsAdminMode(true);
       }
 
-      // Logic to change the icon based on mode
       const updateIcon = (isAdmin: boolean) => {
-          const color = isAdmin ? '%23EF4444' : '%23A3E635'; // Red-500 or Lime-400
+          const color = isAdmin ? '%23EF4444' : '%23A3E635'; 
           const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${color}%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>`;
           
           const linkIcon = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
@@ -148,22 +144,25 @@ const App: React.FC = () => {
   };
 
   const getMonthlyWorkoutsCount = (phone: string) => {
+      const normalized = normalizePhone(phone);
       const now = new Date();
       return sessions.filter(s => {
           const d = new Date(s.date);
-          const attended = s.attendedPhoneNumbers?.includes(normalizePhone(phone)) || s.registeredPhoneNumbers.includes(normalizePhone(phone));
-          return d.getMonth() === now.getMonth() && attended;
+          // Count if registered OR attended
+          const isRegistered = s.registeredPhoneNumbers?.includes(normalized);
+          const isAttended = s.attendedPhoneNumbers?.includes(normalized);
+          return d.getMonth() === now.getMonth() && (isRegistered || isAttended);
       }).length;
   };
 
-  // Streak Calculation
+  // Strict Streak Calculation: 3+ workouts in the same week
   const calculateStreak = (phone: string) => {
       if (!sessions || sessions.length === 0) return 0;
       const normalized = normalizePhone(phone);
       
-      // Get all attended sessions for user
+      // Get all relevant sessions (registered OR attended)
       const userSessions = sessions.filter(s => 
-         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers.includes(normalized)
+         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers?.includes(normalized)
       ).map(s => new Date(s.date));
 
       if (userSessions.length === 0) return 0;
@@ -187,21 +186,27 @@ const App: React.FC = () => {
       let checkDate = new Date(today.setDate(diff));
       checkDate.setHours(0,0,0,0);
 
-      // Check backwards
+      // Check backwards from this week
       while(true) {
           const key = checkDate.toISOString().split('T')[0];
           const count = weeks[key] || 0;
           
-          if (count >= 3) { // Goal is 3
+          if (count >= 3) { 
               currentStreak++;
           } else {
-              if (checkDate.getTime() < new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000) { 
-                 if (count < 3 && currentStreak > 0) break; // End of streak
+              // If this week is not finished (less than 7 days passed relative to check),
+              // and we have > 0 streak, we assume the streak is still "active" from last week
+              // but we don't count the current incomplete week if it's < 3.
+              // However, if we hit a past week with < 3, streak breaks.
+              
+              const isCurrentWeek = checkDate.getTime() >= new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000;
+              if (!isCurrentWeek) {
+                  break; // Broken streak in the past
               }
           }
           
           checkDate.setDate(checkDate.getDate() - 7);
-          if (checkDate.getFullYear() < 2023) break;
+          if (checkDate.getFullYear() < 2023) break; // Safety break
       }
       return currentStreak;
   };
@@ -240,6 +245,24 @@ const App: React.FC = () => {
           alert('שגיאה בעדכון ההרשמה, נסה שנית');
           refreshData();
       }
+  };
+
+  const handleAddToCalendar = () => {
+      if (!viewingSession) return;
+      
+      const startTime = new Date(`${viewingSession.date}T${viewingSession.time}`);
+      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 Hour duration
+
+      // Format for Google Calendar: YYYYMMDDThhmmssZ
+      const formatTime = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+      
+      const title = encodeURIComponent(`אימון ${viewingSession.type} עם ניב כהן`);
+      const details = encodeURIComponent(viewingSession.description || 'אימון כושר');
+      const location = encodeURIComponent(viewingSession.location);
+      
+      const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatTime(startTime)}/${formatTime(endTime)}&details=${details}&location=${location}&sf=true&output=xml`;
+      
+      window.open(googleUrl, '_blank');
   };
 
   const handleLogin = async () => {
@@ -330,7 +353,6 @@ const App: React.FC = () => {
                          <div className="text-xs text-gray-500">שיא אישי: <span className="text-brand-primary font-bold">{Math.max(userStats.monthlyRecord, userStats.currentMonthCount)}</span></div>
                      </div>
                      
-                     {/* Streak Badge - UPDATED to Trophy and Text */}
                      <div className="flex flex-col items-center" onClick={() => setShowStreakTooltip(!showStreakTooltip)}>
                         <div className="text-4xl mb-1 cursor-help filter drop-shadow-lg">
                            🏆
@@ -389,13 +411,11 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-col gap-6"> 
-                    {/* Using weekDates directly which now includes 7 days */}
                     {weekDates.map(date => {
                         const daySessions = groupedSessions[date] || [];
                         const isToday = new Date().toISOString().split('T')[0] === date;
                         return (
                             <div key={date} className={`rounded-xl border overflow-hidden flex flex-col md:flex-row shadow-lg ${isToday ? 'border-brand-primary bg-gray-800/50' : 'border-gray-800 bg-gray-900/40'}`}>
-                                {/* Date Header - Full width on mobile, Sidebar on desktop */}
                                 <div className={`p-3 md:w-24 flex justify-between items-center md:flex-col md:justify-center border-b md:border-b-0 md:border-l border-gray-700 ${isToday?'bg-brand-primary/10 text-brand-primary':'bg-gray-800 text-gray-400'}`}>
                                     <div className="flex items-baseline gap-2 md:flex-col md:gap-0 md:text-center">
                                         <span className="font-bold text-lg">{new Date(date).toLocaleDateString('he-IL',{weekday:'short'})}</span>
@@ -404,7 +424,6 @@ const App: React.FC = () => {
                                     {weatherData[date] && <div className="text-xs font-mono bg-black/20 px-2 py-0.5 rounded">{Math.round(weatherData[date].maxTemp)}° {getWeatherIcon(weatherData[date].weatherCode)}</div>}
                                 </div>
                                 
-                                {/* Session Grid - 2 Columns on Mobile */}
                                 <div className="flex-1 p-3">
                                     {daySessions.length>0 ? (
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -430,20 +449,17 @@ const App: React.FC = () => {
           <div className="fixed inset-0 bg-black/90 z-50 flex items-end md:items-center justify-center backdrop-blur-sm" onClick={()=>setViewingSession(null)}>
               <div className="bg-gray-800 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t border-brand-primary shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
                   
-                  {/* Header Section with Weather and Info (TOP) */}
                   <div className="p-6 bg-gradient-to-b from-gray-700/50 to-gray-800 border-b border-gray-700 relative overflow-hidden">
                       <div className="relative z-10 flex justify-between items-start mb-2">
                            <div>
                                <h2 className="text-3xl text-white font-black leading-none mb-1">{viewingSession.type}</h2>
                                <div className="flex items-center gap-2 mt-2">
                                    <div className="text-brand-primary font-mono font-bold text-lg bg-brand-primary/10 px-2 py-1 rounded">{viewingSession.time}</div>
-                                   {/* Added Day Name */}
                                    <div className="text-gray-400 text-sm border border-gray-600 px-2 py-1 rounded">
                                        {new Date(viewingSession.date).toLocaleDateString('he-IL', { weekday: 'long' })}, {viewingSession.date}
                                    </div>
                                </div>
                            </div>
-                           {/* Weather Widget inside Modal */}
                            {weatherData[viewingSession.date] && (
                                <div className="flex flex-col items-center bg-gray-900/50 p-2 rounded-lg border border-gray-600/50 shadow-sm">
                                    <span className="text-2xl">{getWeatherIcon(weatherData[viewingSession.date].weatherCode)}</span>
@@ -459,7 +475,6 @@ const App: React.FC = () => {
                             </svg>
                             <span>{viewingSession.location}</span>
                         </div>
-                        {/* Navigation Button */}
                         <a 
                             href={`https://waze.com/ul?q=${encodeURIComponent(viewingSession.location)}&navigate=yes`}
                             target="_blank" 
@@ -474,9 +489,14 @@ const App: React.FC = () => {
                       <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">
                         {viewingSession.description || 'ללא תיאור'}
                       </p>
+
+                      <div className="relative z-10 mt-3 flex">
+                         <Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">
+                             📅 הוסף ליומן
+                         </Button>
+                      </div>
                   </div>
 
-                  {/* Participants List (BOTTOM) */}
                   <div className="flex-1 overflow-y-auto p-4 bg-gray-800">
                       <div className="flex justify-between items-center mb-3">
                           <div className="text-sm font-bold text-white">רשימת משתתפים</div>
@@ -502,7 +522,6 @@ const App: React.FC = () => {
                       )}
                   </div>
 
-                  {/* Action Footer */}
                   <div className="p-4 border-t border-gray-700 bg-gray-900/50">
                       <Button onClick={()=>handleRegisterClick(viewingSession.id)} className="w-full py-3 text-lg font-bold shadow-xl">
                           {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'בטל הרשמה ✕' : 'אשר הגעה ✓'}
@@ -518,7 +537,6 @@ const App: React.FC = () => {
                   <h3 className="text-white font-bold mb-4 text-xl">התחברות / הרשמה</h3>
                   <input type="tel" placeholder="מספר טלפון" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-2 text-lg border border-gray-700 focus:border-brand-primary outline-none" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)}/>
                   
-                  {/* Logic Change: Only show name input if phone not found in system */}
                   {(!users.find(u => normalizePhone(u.phone) === normalizePhone(loginPhone)) && loginPhone.length >= 9) && (
                       <input type="text" placeholder="שם מלא (לנרשמים חדשים)" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 border border-gray-700 focus:border-brand-primary outline-none" value={newUserName} onChange={e=>setNewUserName(e.target.value)}/>
                   )}

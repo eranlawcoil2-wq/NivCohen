@@ -64,6 +64,13 @@ const getSunday = (d: Date) => {
 
 const formatDateForInput = (date: Date) => date.toISOString().split('T')[0];
 
+const normalizePhone = (phone: string): string => {
+    if (!phone) return '';
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('972')) cleaned = '0' + cleaned.substring(3);
+    return cleaned;
+};
+
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
     users, sessions, primaryColor, workoutTypes, locations, weatherLocation,
     paymentLinks, streakGoal, onAddUser, onUpdateUser, onDeleteUser, 
@@ -77,7 +84,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [formUser, setFormUser] = useState<Partial<User>>({
     fullName: '', displayName: '', phone: '', email: '',
     startDate: new Date().toISOString().split('T')[0],
-    paymentStatus: PaymentStatus.PAID, userColor: '', monthlyRecord: 0
+    paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
@@ -118,14 +125,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const existingUsers = users.filter(u => !u.isNew);
 
   const getMonthlyWorkoutsCount = (userPhone: string) => {
+    if (!userPhone) return 0;
+    const normalizedPhone = normalizePhone(userPhone);
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
     return sessions.filter(session => {
         const sessionDate = new Date(session.date);
         const didAttend = session.attendedPhoneNumbers 
-            ? session.attendedPhoneNumbers.includes(userPhone)
-            : session.registeredPhoneNumbers.includes(userPhone);
+            ? session.attendedPhoneNumbers.includes(normalizedPhone)
+            : session.registeredPhoneNumbers.includes(normalizedPhone);
         return (
             sessionDate.getMonth() === currentMonth &&
             sessionDate.getFullYear() === currentYear &&
@@ -134,9 +143,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }).length;
   };
 
+  const calculateStreak = (phone: string) => {
+      if (!sessions || sessions.length === 0 || !phone) return 0;
+      const normalized = normalizePhone(phone);
+      
+      const userSessions = sessions.filter(s => 
+         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers?.includes(normalized)
+      ).map(s => new Date(s.date));
+
+      if (userSessions.length === 0) return 0;
+
+      const weeks: Record<string, number> = {};
+      userSessions.forEach(d => {
+          const day = d.getDay();
+          const diff = d.getDate() - day; 
+          const startOfWeek = new Date(d);
+          startOfWeek.setDate(diff);
+          startOfWeek.setHours(0,0,0,0);
+          const key = startOfWeek.toISOString().split('T')[0];
+          weeks[key] = (weeks[key] || 0) + 1;
+      });
+
+      let currentStreak = 0;
+      const today = new Date();
+      const day = today.getDay();
+      const diff = today.getDate() - day;
+      let checkDate = new Date(today.setDate(diff));
+      checkDate.setHours(0,0,0,0);
+
+      while(true) {
+          const key = checkDate.toISOString().split('T')[0];
+          const count = weeks[key] || 0;
+          if (count >= 3) { currentStreak++; } 
+          else {
+              if (checkDate.getTime() < new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000) { 
+                 if (count < 3 && currentStreak > 0) break;
+              }
+          }
+          checkDate.setDate(checkDate.getDate() - 7);
+          if (checkDate.getFullYear() < 2023) break;
+      }
+      return currentStreak;
+  };
+
   const getDayName = (dateStr: string) => new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long' });
   
-  // This button now just saves/refreshes without exiting
   const handleGlobalSave = () => {
       setIsReloading(true);
       setTimeout(() => {
@@ -170,7 +221,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const openAttendanceModal = (session: TrainingSession) => {
       setAttendanceSession(session);
-      setIsEditingInModal(false); // Start in view mode
+      setIsEditingInModal(false); 
       let initialSet: Set<string>;
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
           initialSet = new Set(session.registeredPhoneNumbers);
@@ -198,7 +249,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setAttendanceSession(null);
   };
 
-  // --- In-Modal Editing Logic ---
   const handleEditFromAttendance = () => {
       if(!attendanceSession) return;
       setEditSessionForm({ ...attendanceSession });
@@ -208,24 +258,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveEditedSession = async () => {
       if (!editSessionForm.id || !editSessionForm.type || !editSessionForm.date) return;
       
-      const updatedSession = { 
+      const sessionToSave = { 
           ...attendanceSession, 
           ...editSessionForm 
       } as TrainingSession;
 
+      const isExistingSession = sessions.some(s => s.id === sessionToSave.id);
+
       try {
-          await onUpdateSession(updatedSession);
-          alert('האימון עודכן ונשמר בהצלחה! ✅');
+          if (isExistingSession) {
+              await onUpdateSession(sessionToSave);
+              alert('האימון עודכן בהצלחה! ✅');
+          } else {
+              await onAddSession(sessionToSave);
+              alert('אימון חדש נשמר בשרת בהצלחה! 🎉');
+          }
+          
           setAttendanceSession(null);
           setIsEditingInModal(false);
       } catch (error) {
+          console.error(error);
           alert('שגיאה בשמירה, נסה שוב.');
       }
   };
 
   const handleDuplicateFromAttendance = async () => {
       if(!attendanceSession) return;
-      // Logic: Same Day, +1 Hour
       const [h, m] = attendanceSession.time.split(':').map(Number);
       const dateObj = new Date();
       dateObj.setHours(h, m);
@@ -272,8 +330,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
 
-  // --- Other Handlers ---
-
   const handleSaveAsApp = () => {
       alert("כדי ליצור קיצור דרך למסך הבית שפותח ישר את הניהול:\n1. וודא שאתה במסך זה.\n2. לחץ על כפתור השיתוף בדפדפן (Share).\n3. בחר 'הוסף למסך הבית'.");
   };
@@ -309,7 +365,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           email: formUser.email || '',
           startDate: formUser.startDate!,
           paymentStatus: formUser.paymentStatus!,
-          userColor: formUser.userColor,
+          userColor: formUser.userColor || '#A3E635',
           monthlyRecord: formUser.monthlyRecord || 0,
           isNew: false 
       } as User;
@@ -317,7 +373,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (editingUserId) { onUpdateUser(userData); alert('פרטי משתמש עודכנו'); setEditingUserId(null); } 
       else { onAddUser(userData); alert('משתמש נוסף בהצלחה'); }
       
-      setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '', monthlyRecord: 0 });
+      setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0 });
   };
 
   const handleEditUserClick = (user: User) => {
@@ -327,7 +383,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleDeleteUserClick = (userId: string) => { if(window.confirm('למחוק מתאמן זה?')) onDeleteUser(userId); };
   const handleApproveUser = (user: User) => onUpdateUser({ ...user, isNew: false });
   const handlePaymentStatusChange = (user: User, newStatus: PaymentStatus) => onUpdateUser({ ...user, paymentStatus: newStatus });
-
 
   const handleSaveTemplate = () => {
       const startOfWeek = getSunday(new Date(templateSourceDate));
@@ -349,7 +404,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       template.forEach((t: any) => {
           const newDate = new Date(targetStartOfWeek); newDate.setDate(newDate.getDate() + t.dayIndex);
           const dateStr = newDate.toISOString().split('T')[0];
-          // Use unique ID for template items too
           const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9) + count;
           
           if (!sessions.some(s => s.date === dateStr && s.time === t.time && s.location === t.location)) {
@@ -388,11 +442,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const sortedSessions = sessions.sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   
-  // Quick Add Logic
   const handleQuickAddSession = () => {
       const today = new Date().toISOString().split('T')[0];
       const newSession: TrainingSession = {
-          id: Date.now().toString(),
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 5), 
           type: workoutTypes[0] || 'אימון',
           date: today,
           time: '18:00',
@@ -403,9 +456,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           description: '',
           color: SESSION_COLORS[0]
       };
-      setAttendanceSession(newSession); // Open modal with this new session
-      setEditSessionForm(newSession);   // Prepare form
-      setIsEditingInModal(true);        // Go straight to edit mode
+      setAttendanceSession(newSession); 
+      setEditSessionForm(newSession);   
+      setIsEditingInModal(true);        
   };
 
   return (
@@ -446,7 +499,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               <div className="grid gap-4">
-                  {/* Changed to 7 days to include Saturday */}
                   {weekDates.map((date) => {
                       const daySessions = groupedSessions[date] || [];
                       const isToday = new Date().toISOString().split('T')[0] === date;
@@ -476,13 +528,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
 
-      {/* Unified Modal for View / Edit / Attendance */}
       {attendanceSession && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
               <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                   
                   {isEditingInModal ? (
-                      // --- EDIT MODE ---
                       <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                           <h3 className="text-xl font-bold text-white mb-2">עריכת אימון</h3>
                           <div className="grid grid-cols-2 gap-2">
@@ -513,12 +563,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                           
                           <div className="flex gap-2 pt-2 border-t border-gray-700 mt-4">
-                              <Button onClick={handleSaveEditedSession} className="flex-1 py-3 text-lg">עדכן פרטים 💾</Button>
+                              <Button onClick={handleSaveEditedSession} className="flex-1 py-3 text-lg">עדכן פרטים ושמור 💾</Button>
                               <Button variant="secondary" onClick={()=>setIsEditingInModal(false)} className="px-4">ביטול</Button>
                           </div>
                       </div>
                   ) : (
-                      // --- VIEW / ATTENDANCE MODE ---
                       <>
                           <div className="flex justify-between items-start mb-4 border-b border-gray-700 pb-2">
                              <div>
@@ -529,7 +578,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                              <button onClick={() => setAttendanceSession(null)} className="text-gray-400 hover:text-white text-xl">✕</button>
                           </div>
                           
-                          {/* Toolbar */}
                           <div className="flex gap-2 mb-4 bg-gray-900 p-2 rounded-lg">
                               <Button size="sm" variant="secondary" onClick={handleEditFromAttendance} className="flex-1 text-xs">✏️ ערוך פרטים</Button>
                               <Button size="sm" variant="secondary" onClick={handleDuplicateFromAttendance} className="flex-1 text-xs">📄 שכפל (+1 שעה)</Button>
@@ -565,25 +613,67 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'users' && (
          <div className="space-y-6">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכה' : 'הוספה'}</h3>
+                <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>
+                
+                {/* User Stats Display (Only in Edit Mode) */}
+                {editingUserId && formUser.phone && (
+                   <div className="bg-gray-900/50 p-3 rounded mb-3 flex justify-between text-sm border border-gray-700">
+                       <div>💪 אימונים החודש: <span className="text-brand-primary font-bold">{getMonthlyWorkoutsCount(formUser.phone)}</span></div>
+                       <div>🏆 רצף נוכחי: <span className="text-yellow-500 font-bold">{calculateStreak(formUser.phone)}</span></div>
+                   </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                    <input type="text" placeholder="שם מלא" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.fullName} onChange={e => setFormUser({...formUser, fullName: e.target.value})}/>
-                    <input type="tel" placeholder="טלפון" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.phone} onChange={e => setFormUser({...formUser, phone: e.target.value})}/>
+                    <div>
+                        <label className="text-xs text-gray-400 mb-1 block">שם מלא</label>
+                        <input type="text" placeholder="שם מלא" className="w-full p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.fullName} onChange={e => setFormUser({...formUser, fullName: e.target.value})}/>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 mb-1 block">כינוי (באפליקציה)</label>
+                        <input type="text" placeholder="כינוי" className="w-full p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.displayName || ''} onChange={e => setFormUser({...formUser, displayName: e.target.value})}/>
+                    </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div>
+                        <label className="text-xs text-gray-400 mb-1 block">טלפון</label>
+                        <input type="tel" placeholder="050..." className="w-full p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.phone} onChange={e => setFormUser({...formUser, phone: e.target.value})}/>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-400 mb-1 block">אימייל</label>
+                        <input type="email" placeholder="email@example.com" className="w-full p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.email || ''} onChange={e => setFormUser({...formUser, email: e.target.value})}/>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-2 mb-2">
                    <div className="flex flex-col">
                        <label className="text-xs text-gray-400 mb-1">שיא חודשי</label>
-                       <input type="number" placeholder="שיא אימונים" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.monthlyRecord || 0} onChange={e => setFormUser({...formUser, monthlyRecord: parseInt(e.target.value) || 0})}/>
+                       <input type="number" placeholder="שיא" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.monthlyRecord || 0} onChange={e => setFormUser({...formUser, monthlyRecord: parseInt(e.target.value) || 0})}/>
+                   </div>
+                   <div className="flex flex-col">
+                       <label className="text-xs text-gray-400 mb-1">צבע משתמש</label>
+                       <div className="flex items-center gap-2">
+                           <input type="color" className="w-10 h-10 rounded cursor-pointer bg-transparent border-none p-0" value={formUser.userColor || '#A3E635'} onChange={e => setFormUser({...formUser, userColor: e.target.value})}/>
+                           <span className="text-xs text-gray-500">{formUser.userColor}</span>
+                       </div>
                    </div>
                 </div>
-                <Button onClick={handleUserSubmit} className="w-full">{editingUserId ? 'עדכן' : 'הוסף'}</Button>
+
+                <div className="flex gap-2 mt-4">
+                    <Button onClick={handleUserSubmit} className="flex-1">{editingUserId ? 'עדכן פרטים' : 'הוסף משתמש'}</Button>
+                    {editingUserId && <Button variant="secondary" onClick={() => {setEditingUserId(null); setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0 });}}>ביטול</Button>}
+                </div>
             </div>
+            
             <div className="bg-gray-800 rounded-xl overflow-hidden border border-gray-700 max-h-96 overflow-y-auto">
                 {filteredUsers.map(user => (
                     <div key={user.id} className="p-3 border-b border-gray-700 flex justify-between items-center hover:bg-gray-700/50">
                         <div>
-                            <div className="font-bold text-white">{user.fullName} <span className={`text-xs px-2 rounded ${user.paymentStatus === 'PAID' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>{user.paymentStatus}</span></div>
-                            <div className="text-xs text-gray-400">{user.phone} | שיא חודשי: {user.monthlyRecord || 0}</div>
+                            <div className="font-bold text-white flex items-center gap-2">
+                                <span style={{color: user.userColor}}>{user.fullName}</span>
+                                <span className={`text-[10px] px-1.5 rounded ${user.paymentStatus === 'PAID' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}`}>{user.paymentStatus}</span>
+                            </div>
+                            <div className="text-xs text-gray-400">{user.phone} {user.displayName ? `(${user.displayName})` : ''}</div>
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => handleEditUserClick(user)} className="bg-gray-600 text-white px-2 py-1 rounded text-xs">ערוך</button>
