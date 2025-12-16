@@ -37,18 +37,27 @@ const SESSION_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- טבלת משתמשים
+-- יצירת טבלאות (למשתמשים חדשים)
 create table if not exists users (
   id text primary key, "fullName" text, "displayName" text, phone text unique,
   email text, "startDate" text, "paymentStatus" text, "isNew" boolean, "userColor" text, "monthlyRecord" int
 );
--- טבלת אימונים
+
 create table if not exists sessions (
   id text primary key, type text, date text, time text, location text,
   "maxCapacity" int, description text, "registeredPhoneNumbers" text[],
   "attendedPhoneNumbers" text[], color text, "isTrial" boolean,
   "zoomLink" text, "isZoomSession" boolean
 );
+
+-- עדכון טבלאות קיימות (הוספת עמודות חסרות למניעת שגיאות)
+alter table sessions add column if not exists "attendedPhoneNumbers" text[] default '{}';
+alter table sessions add column if not exists "isZoomSession" boolean default false;
+alter table sessions add column if not exists "zoomLink" text;
+alter table users add column if not exists "monthlyRecord" int default 0;
+alter table users add column if not exists "userColor" text;
+
+-- הגדרות אבטחה
 alter table users enable row level security;
 alter table sessions enable row level security;
 create policy "Public Access Users" on users for all using (true);
@@ -286,7 +295,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           setIsEditingInModal(false);
       } catch (error: any) {
           console.error(error);
-          alert('שגיאה בשמירה: ' + (error.message || 'אנא בדוק את החיבור'));
+          if (error.message?.includes('attendedPhoneNumbers') || error.message?.includes('column')) {
+              alert('⚠️ שגיאה: מסד הנתונים לא מעודכן.\nחסרה העמודה "attendedPhoneNumbers".\n\nפתרון:\n1. גש ללשונית "חיבורים"\n2. העתק את סקריפט ה-SQL\n3. הרץ אותו ב-Supabase SQL Editor');
+          } else {
+              alert('שגיאה בשמירה: ' + (error.message || 'אנא בדוק את החיבור'));
+          }
       }
   };
 
@@ -314,7 +327,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         alert(`האימון שוכפל לשעה ${newTime}`);
         setAttendanceSession(null);
       } catch (error: any) {
-        alert('שגיאה בשכפול: ' + (error.message || ''));
+        if (error.message?.includes('attendedPhoneNumbers') || error.message?.includes('column')) {
+             alert('⚠️ שגיאה בשכפול: חסרה עמודה בטבלה.\n\nאנא גש ללשונית "חיבורים", העתק את הסקריפט והרץ אותו ב-Supabase.');
+        } else {
+             alert('שגיאה בשכפול: ' + (error.message || ''));
+        }
       }
   };
 
@@ -731,6 +748,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <div className="mt-6 pt-6 border-t border-gray-700">
                  <h4 className="text-sm font-bold mb-2">הוראות התקנה (חד פעמי):</h4>
+                 <p className="text-xs text-gray-400 mb-2">אם נתקלת בשגיאות שמירה (חסרות עמודות), הרץ את הסקריפט הזה:</p>
                  <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">העתק סקריפט SQL ליצירת טבלאות</Button>
               </div>
           </div>
