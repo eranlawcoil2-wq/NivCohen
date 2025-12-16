@@ -41,9 +41,11 @@ export interface TrainingSession {
   maxCapacity: number;
   description?: string;
   registeredPhoneNumbers: string[];
+  attendedPhoneNumbers?: string[]; // List of users who actually attended (Checked by coach)
   color?: string; // Hex color code for the session theme
   isTrial?: boolean; // Is this a trial session for new users?
   zoomLink?: string; // Optional link for Zoom sessions
+  isZoomSession?: boolean; // Flag to mark as Zoom even without link
 }
 
 export interface WeatherLocation {

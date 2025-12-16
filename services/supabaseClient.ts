@@ -1,26 +1,29 @@
 import { createClient } from '@supabase/supabase-js';
 
-// ==============================================================================
-// פרטי התחברות ל-Supabase
-// עודכן לפי הבקשה האחרונה שלך
-// ==============================================================================
+// --- הוראות חשובות ---
+// 1. מחק את הטקסט 'PASTE_YOUR_URL_HERE' (כולל הגרש) והדבק במקומו את ה-URL שהעתקת מ-Supabase.
+// 2. מחק את הטקסט 'PASTE_YOUR_ANON_KEY_HERE' (כולל הגרש) והדבק במקומו את ה-Anon Key שהעתקת.
+// --------------------
 
-const PROJECT_URL = 'https://xjqlluobnzpgpttprmio.supabase.co';
-const ANON_KEY = 'sb_publishable_WyvAmRCYPahTpaQAwqiyjQ_NEGFK5wN';
+const HARDCODED_URL = 'PASTE_YOUR_URL_HERE'; 
+const HARDCODED_KEY = 'PASTE_YOUR_ANON_KEY_HERE';
 
-// ==============================================================================
+// Access environment variables safely with fallback
+const env = (import.meta as any).env || {};
 
-// מנסה לקחת מהקוד (עדיפות עליונה), ואם אין - מנסה לקחת מהזיכרון המקומי
-const FINAL_URL = PROJECT_URL || localStorage.getItem('niv_app_supabase_url') || '';
-const FINAL_KEY = ANON_KEY || localStorage.getItem('niv_app_supabase_key') || '';
+// Priority: 
+// 1. Hardcoded in file (Best for public website)
+// 2. Environment Variables (Best for developers)
+// 3. LocalStorage (Fallback for testing)
 
-// בדיקה בסיסית שהערכים קיימים וארוכים מספיק
-const isConfigured = FINAL_URL.length > 10 && FINAL_KEY.length > 20;
+const localUrl = typeof window !== 'undefined' ? localStorage.getItem('niv_app_supabase_url') : null;
+const localKey = typeof window !== 'undefined' ? localStorage.getItem('niv_app_supabase_key') : null;
 
-if (!isConfigured) {
-    console.error('❌ שגיאה: לא הוזנו פרטי התחברות ל-Supabase בקובץ services/supabaseClient.ts');
-} else {
-    console.log('✅ Supabase מחובר בהצלחה עם הכתובת:', FINAL_URL);
-}
+// Logic to select the best available key
+const supabaseUrl = (HARDCODED_URL && HARDCODED_URL !== 'PASTE_YOUR_URL_HERE') ? HARDCODED_URL : (env.VITE_SUPABASE_URL || localUrl);
+const supabaseKey = (HARDCODED_KEY && HARDCODED_KEY !== 'PASTE_YOUR_ANON_KEY_HERE') ? HARDCODED_KEY : (env.VITE_SUPABASE_ANON_KEY || localKey);
 
-export const supabase = isConfigured ? createClient(FINAL_URL, FINAL_KEY) : null;
+// Create the client
+export const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey) 
+  : null;
