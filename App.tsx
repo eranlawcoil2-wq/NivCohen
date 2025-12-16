@@ -39,6 +39,33 @@ const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canI
     </div>
 );
 
+const ConnectionBlocker: React.FC = () => {
+    const [url, setUrl] = useState('');
+    const [key, setKey] = useState('');
+
+    const handleSave = () => {
+        if (!url || !key) return alert('חובה להזין את כל השדות');
+        localStorage.setItem('niv_app_supabase_url', url);
+        localStorage.setItem('niv_app_supabase_key', key);
+        window.location.reload();
+    };
+
+    return (
+        <div className="fixed inset-0 bg-gray-900 z-[100] flex flex-col items-center justify-center p-6 text-center">
+            <h1 className="text-3xl font-black text-brand-primary mb-2">NIV COHEN</h1>
+            <h2 className="text-xl text-white font-bold mb-4">חיבור לשרת נדרש</h2>
+            <p className="text-gray-400 mb-6 text-sm">האפליקציה עובדת כעת במצב מקוון בלבד. נא להזין פרטי התחברות לשרת.</p>
+            
+            <div className="w-full max-w-sm space-y-3">
+                <input type="text" placeholder="Supabase URL" className="w-full p-3 bg-gray-800 border border-gray-700 rounded text-white text-left dir-ltr" value={url} onChange={e=>setUrl(e.target.value)} />
+                <input type="password" placeholder="Supabase Key" className="w-full p-3 bg-gray-800 border border-gray-700 rounded text-white text-left dir-ltr" value={key} onChange={e=>setKey(e.target.value)} />
+                <Button onClick={handleSave} className="w-full py-3">התחבר לשרת 🚀</Button>
+            </div>
+            <p className="mt-8 text-xs text-gray-600">צור קשר עם המאמן לקבלת פרטי גישה.</p>
+        </div>
+    );
+};
+
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
@@ -68,7 +95,7 @@ const App: React.FC = () => {
   const [newUserName, setNewUserName] = useState('');
   
   // Profile Edit State
-  const [editProfileData, setEditProfileData] = useState({ fullName: '', email: '' });
+  const [editProfileData, setEditProfileData] = useState({ fullName: '', email: '', displayName: '', userColor: '#A3E635', phone: '' });
 
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [quote, setQuote] = useState('');
@@ -78,12 +105,17 @@ const App: React.FC = () => {
 
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
-      setIsCloudConnected(!!supabase);
-      try {
-          const u = await dataService.getUsers();
-          const s = await dataService.getSessions();
-          setUsers(u); setSessions(s);
-      } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
+      const connected = !!supabase;
+      setIsCloudConnected(connected);
+      if (connected) {
+          try {
+              const u = await dataService.getUsers();
+              const s = await dataService.getSessions();
+              setUsers(u); setSessions(s);
+          } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
+      } else {
+          setIsLoadingData(false);
+      }
   }, []);
 
   useEffect(() => { refreshData(); }, [refreshData]);
@@ -155,7 +187,7 @@ const App: React.FC = () => {
       
       // Get all attended sessions for user
       const userSessions = sessions.filter(s => 
-         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers.includes(normalized) // Considering registration as enough for stats to show encouragement, or strict attendance? Usually attendance. For now, let's stick to attended/registered as existing code does for monthly count.
+         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers.includes(normalized)
       ).map(s => new Date(s.date));
 
       if (userSessions.length === 0) return 0;
@@ -191,7 +223,6 @@ const App: React.FC = () => {
               // If it's strictly a past week and we didn't meet goal, streak breaks
               // We allow current week to be incomplete
               if (checkDate.getTime() < new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000) { // sloppy check for "is this strictly a past week"
-                 // Actually simpler: just count consecutive weeks with >= 3
                  if (count < 3 && currentStreak > 0) break; // End of streak
               }
           }
@@ -215,7 +246,7 @@ const App: React.FC = () => {
     const curr = new Date();
     const diff = curr.getDate() - curr.getDay() + (offset * 7);
     const start = new Date(curr.setDate(diff));
-    return Array.from({length: 7}, (_, i) => { // Changed to 7 to include Saturday
+    return Array.from({length: 7}, (_, i) => { 
         const d = new Date(start); d.setDate(start.getDate() + i);
         return d.toISOString().split('T')[0];
     });
@@ -238,7 +269,6 @@ const App: React.FC = () => {
   const handleLogin = async () => {
       if (!loginPhone) return;
       const phone = normalizePhone(loginPhone);
-      // Check if user exists (was added by trainer or self-registered before)
       if (!users.find(u => normalizePhone(u.phone) === phone)) {
           if (!newUserName) { alert('הזן שם להרשמה'); return; }
           const newUser = { id: Date.now().toString(), fullName: newUserName, phone, email: '', startDate: new Date().toISOString(), paymentStatus: PaymentStatus.PAID, isNew: true } as User;
@@ -250,25 +280,56 @@ const App: React.FC = () => {
 
   const handleOpenProfile = () => {
       if (currentUser) {
-          setEditProfileData({ fullName: currentUser.fullName, email: currentUser.email });
+          setEditProfileData({ 
+              fullName: currentUser.fullName, 
+              email: currentUser.email,
+              displayName: currentUser.displayName || '',
+              userColor: currentUser.userColor || '#A3E635',
+              phone: currentUser.phone 
+          });
           setShowProfileModal(true);
       }
   };
 
   const handleUpdateProfile = async () => {
       if (!currentUser) return;
-      if (!editProfileData.fullName) return alert('שם חובה');
+      if (!editProfileData.fullName || !editProfileData.phone) return alert('שם וטלפון חובה');
       
-      const updatedUser = { ...currentUser, fullName: editProfileData.fullName, email: editProfileData.email };
-      await dataService.updateUser(updatedUser);
-      setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
-      setShowProfileModal(false);
-      alert('פרופיל עודכן!');
+      const newPhone = normalizePhone(editProfileData.phone);
+      
+      const updatedUser = { 
+          ...currentUser, 
+          fullName: editProfileData.fullName, 
+          email: editProfileData.email,
+          displayName: editProfileData.displayName,
+          userColor: editProfileData.userColor,
+          phone: newPhone
+      };
+      
+      try {
+          await dataService.updateUser(updatedUser);
+          setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+          
+          // If phone number changed, update session storage so user isn't logged out
+          if (newPhone !== normalizePhone(currentUserPhone || '')) {
+              localStorage.setItem('niv_app_current_phone', newPhone);
+              setCurrentUserPhone(newPhone);
+          }
+          
+          setShowProfileModal(false);
+          alert('פרופיל עודכן!');
+      } catch (error) {
+          alert('שגיאה בעדכון, ייתכן שהטלפון כבר קיים במערכת');
+      }
   };
 
   const mainBackgroundClass = isAdminMode 
     ? 'min-h-screen pb-20 font-sans md:bg-[#330000] bg-brand-black transition-colors duration-500' 
     : 'min-h-screen bg-brand-black pb-20 font-sans transition-colors duration-500';
+
+  if (!isCloudConnected && !isLoadingData) {
+      return <ConnectionBlocker />;
+  }
 
   return (
     <div className={mainBackgroundClass}>
@@ -277,7 +338,7 @@ const App: React.FC = () => {
           {currentUser && (
               <div className="text-right flex items-center gap-3">
                   <div>
-                    <p className="text-white text-xs font-bold">היי {currentUser.fullName}</p>
+                    <p className="text-white text-xs font-bold">היי <span style={{color: currentUser.userColor}}>{currentUser.displayName || currentUser.fullName}</span></p>
                     <div className="flex gap-2 justify-end">
                         <button onClick={handleOpenProfile} className="text-[10px] text-brand-primary hover:underline">ערוך פרופיל</button>
                         <span className="text-gray-600 text-[10px]">|</span>
@@ -497,8 +558,23 @@ const App: React.FC = () => {
                           <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.fullName} onChange={e=>setEditProfileData({...editProfileData, fullName: e.target.value})}/>
                       </div>
                       <div>
+                          <label className="text-xs text-gray-400 mb-1 block">טלפון</label>
+                          <input type="tel" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.phone} onChange={e=>setEditProfileData({...editProfileData, phone: e.target.value})}/>
+                      </div>
+                      <div>
+                          <label className="text-xs text-gray-400 mb-1 block">כינוי באפליקציה</label>
+                          <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.displayName} onChange={e=>setEditProfileData({...editProfileData, displayName: e.target.value})}/>
+                      </div>
+                      <div>
                           <label className="text-xs text-gray-400 mb-1 block">אימייל</label>
                           <input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/>
+                      </div>
+                      <div>
+                          <label className="text-xs text-gray-400 mb-1 block">צבע משתמש</label>
+                          <div className="flex items-center gap-2">
+                             <input type="color" className="w-12 h-12 rounded cursor-pointer bg-transparent border-none" value={editProfileData.userColor} onChange={e=>setEditProfileData({...editProfileData, userColor: e.target.value})}/>
+                             <span className="text-gray-400 text-sm">{editProfileData.userColor}</span>
+                          </div>
                       </div>
                   </div>
                   <div className="flex gap-2">
