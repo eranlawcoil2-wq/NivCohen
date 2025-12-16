@@ -78,13 +78,30 @@ const App: React.FC = () => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
   
-  // URL Based Admin Mode
+  // URL Based Admin Mode + Dynamic Icon
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('mode') === 'admin') {
+      const isParamAdmin = params.get('mode') === 'admin';
+      
+      if (isParamAdmin) {
           setIsAdminMode(true);
       }
-  }, []);
+
+      // Logic to change the icon based on mode
+      const updateIcon = (isAdmin: boolean) => {
+          const color = isAdmin ? '%23EF4444' : '%23A3E635'; // Red-500 or Lime-400
+          const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${color}%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>`;
+          
+          const linkIcon = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+          const linkApple = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+          
+          if (linkIcon) linkIcon.href = svgIcon;
+          if (linkApple) linkApple.href = svgIcon;
+      };
+
+      updateIcon(isParamAdmin || isAdminMode);
+
+  }, [isAdminMode]);
 
   const toggleAdminMode = () => {
       const newMode = !isAdminMode;
@@ -250,7 +267,10 @@ const App: React.FC = () => {
                                <h2 className="text-3xl text-white font-black leading-none mb-1">{viewingSession.type}</h2>
                                <div className="flex items-center gap-2 mt-2">
                                    <div className="text-brand-primary font-mono font-bold text-lg bg-brand-primary/10 px-2 py-1 rounded">{viewingSession.time}</div>
-                                   <div className="text-gray-400 text-sm border border-gray-600 px-2 py-1 rounded">{viewingSession.date}</div>
+                                   {/* Added Day Name */}
+                                   <div className="text-gray-400 text-sm border border-gray-600 px-2 py-1 rounded">
+                                       {new Date(viewingSession.date).toLocaleDateString('he-IL', { weekday: 'long' })}, {viewingSession.date}
+                                   </div>
                                </div>
                            </div>
                            {/* Weather Widget inside Modal */}
@@ -262,11 +282,23 @@ const App: React.FC = () => {
                            )}
                       </div>
                       
-                      <div className="relative z-10 flex items-center gap-1.5 text-gray-300 text-sm mb-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                           <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                        </svg>
-                        <span>{viewingSession.location}</span>
+                      <div className="relative z-10 flex justify-between items-center text-gray-300 text-sm mb-3">
+                        <div className="flex items-center gap-1.5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
+                               <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                            </svg>
+                            <span>{viewingSession.location}</span>
+                        </div>
+                        {/* Navigation Button */}
+                        <a 
+                            href={`https://waze.com/ul?q=${encodeURIComponent(viewingSession.location)}&navigate=yes`}
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors border border-gray-600"
+                        >
+                            <span>נווט</span>
+                            <span>🚗</span>
+                        </a>
                       </div>
 
                       <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">
