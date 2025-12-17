@@ -165,8 +165,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
   
   // --- SYNC CONFIG WHEN LOADED ---
-  // This useEffect ensures that when the appConfig is fetched from the server/localstorage asynchronously,
-  // the form updates to reflect the saved values instead of sticking to the initial defaults.
   useEffect(() => {
       setTempConfig(appConfig);
   }, [appConfig]);
@@ -443,6 +441,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setEditSessionForm({ ...attendanceSession });
       setIsEditingInModal(true);
   };
+  
+  const handleSendReminder = () => {
+      if (!attendanceSession) return;
+      const attendees = attendanceSession.registeredPhoneNumbers;
+      if (attendees.length === 0) {
+          alert('אין נרשמים לאימון זה');
+          return;
+      }
+      
+      const message = `היי כולם! 
+תזכורת לאימון ${attendanceSession.type} היום בשעה ${attendanceSession.time} ב${attendanceSession.location}.
+מחכה לכם! 💪
+${appConfig.coachNameHeb}`;
+
+      const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+  };
+
+  const handleCopyNumbers = () => {
+      if (!attendanceSession) return;
+      if (attendanceSession.registeredPhoneNumbers.length === 0) return;
+      
+      const numbers = attendanceSession.registeredPhoneNumbers.map(p => {
+          let clean = normalizePhone(p);
+          if (clean.startsWith('0')) clean = '972' + clean.substring(1);
+          return clean;
+      }).join(',');
+      
+      navigator.clipboard.writeText(numbers).then(() => alert('מספרי הטלפון הועתקו ללוח! 📋'));
+  };
 
   const handleSaveEditedSession = async () => {
       if (!editSessionForm.id || !editSessionForm.type || !editSessionForm.date) return;
@@ -452,6 +480,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           ...editSessionForm,
           registeredPhoneNumbers: attendanceSession?.registeredPhoneNumbers || [],
           attendedPhoneNumbers: attendanceSession?.attendedPhoneNumbers || [],
+          waitingList: attendanceSession?.waitingList || [],
       } as TrainingSession;
 
       if (!sessionToSave.id) {
@@ -492,6 +521,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           time: newTime,
           registeredPhoneNumbers: [], 
           attendedPhoneNumbers: [],
+          waitingList: [],
           isHidden: attendanceSession.isHidden,
           isCancelled: false 
       };
@@ -619,6 +649,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       date: newDateStr,
                       registeredPhoneNumbers: [],
                       attendedPhoneNumbers: [],
+                      waitingList: [],
                       isHidden: s.isHidden,
                       isCancelled: false
                   });
@@ -658,6 +689,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           maxCapacity: 15,
           registeredPhoneNumbers: [],
           attendedPhoneNumbers: [],
+          waitingList: [],
           description: '',
           color: SESSION_COLORS[0],
           isHidden: false,
@@ -820,13 +852,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               <button onClick={handleDuplicateFromAttendance} className="bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-3 rounded flex-1 border border-red-800 transition-colors font-bold shadow-md">📄 שכפל (+1 שעה)</button>
                               <button onClick={handleDeleteFromAttendance} className="bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-3 rounded flex-1 border border-red-800 transition-colors font-bold shadow-md">🗑️ מחק</button>
                           </div>
+
+                          {/* NOTIFICATIONS SECTION */}
+                          <div className="flex gap-2 mb-4 bg-gray-900 p-2 rounded-lg border border-gray-700">
+                               <Button size="sm" onClick={handleSendReminder} className="flex-1 text-xs gap-1 bg-[#25D366] hover:bg-[#20bd5a] text-white border-none shadow-none">
+                                   <span className="text-sm">📣</span> שלח תזכורת
+                               </Button>
+                               <Button size="sm" variant="secondary" onClick={handleCopyNumbers} className="flex-1 text-xs gap-1">
+                                   <span className="text-sm">📋</span> העתק טלפונים
+                               </Button>
+                          </div>
                           
                           <div className="mb-4">
                               <Button size="sm" variant="secondary" onClick={handleAddToCalendar} className="w-full text-xs gap-2">📅 הוסף ליומן (קובץ) {appConfig.coachNameHeb}</Button>
                           </div>
 
                           <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded max-h-52">
-                              <div className="text-xs text-gray-400 mb-2 sticky top-0 bg-gray-900 p-1">סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</div>
+                              <div className="text-xs text-gray-400 mb-2 sticky top-0 bg-gray-900 p-1 flex justify-between">
+                                  <span>סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</span>
+                                  {attendanceSession.waitingList && attendanceSession.waitingList.length > 0 && <span className="text-orange-400 font-bold">ממתינים: {attendanceSession.waitingList.length}</span>}
+                              </div>
                               {attendanceSession.registeredPhoneNumbers.length === 0 ? <p className="text-center text-gray-500 py-4">אין נרשמים</p> :
                                   attendanceSession.registeredPhoneNumbers.map(phone => {
                                       const user = users.find(u => u.phone.replace(/\D/g,'') === phone.replace(/\D/g,''));
@@ -844,6 +889,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                       );
                                   })
                               }
+
+                              {attendanceSession.waitingList && attendanceSession.waitingList.length > 0 && (
+                                  <div className="mt-4 border-t border-gray-700 pt-2">
+                                      <div className="text-orange-400 text-xs font-bold mb-2">רשימת המתנה</div>
+                                      {attendanceSession.waitingList.map((phone, i) => {
+                                           const user = users.find(u => u.phone.replace(/\D/g,'') === phone.replace(/\D/g,''));
+                                           return (
+                                              <div key={phone} className="flex justify-between items-center p-2 rounded bg-orange-900/20 text-orange-200 text-xs mb-1">
+                                                  <span>{i+1}. {user?.fullName || phone}</span>
+                                              </div>
+                                           );
+                                      })}
+                                  </div>
+                              )}
                           </div>
                           <div className="flex gap-2">
                               <Button onClick={saveAttendance} className="flex-1">אישור נוכחות</Button>
@@ -856,6 +915,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       {activeTab === 'users' && (
          <div className="space-y-6">
+            {/* ... (Users Tab Content Unchanged) ... */}
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                  <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>
                 {editingUserId && formUser.phone && (
@@ -1008,6 +1068,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       
       {activeTab === 'connections' && (
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 text-white space-y-4">
+              {/* ... (Connections Tab Content Unchanged) ... */}
               <h3 className="text-xl font-bold mb-4">חיבור ל-Supabase (ענן)</h3>
               <div className="space-y-2">
                   <label className="text-xs text-gray-400">Project URL</label>
@@ -1033,6 +1094,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       
       {activeTab === 'settings' && (
           <div className="space-y-6">
+              {/* ... (Settings Tab Content Unchanged) ... */}
                <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-3 font-bold">פרטי מאמן והגדרות כלליות</h3>
                   

@@ -83,7 +83,10 @@ export const dataService = {
       const { data, error } = await supabase.from('sessions').select('*');
       if (error) throw error;
       // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo sessions.
-      if (data) return data as TrainingSession[];
+      if (data) return data.map((s: any) => ({
+          ...s,
+          waitingList: s.waitingList || [] // Ensure waitingList exists
+      })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
   },
@@ -93,7 +96,8 @@ export const dataService = {
       const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          attendedPhoneNumbers: session.attendedPhoneNumbers || []
+          attendedPhoneNumbers: session.attendedPhoneNumbers || [],
+          waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').insert([safeSession]);
       if (error) throw error;
@@ -108,7 +112,8 @@ export const dataService = {
        const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          attendedPhoneNumbers: session.attendedPhoneNumbers || []
+          attendedPhoneNumbers: session.attendedPhoneNumbers || [],
+          waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);
       if (error) throw error;
@@ -134,8 +139,6 @@ export const dataService = {
     if (supabase) {
        const { data, error } = await supabase.from('config_locations').select('*');
        if (!error && data) return data as LocationDef[];
-       // REMOVED FALLBACK TO DEFAULT_LOCATIONS IF EMPTY
-       // This ensures if user deletes all locations in cloud, it stays empty and doesn't respawn "Park Hayarkon"
     }
     
     // Local storage fallback
@@ -168,7 +171,6 @@ export const dataService = {
       if (supabase) {
           const { data, error } = await supabase.from('config_workout_types').select('*');
           if (!error && data && data.length > 0) return data.map((t:any) => t.name);
-          // If empty in cloud, return empty array, don't fallback to defaults if they were deleted
           if (!error && data && data.length === 0) return [];
       }
       return safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);

@@ -504,21 +504,52 @@ const App: React.FC = () => {
       const session = sessions.find(s => s.id === sid);
       if (!session) return;
       const phone = normalizePhone(currentUserPhone);
-      const isReg = session.registeredPhoneNumbers.includes(phone);
-      if (!isReg && session.registeredPhoneNumbers.length >= session.maxCapacity) { alert('מלא'); return; }
       
-      const updated = { ...session, registeredPhoneNumbers: isReg ? session.registeredPhoneNumbers.filter(p => p !== phone) : [...session.registeredPhoneNumbers, phone] };
+      const isRegistered = session.registeredPhoneNumbers.includes(phone);
+      const isWaiting = session.waitingList?.includes(phone);
+      
+      let updatedSession = { ...session };
+      
+      if (isRegistered) {
+          // CANCEL REGISTRATION Logic
+          // 1. Remove from registered
+          updatedSession.registeredPhoneNumbers = session.registeredPhoneNumbers.filter(p => p !== phone);
+          
+          // 2. Check if waiting list has people, if so, promote the first one
+          if (updatedSession.waitingList && updatedSession.waitingList.length > 0) {
+              const [firstInLine, ...remainingWaitlist] = updatedSession.waitingList;
+              updatedSession.registeredPhoneNumbers.push(firstInLine);
+              updatedSession.waitingList = remainingWaitlist;
+              // Ideally notify 'firstInLine' here (requires server/push), currently implied.
+          }
+          
+          alert('בוטלה ההרשמה בהצלחה.');
+      } else if (isWaiting) {
+          // CANCEL WAITING LIST
+          updatedSession.waitingList = (session.waitingList || []).filter(p => p !== phone);
+          alert('יצאת מרשימת ההמתנה.');
+      } else {
+          // NEW REGISTRATION Logic
+          if (session.registeredPhoneNumbers.length < session.maxCapacity) {
+              // Regular registration
+              updatedSession.registeredPhoneNumbers = [...session.registeredPhoneNumbers, phone];
+          } else {
+              // Join Waiting List
+              if (!confirm('האימון מלא. האם להיכנס לרשימת המתנה? \n(אם יתפנה מקום, תכנס אוטומטית)')) return;
+              updatedSession.waitingList = [...(session.waitingList || []), phone];
+          }
+      }
       
       // OPTIMISTIC UPDATE
-      setSessions(prev => prev.map(s => s.id === sid ? updated : s));
+      setSessions(prev => prev.map(s => s.id === sid ? updatedSession : s));
       
-      // CRITICAL FIX: If the modal is open for this session, update it too!
+      // Update Modal if open
       if (viewingSession && viewingSession.id === sid) {
-          setViewingSession(updated);
+          setViewingSession(updatedSession);
       }
 
       try {
-          await dataService.updateSession(updated);
+          await dataService.updateSession(updatedSession);
       } catch (e) {
           alert('שגיאה בעדכון ההרשמה, נסה שנית');
           refreshData(); // Revert on error
@@ -803,7 +834,7 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* ... (Viewing Session, Login, Profile Modals - Unchanged) ... */}
+      {/* Viewing Session Modal */}
       {viewingSession && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-end md:items-center justify-center backdrop-blur-sm" onClick={()=>setViewingSession(null)}>
               <div className="bg-gray-800 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t border-brand-primary shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
@@ -841,7 +872,7 @@ const App: React.FC = () => {
                           <div className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{viewingSession.registeredPhoneNumbers.length} / {viewingSession.maxCapacity}</div>
                       </div>
                       {viewingSession.registeredPhoneNumbers.length > 0 ? (
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-2 gap-2 mb-4">
                               {viewingSession.registeredPhoneNumbers.map((p,i) => {
                                   const u = users.find(user => normalizePhone(user.phone) === p);
                                   const displayName = u?.displayName || u?.fullName || 'אורח';
@@ -856,11 +887,55 @@ const App: React.FC = () => {
                               })}
                           </div>
                       ) : <div className="text-center text-gray-600 text-sm py-8">טרם נרשמו מתאמנים</div>}
+
+                      {/* Waiting List Display in Modal */}
+                      {viewingSession.waitingList && viewingSession.waitingList.length > 0 && (
+                          <div className="border-t border-gray-700 pt-3">
+                               <div className="flex justify-between items-center mb-2">
+                                  <div className="text-sm font-bold text-orange-400">רשימת המתנה ⏳</div>
+                                  <div className="text-xs bg-orange-900/50 text-orange-300 px-2 py-0.5 rounded-full">{viewingSession.waitingList.length}</div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                  {viewingSession.waitingList.map((p,i) => {
+                                      const u = users.find(user => normalizePhone(user.phone) === p);
+                                      const displayName = u?.displayName || u?.fullName || 'אורח';
+                                      return (
+                                        <div key={i} className="bg-orange-900/20 text-orange-200 text-xs px-3 py-2 rounded flex items-center gap-2 border border-orange-900/30 opacity-70">
+                                            <span className="text-xs font-bold w-4">{i+1}.</span>
+                                            <span>{displayName}</span>
+                                        </div>
+                                      );
+                                  })}
+                              </div>
+                          </div>
+                      )}
                   </div>
                   <div className="p-4 border-t border-gray-700 bg-gray-900/50">
-                      <Button onClick={()=>handleRegisterClick(viewingSession.id)} className="w-full py-3 text-lg font-bold shadow-xl">
-                          {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'בטל הרשמה ✕' : 'הירשם לאימון +'}
-                      </Button>
+                       {(() => {
+                            const isRegistered = currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone));
+                            const isWaiting = currentUserPhone && viewingSession.waitingList?.includes(normalizePhone(currentUserPhone));
+                            const isFull = viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity;
+
+                            let btnText = 'הירשם לאימון +';
+                            let btnVariant: 'primary' | 'secondary' | 'danger' = 'primary';
+                            
+                            if (isRegistered) {
+                                btnText = 'בטל הרשמה ✕';
+                                btnVariant = 'danger';
+                            } else if (isWaiting) {
+                                btnText = 'צא מרשימת המתנה ✕';
+                                btnVariant = 'secondary';
+                            } else if (isFull) {
+                                btnText = 'היכנס לרשימת המתנה ⏳';
+                                btnVariant = 'secondary';
+                            }
+
+                            return (
+                                <Button onClick={()=>handleRegisterClick(viewingSession.id)} variant={btnVariant} className="w-full py-3 text-lg font-bold shadow-xl">
+                                    {btnText}
+                                </Button>
+                            );
+                       })()}
                   </div>
               </div>
           </div>

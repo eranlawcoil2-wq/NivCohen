@@ -52,6 +52,7 @@ export interface TrainingSession {
   maxCapacity: number;
   description?: string;
   registeredPhoneNumbers: string[];
+  waitingList?: string[]; // New: List of phone numbers waiting for a spot
   attendedPhoneNumbers?: string[]; // List of users who actually attended (Checked by coach)
   color?: string; // Hex color code for the session theme
   isTrial?: boolean; // Is this a trial session for new users?

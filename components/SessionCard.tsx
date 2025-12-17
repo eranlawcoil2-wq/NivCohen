@@ -11,7 +11,7 @@ interface SessionCardProps {
   onRegisterClick: (sessionId: string) => void;
   onViewDetails: (sessionId: string) => void;
   locations?: LocationDef[];
-  isAdmin?: boolean; // New prop for admin styling
+  isAdmin?: boolean; 
 }
 
 const stringToColor = (str: string) => {
@@ -42,38 +42,37 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   locations = [],
   isAdmin = false
 }) => {
-  const spotsLeft = session.maxCapacity - session.registeredPhoneNumbers.length;
-  const isFull = spotsLeft <= 0;
   const registeredCount = session.registeredPhoneNumbers.length;
+  const waitingCount = session.waitingList ? session.waitingList.length : 0;
+  const spotsLeft = session.maxCapacity - registeredCount;
+  const isFull = spotsLeft <= 0;
   const cardColor = session.color || 'var(--brand-primary)'; 
+  
+  // Calculate if user is in waiting list
+  // Note: App.tsx handles the actual prop `isRegistered` which usually checks registeredPhoneNumbers.
+  // We need to check waiting list manually here or trust the parent. 
+  // For visual "In Waitlist", we need to know the current user's phone, but we don't have it here directly easily without modifying props.
+  // Instead, we will rely on a distinct button state if `isRegistered` is false but user is in waitlist.
+  // However, simpler for now: `isRegistered` prop should ideally only reflect active registration.
 
-  // Try to find specific location color
   const locationObj = locations.find(l => l.name === session.location);
   const locationBadgeStyle = locationObj && locationObj.color 
-      ? { backgroundColor: `${locationObj.color}33`, color: locationObj.color, borderColor: `${locationObj.color}4d` } // 33=20%, 4d=30% alpha
+      ? { backgroundColor: `${locationObj.color}33`, color: locationObj.color, borderColor: `${locationObj.color}4d` } 
       : null;
       
   const defaultLocationClass = !locationBadgeStyle ? stringToColor(session.location) : '';
-
   const showZoomBadge = session.isZoomSession || !!session.zoomLink;
-
-  // --- Logic for Status Badges ---
   const isCancelled = session.isCancelled || false;
   
-  // Logic: Happening if Manual Override IS TRUE, OR if within 3 hours automatically
   let isHappening = false;
-  
   if (!isCancelled) {
       if (session.manualHasStarted) {
           isHappening = true;
       } else {
-          // Automatic time check
           const now = new Date();
           const sessionStart = new Date(`${session.date}T${session.time}`);
           const diffMs = sessionStart.getTime() - now.getTime();
           const diffHours = diffMs / (1000 * 60 * 60);
-          
-          // If time difference is between -1.5 (1.5 hour passed) and 3 (3 hours before)
           if (diffHours <= 3 && diffHours > -1.5) {
               isHappening = true;
           }
@@ -87,29 +86,43 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       }
   };
 
-  // Distinct background for hidden sessions - NOW PURPLE
   let containerClass = 'bg-brand-dark border-gray-800 hover:border-gray-600';
   if (session.isHidden) containerClass = 'bg-[#2e1065] border-purple-500/60 shadow-none';
   if (isCancelled) containerClass = 'bg-red-900/10 border-red-900/40 grayscale-[0.5]';
 
-  // --- Weather Logic (Hourly or Daily) ---
   let displayTemp = weather?.maxTemp;
   let displayIcon = weather ? getWeatherIcon(weather.weatherCode) : null;
   
-  // Try to get hourly data if available
   if (weather && weather.hourly && session.time) {
-      const sessionHourStr = session.time.split(':')[0]; // "18:30" -> "18"
+      const sessionHourStr = session.time.split(':')[0]; 
       const sessionHour = parseInt(sessionHourStr, 10);
       const hourlyData = weather.hourly[sessionHourStr];
-      
-      // Determine if it is night (approx. between 19:00 and 06:00)
       const isNight = sessionHour >= 19 || sessionHour < 6;
 
       if (hourlyData) {
           displayTemp = hourlyData.temp;
-          // Pass isNight to get the correct icon (Moon vs Sun)
           displayIcon = getWeatherIcon(hourlyData.weatherCode, isNight);
       }
+  }
+
+  // Determine Button Text & Style
+  let buttonText = 'הירשם +';
+  let buttonVariant: 'primary' | 'secondary' | 'danger' | 'outline' = 'primary';
+  let buttonDisabled = false;
+
+  if (isAdmin) {
+      buttonText = 'ניהול / אישורים';
+      buttonVariant = 'danger';
+  } else if (isCancelled) {
+      buttonText = 'מבוטל ✕';
+      buttonDisabled = true;
+      buttonVariant = 'secondary';
+  } else if (isRegistered) {
+      buttonText = 'רשום ✅';
+      buttonVariant = 'outline';
+  } else if (isFull) {
+      buttonText = 'היכנס להמתנה ⏳';
+      buttonVariant = 'secondary'; // Or a specific waitlist color
   }
 
   return (
@@ -128,29 +141,19 @@ export const SessionCard: React.FC<SessionCardProps> = ({
            </div>
         )}
         
-        {/* COMBINED BADGE: If Happening AND Zoom */}
-        {!isCancelled && isHappening && showZoomBadge && (
-            <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
+        {!isCancelled && isHappening && (
+            <div className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
-                מתקיים + ZOOM
+                מתקיים {showZoomBadge ? '+ ZOOM' : ''}
             </div>
         )}
 
-        {/* HAPPENING ONLY BADGE */}
-        {!isCancelled && isHappening && !showZoomBadge && (
-           <div className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
-               <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
-               האימון מתקיים
-           </div>
-        )}
-
-        {/* ZOOM ONLY BADGE (If active it would be combined above, so this is for inactive zoom) */}
         {!isCancelled && showZoomBadge && !isHappening && (
            <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                </svg>
-               אימון ZOOM
+               ZOOM
            </div>
         )}
 
@@ -164,6 +167,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             <div className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
                <span>👻 נסתר</span>
            </div>
+        )}
+        
+        {/* Waiting List Badge */}
+        {!isRegistered && isFull && !isCancelled && waitingCount > 0 && (
+            <div className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+                <span>⏳ {waitingCount} ממתינים</span>
+            </div>
         )}
       </div>
       
@@ -204,20 +214,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           
           <Button 
             size="sm" 
-            variant={isAdmin ? 'danger' : (isRegistered && !isCancelled ? 'outline' : 'primary')}
+            variant={buttonVariant}
             className={`w-full text-xs py-1.5 h-8 ${isRegistered && !isAdmin ? 'bg-transparent border-gray-600 text-gray-300' : ''}`}
             onClick={handleButtonClick}
-            disabled={(!isRegistered && isFull && !isAdmin) || (isCancelled && !isAdmin)}
+            disabled={buttonDisabled}
           >
-            {isAdmin 
-                ? 'ניהול / אישורים' 
-                : isCancelled 
-                    ? 'מבוטל ✕' 
-                    : isRegistered 
-                        ? 'רשום ✅' 
-                        : isFull 
-                            ? 'מלא ⛔' 
-                            : 'הירשם +'}
+            {buttonText}
           </Button>
       </div>
     </div>
