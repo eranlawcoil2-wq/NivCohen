@@ -24,6 +24,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [weekOffset, setWeekOffset] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'workouts' | 'payment'>('name');
+  const [whatsappTemplate, setWhatsappTemplate] = useState('היי! מזכיר שקבענו לאימון {type} ב-{time} ב-{location}. מחכה לכם! 🚀');
 
   const normalizePhone = (p: string) => p.replace(/\D/g, '').replace(/^972/, '0');
   
@@ -47,6 +48,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       });
   }, [props.users, searchTerm, sortBy]);
 
+  const sendWhatsApp = (p: string, session: TrainingSession) => {
+      const u = props.users.find(x => normalizePhone(x.phone) === normalizePhone(p));
+      let msg = whatsappTemplate
+        .replace('{type}', session.type)
+        .replace('{time}', session.time)
+        .replace('{location}', session.location);
+      
+      const cleanPhone = p.startsWith('0') ? '972' + p.substring(1) : p;
+      window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
   return (
     <div className="bg-brand-black min-h-screen">
       <div className="flex gap-2 p-4 sticky top-[72px] bg-brand-black z-30 border-b border-gray-800 no-scrollbar overflow-x-auto">
@@ -63,7 +75,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 <span className="text-red-500 font-black text-[10px] uppercase tracking-widest">{weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}</span>
                 <button onClick={()=>setWeekOffset(p=>p+1)} className="text-white">→</button>
              </div>
-             <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0], date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [] })} className="w-full py-5 rounded-[40px] bg-red-600 shadow-2xl">+ אימון חדש</Button>
+             <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0], date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [] })} className="w-full py-5 rounded-[40px] bg-red-600 shadow-2xl">+ אימון חדש</Button>
              {weekDates.map(date => {
                 const daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
                 return (
@@ -143,25 +155,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                  </div>
                  <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-3xl">✕</button>
               </div>
+
+              <div className="mb-4">
+                  <label className="text-[8px] text-gray-600 font-black uppercase tracking-widest mb-2 block">הודעה לשליחה (וואטסאפ)</label>
+                  <textarea className="w-full bg-gray-800 border border-gray-700 p-4 rounded-2xl text-white text-xs" value={whatsappTemplate} onChange={e=>setWhatsappTemplate(e.target.value)} />
+              </div>
+
               <div className="flex-1 overflow-y-auto space-y-6 py-4 no-scrollbar">
                  <div className="grid grid-cols-2 gap-2">
-                     <button onClick={()=>props.onUpdateSession({...attendanceSession, isCancelled: !attendanceSession.isCancelled})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 ${attendanceSession.isCancelled ? 'bg-red-500 border-red-500 text-black' : 'border-gray-800 text-red-500'}`}>ביטול</button>
-                     <button onClick={()=>props.onUpdateSession({...attendanceSession, isZoomSession: !attendanceSession.isZoomSession})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 ${attendanceSession.isZoomSession ? 'bg-blue-500 border-blue-500 text-black' : 'border-gray-800 text-blue-500'}`}>זום</button>
-                     <button onClick={()=>props.onUpdateSession({...attendanceSession, manualHasStarted: !attendanceSession.manualHasStarted})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 col-span-2 ${attendanceSession.manualHasStarted ? 'bg-brand-primary border-brand-primary text-black' : 'border-gray-800 text-brand-primary'}`}>סמן כמתקיים</button>
+                     <button onClick={()=>props.onUpdateSession({...attendanceSession, isCancelled: !attendanceSession.isCancelled})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${attendanceSession.isCancelled ? 'bg-red-500 border-red-500 text-black' : 'border-gray-800 text-red-500'}`}>ביטול אימון</button>
+                     <button onClick={()=>props.onUpdateSession({...attendanceSession, isZoomSession: !attendanceSession.isZoomSession})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 transition-all ${attendanceSession.isZoomSession ? 'bg-blue-500 border-blue-500 text-black' : 'border-gray-800 text-blue-500'}`}>אימון זום</button>
+                     <button onClick={()=>props.onUpdateSession({...attendanceSession, manualHasStarted: !attendanceSession.manualHasStarted})} className={`py-4 rounded-3xl text-[10px] font-black uppercase border-2 col-span-2 transition-all ${attendanceSession.manualHasStarted ? 'bg-brand-primary border-brand-primary text-black' : 'border-gray-800 text-brand-primary'}`}>מתקיים</button>
                  </div>
-                 <h4 className="text-gray-600 text-[8px] font-black uppercase tracking-widest border-b border-gray-800 pb-2">נוכחות ({attendanceSession.registeredPhoneNumbers.length})</h4>
+                 <h4 className="text-gray-600 text-[8px] font-black uppercase tracking-widest border-b border-gray-800 pb-2 flex justify-between">
+                    <span>נוכחות וניהול הודעות ({attendanceSession.registeredPhoneNumbers.length})</span>
+                    <button onClick={()=>{if(confirm('למחוק את האימון לצמיתות?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} className="text-red-500">מחק אימון 🗑️</button>
+                 </h4>
                  <div className="space-y-2">
                     {attendanceSession.registeredPhoneNumbers.map(p => {
                         const u = props.users.find(x => normalizePhone(x.phone) === normalizePhone(p));
+                        // Default to all registered users being attended if field is empty, otherwise check field
                         const isAttended = (attendanceSession.attendedPhoneNumbers || attendanceSession.registeredPhoneNumbers).includes(p);
                         return (
-                           <div key={p} onClick={() => {
-                               const current = attendanceSession.attendedPhoneNumbers || attendanceSession.registeredPhoneNumbers;
-                               const next = current.includes(p) ? current.filter(x=>x!==p) : [...current, p];
-                               props.onUpdateSession({...attendanceSession, attendedPhoneNumbers: next});
-                           }} className={`p-6 rounded-3xl border flex justify-between items-center cursor-pointer transition-all ${isAttended ? 'bg-red-600/10 border-red-500/40' : 'bg-gray-800/30 border-gray-800 opacity-40'}`}>
-                              <span className="font-black text-white">{u?.fullName || p}</span>
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${isAttended ? 'bg-red-500 text-white' : 'border border-gray-700'}`}>{isAttended ? '✓' : ''}</div>
+                           <div key={p} className="flex gap-2">
+                               <div onClick={() => {
+                                   const current = attendanceSession.attendedPhoneNumbers || attendanceSession.registeredPhoneNumbers;
+                                   const next = current.includes(p) ? current.filter(x=>x!==p) : [...current, p];
+                                   props.onUpdateSession({...attendanceSession, attendedPhoneNumbers: next});
+                               }} className={`flex-1 p-6 rounded-3xl border flex justify-between items-center cursor-pointer transition-all ${isAttended ? 'bg-red-600/10 border-red-500/40' : 'bg-gray-800/30 border-gray-800 opacity-40'}`}>
+                                  <span className="font-black text-white">{u?.fullName || p}</span>
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black transition-all ${isAttended ? 'bg-red-500 text-white' : 'border border-gray-700'}`}>{isAttended ? '✓' : ''}</div>
+                               </div>
+                               <button onClick={()=>sendWhatsApp(p, attendanceSession)} className="bg-green-600/20 text-green-500 border border-green-500/30 px-6 rounded-3xl text-[9px] font-black uppercase">שלח</button>
                            </div>
                         );
                     })}
@@ -187,6 +212,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       <div><label className="text-[8px] text-gray-500 uppercase font-black">שיא אימונים</label>
                       <input type="number" className="w-full bg-gray-900 border border-gray-700 p-4 rounded-2xl text-white mt-1" value={editingUser.monthlyRecord || 0} onChange={e=>setEditingUser({...editingUser, monthlyRecord: parseInt(e.target.value)})} /></div>
                   </div>
+                  <div><label className="text-[8px] text-gray-500 uppercase font-black">תאריך הצהרת בריאות</label>
+                  <input type="date" className="w-full bg-gray-900 border border-gray-700 p-4 rounded-2xl text-white mt-1" value={editingUser.healthDeclarationDate || ''} onChange={e=>setEditingUser({...editingUser, healthDeclarationDate: e.target.value})} /></div>
               </div>
               <div className="mt-8 flex gap-2">
                   <Button onClick={()=>{props.onUpdateUser(editingUser); setEditingUser(null);}} className="flex-1 bg-red-600">שמור שינויים</Button>

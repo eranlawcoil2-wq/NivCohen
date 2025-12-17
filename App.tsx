@@ -30,7 +30,6 @@ const App: React.FC = () => {
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  // Fix: Added missing state for viewing session details
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
@@ -39,15 +38,15 @@ const App: React.FC = () => {
     if (!currentUser) return { monthly: 0, record: 0, streak: 0 };
     const phone = normalizePhone(currentUser.phone);
     const now = new Date();
-    const attendedSessions = sessions.filter(s => 
-        (s.attendedPhoneNumbers?.includes(phone) || (!s.attendedPhoneNumbers && s.registeredPhoneNumbers.includes(phone)))
-    );
+    // Only count sessions where the user actually attended (marked by coach)
+    const attendedSessions = sessions.filter(s => s.attendedPhoneNumbers?.includes(phone));
+    
     const monthlyCount = attendedSessions.filter(s => {
         const d = new Date(s.date);
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
 
-    // Streak: weeks with 3+ workouts
+    // Streak: weeks with 3+ attended workouts
     const weekMap: Record<string, number> = {};
     attendedSessions.forEach(s => {
         const d = new Date(s.date);
@@ -65,26 +64,46 @@ const App: React.FC = () => {
     return { monthly: monthlyCount, record: Math.max(currentUser.monthlyRecord || 0, monthlyCount), streak };
   }, [currentUser, sessions]);
 
+  // Fix: Added monthLeader to calculate the top attendee of the current month
   const monthLeader = useMemo(() => {
     const now = new Date();
-    const counts: Record<string, number> = {};
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    const attendanceMap: Record<string, number> = {};
+    
     sessions.forEach(s => {
-        const d = new Date(s.date);
-        if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
-            (s.attendedPhoneNumbers || s.registeredPhoneNumbers).forEach(p => {
-                const n = normalizePhone(p); counts[n] = (counts[n] || 0) + 1;
-            });
-        }
+      const sDate = new Date(s.date);
+      if (sDate.getMonth() === currentMonth && sDate.getFullYear() === currentYear) {
+        (s.attendedPhoneNumbers || []).forEach(p => {
+          const np = normalizePhone(p);
+          attendanceMap[np] = (attendanceMap[np] || 0) + 1;
+        });
+      }
     });
-    let max = 0, lead = '';
-    Object.entries(counts).forEach(([p, c]) => { if(c > max) { max = c; lead = p; } });
-    const u = users.find(x => normalizePhone(x.phone) === lead);
-    return { name: u?.fullName.split(' ')[0] || '---', count: max };
+
+    let topCount = 0;
+    let topPhone = '';
+
+    Object.entries(attendanceMap).forEach(([phone, count]) => {
+      if (count > topCount) {
+        topCount = count;
+        topPhone = phone;
+      }
+    });
+
+    const leader = users.find(u => normalizePhone(u.phone) === topPhone);
+    return {
+      name: leader ? leader.fullName : 'אין מוביל',
+      count: topCount > 0 ? `${topCount} אימונים` : '0 אימונים'
+    };
   }, [sessions, users]);
 
   useEffect(() => {
     window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setDeferredPrompt(e); });
-  }, []);
+    // Dynamically update primary brand color
+    document.documentElement.style.setProperty('--brand-primary', isAdminMode ? '#EF4444' : '#A3E635');
+  }, [isAdminMode]);
 
   const handleInstall = async () => {
     if (deferredPrompt) {
@@ -142,7 +161,7 @@ const App: React.FC = () => {
       <header className={`p-6 sticky top-0 z-40 border-b border-gray-800/50 backdrop-blur-md ${isAdminMode ? 'bg-red-900/20 border-red-500/30' : 'bg-brand-dark/80'}`}>
           <div className="flex justify-between items-center mb-6">
               <div onClick={() => isAdminMode ? setIsAdminMode(false) : document.getElementById('admin-modal')?.classList.remove('hidden')} className="cursor-pointer">
-                  <h1 className={`text-2xl font-black italic uppercase leading-none ${isAdminMode ? 'text-red-500' : 'text-white'}`}>
+                  <h1 className={`text-2xl font-black italic uppercase leading-none transition-colors duration-500 ${isAdminMode ? 'text-red-500' : 'text-white'}`}>
                       {appConfig.coachNameEng.split(' ')[0]} <span className={isAdminMode ? 'text-white' : 'text-brand-primary'}>{appConfig.coachNameEng.split(' ').slice(1).join(' ')}</span>
                   </h1>
                   <p className="text-[8px] font-black tracking-[0.4em] text-gray-500 uppercase mt-1">CONSIST TRAINING</p>
@@ -221,8 +240,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Fix: Added session details modal to show session information when a card is clicked */}
-      {viewingSession && (
+      {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 backdrop-blur-xl">
            <div className="bg-gray-900 p-10 rounded-[50px] w-full max-w-md border border-gray-800 flex flex-col shadow-3xl text-right" dir="rtl">
               <div className="flex justify-between items-start mb-6">
@@ -237,12 +255,6 @@ const App: React.FC = () => {
                     <p className="text-gray-500 text-[10px] font-black uppercase mb-1">מיקום</p>
                     <p className="text-white font-bold">{viewingSession.location}</p>
                  </div>
-                 {viewingSession.description && (
-                   <div>
-                      <p className="text-gray-500 text-[10px] font-black uppercase mb-1">תיאור האימון</p>
-                      <p className="text-gray-300 text-sm">{viewingSession.description}</p>
-                   </div>
-                 )}
                  <div>
                     <p className="text-gray-500 text-[10px] font-black uppercase mb-1">רשומים ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -265,9 +277,9 @@ const App: React.FC = () => {
         </div>
       )}
       
-      {/* Login Modals remain Same as logic logic */}
+      {/* Login Modals */}
       <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-4 backdrop-blur-xl">
-          <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl">
+          <div className="bg-gray-900 p-12 rounded-[50px] w-full max-sm border border-gray-800 shadow-2xl">
               <h3 className="text-white font-black text-3xl mb-8 text-center italic uppercase">כניסת מאמן 🔒</h3>
               <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-6 bg-gray-800 text-white rounded-3xl mb-4 text-center border border-gray-700 outline-none focus:border-red-500 text-3xl font-mono" />
               <Button onClick={() => { 

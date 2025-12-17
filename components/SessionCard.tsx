@@ -41,6 +41,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           const sessionStart = new Date(`${session.date}T${session.time}`);
           const diffMs = sessionStart.getTime() - now.getTime();
           const diffHours = diffMs / (1000 * 60 * 60);
+          // Auto Happening: 3 hours before start
           if (diffHours <= 3 && diffHours > -1) {
               isHappening = true;
           }
@@ -55,14 +56,22 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       window.open(url, '_blank');
   };
 
+  // Color logic
   let borderColor = isAdmin ? '#EF4444' : '#333';
   if (isCancelled) borderColor = '#EF4444';
-  else if (isHappening && isZoom) borderColor = '#3B82F6';
+  else if (isHappening && isZoom) borderColor = '#3B82F6'; // Transitions to blue-ish
   else if (isHappening) borderColor = '#A3E635';
   else if (isZoom) borderColor = '#3B82F6';
 
-  const statusBg = isCancelled ? 'bg-red-500' : (isHappening && isZoom ? 'bg-gradient-to-r from-brand-primary to-blue-500' : (isHappening ? 'bg-brand-primary' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')));
-  const statusLabel = isCancelled ? 'בוטל' : (isHappening ? (isZoom ? 'מתקיים + זום' : 'מתקיים') : (isZoom ? 'אימון זום' : 'מתוכנן'));
+  const statusBg = isCancelled 
+    ? 'bg-red-500' 
+    : (isHappening && isZoom 
+        ? 'bg-gradient-to-r from-brand-primary to-blue-500' 
+        : (isHappening ? 'bg-brand-primary' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')));
+  
+  const statusLabel = isCancelled 
+    ? 'בוטל' 
+    : (isHappening ? (isZoom ? 'מתקיים + זום' : 'מתקיים') : (isZoom ? 'אימון זום' : 'מתוכנן'));
 
   return (
     <div 
@@ -79,7 +88,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
       <div>
         <div className="flex justify-between items-start mb-6">
-           <span className={`text-4xl font-black font-mono italic leading-none ${isCancelled ? 'text-gray-600 line-through' : 'text-white'}`}>{session.time}</span>
+           <span className={`text-4xl font-black font-mono italic leading-none transition-colors duration-500 ${isCancelled ? 'text-gray-600 line-through' : 'text-white'}`}>{session.time}</span>
            {weather && (
                <div className="flex flex-col items-end opacity-40">
                   <span className="text-xl">{getWeatherIcon(weather.weatherCode)}</span>
@@ -87,8 +96,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                </div>
            )}
         </div>
-        <h3 className={`font-black text-sm leading-tight uppercase italic mb-1 tracking-tight ${isCancelled ? 'text-gray-600' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white'))}`}>{session.type}</h3>
-        <p className={`text-[10px] font-black truncate mb-6 uppercase tracking-tighter ${isCancelled ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location}</p>
+        <h3 className={`font-black text-sm leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${isCancelled ? 'text-gray-600' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white'))}`}>{session.type}</h3>
+        <p className={`text-[10px] font-black truncate mb-6 uppercase tracking-tighter transition-colors duration-500 ${isCancelled ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location}</p>
       </div>
 
       <div className="space-y-4">
