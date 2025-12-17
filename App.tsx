@@ -50,7 +50,7 @@ const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, 
     return (
         <button 
             onClick={handleInstall}
-            className={`fixed bottom-24 right-6 z-[100] ${isAdmin ? 'bg-red-500 text-white' : 'bg-brand-primary text-black'} p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black`}
+            className={`fixed bottom-24 right-6 z-[100] ${isAdmin ? 'bg-red-500 text-white shadow-red-500/40' : 'bg-brand-primary text-black shadow-brand-primary/40'} p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black`}
             title={isAdmin ? "התקן אפליקציית ניהול" : "התקן אפליקציית מתאמנים"}
         >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -301,6 +301,7 @@ const App: React.FC = () => {
             <div className="space-y-16 pb-20">
               {Array.from({length:7}, (_,i) => {
                   const d = new Date();
+                  d.setHours(12, 0, 0, 0); // Normalized noon for TZ safety
                   const dayOfWeek = d.getDay(); 
                   d.setDate(d.getDate() - dayOfWeek + i);
                   const dateStr = d.toISOString().split('T')[0];

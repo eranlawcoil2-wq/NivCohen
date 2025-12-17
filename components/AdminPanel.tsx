@@ -30,6 +30,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   
   const weekDates = useMemo(() => {
     const sun = new Date();
+    sun.setHours(12, 0, 0, 0); // Normalized to noon to avoid TZ issues
     sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { 
         const d = new Date(sun); 
@@ -172,9 +173,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <input type="text" className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-blue-400 text-xs font-mono" value={attendanceSession.zoomLink || ''} onChange={e=>setAttendanceSession({...attendanceSession, zoomLink: e.target.value})} placeholder="קישור זום..." />
                              )}
                         </div>
-                        <div className="flex items-center gap-3 bg-brand-primary/10 p-3 rounded-2xl border border-brand-primary/20">
-                            <input type="checkbox" id="isHappening" className="w-5 h-5 accent-brand-primary" checked={attendanceSession.manualHasStarted} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
-                            <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase italic">אימון מתקיים (סמן ידנית)</label>
+                        <div className="flex items-center gap-3 bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20">
+                            <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
+                            <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase italic">אימון מתקיים ✓ (יוצג בירוק)</label>
                         </div>
                         <div className="flex gap-3">
                             <button onClick={()=>setAttendanceSession({...attendanceSession, isCancelled: !attendanceSession.isCancelled})} className={`flex-1 py-4 rounded-3xl font-black text-xs uppercase transition-all ${attendanceSession.isCancelled ? 'bg-red-500 text-white shadow-lg' : 'bg-transparent text-red-500 border border-red-500/30'}`}>{attendanceSession.isCancelled ? 'מבוטל ✗' : 'בטל אימון'}</button>
