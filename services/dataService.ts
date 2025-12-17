@@ -28,7 +28,7 @@ const DEFAULT_CONFIG: AppConfig = {
     coachNameHeb: 'ניב כהן',
     coachNameEng: 'NIV COHEN',
     coachPhone: '0500000000',
-    coachAdditionalPhone: '',
+    coachAdditionalPhone: 'admin', // Default password set to 'admin'
     coachEmail: '',
     defaultCity: 'נס ציונה'
 };

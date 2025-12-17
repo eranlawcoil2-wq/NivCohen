@@ -160,7 +160,7 @@ const App: React.FC = () => {
       coachPhone: '0500000000',
       coachEmail: '',
       defaultCity: 'נס ציונה',
-      coachAdditionalPhone: '123456' // Default fallback
+      coachAdditionalPhone: 'admin' // Default password for new sessions or fallback
   });
 
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
@@ -243,7 +243,8 @@ const App: React.FC = () => {
   };
 
   const handleAdminLoginSubmit = () => {
-      const requiredPassword = appConfig.coachAdditionalPhone?.trim() || '123456'; // Default if not set
+      // Logic changed: fallback is now 'admin' instead of '123456'
+      const requiredPassword = appConfig.coachAdditionalPhone?.trim() || 'admin'; 
       if (adminPasswordInput === requiredPassword) {
           setIsAdminMode(true);
           setShowAdminLoginModal(false);
@@ -752,7 +753,7 @@ const App: React.FC = () => {
                   <p className="text-gray-400 text-sm mb-2 text-center">הכנס את סיסמת הניהול</p>
                   <input 
                     type="password" 
-                    placeholder={appConfig.coachAdditionalPhone ? `רמז: ${appConfig.coachAdditionalPhone}` : 'הזן סיסמא...'}
+                    placeholder={appConfig.coachAdditionalPhone ? `רמז: ${appConfig.coachAdditionalPhone}` : 'הזן סיסמא (ברירת מחדל: admin)'}
                     className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 text-center text-lg border border-gray-700 focus:border-brand-primary outline-none" 
                     value={adminPasswordInput} 
                     onChange={e=>setAdminPasswordInput(e.target.value)}
