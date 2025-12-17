@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef, AppConfig } from './types';
+import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
@@ -142,6 +142,7 @@ const App: React.FC = () => {
         { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה', color: '#A3E635' },
         { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה', color: '#3B82F6' },
   ]));
+  const [customQuotes, setCustomQuotes] = useState<Quote[]>([]);
   
   const [appConfig, setAppConfig] = useState<AppConfig>({
       coachNameHeb: 'ניב כהן',
@@ -206,6 +207,17 @@ const App: React.FC = () => {
           
           const config = await dataService.getAppConfig();
           setAppConfig(config);
+
+          const quotes = await dataService.getQuotes();
+          setCustomQuotes(quotes);
+
+          // Quote Logic: Priority to Custom, Fallback to Gemini
+          if (quotes && quotes.length > 0) {
+              const randomQuote = quotes[Math.floor(Math.random() * quotes.length)].text;
+              setQuote(randomQuote);
+          } else {
+               getMotivationQuote().then(setQuote);
+          }
           
           // Update document title
           document.title = `${config.coachNameHeb} - אימוני כושר`;
@@ -255,6 +267,17 @@ const App: React.FC = () => {
       setAppConfig(newConfig);
       document.title = `${newConfig.coachNameHeb} - אימוני כושר`;
   };
+
+  const handleAddQuote = async (text: string) => {
+      const newQuote: Quote = { id: Date.now().toString(), text };
+      await dataService.addQuote(newQuote);
+      setCustomQuotes([...customQuotes, newQuote]);
+  };
+
+  const handleDeleteQuote = async (id: string) => {
+      await dataService.deleteQuote(id);
+      setCustomQuotes(customQuotes.filter(q => q.id !== id));
+  };
   
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
@@ -282,7 +305,7 @@ const App: React.FC = () => {
   };
 
   useEffect(() => { localStorage.setItem('niv_app_color', primaryColor); document.documentElement.style.setProperty('--brand-primary', primaryColor); }, [primaryColor]);
-  useEffect(() => { getMotivationQuote().then(setQuote); getWeatherForDates(getCurrentWeekDates(0), weatherLocation.lat, weatherLocation.lon).then(setWeatherData); }, []);
+  useEffect(() => { getWeatherForDates(getCurrentWeekDates(0), weatherLocation.lat, weatherLocation.lon).then(setWeatherData); }, []);
   
   useEffect(() => {
     // Detect iOS
@@ -579,6 +602,7 @@ const App: React.FC = () => {
                 users={users} sessions={sessions} primaryColor={primaryColor} workoutTypes={workoutTypes}
                 locations={locations} weatherLocation={weatherLocation} paymentLinks={paymentLinks} streakGoal={streakGoal}
                 appConfig={appConfig}
+                quotes={customQuotes}
                 onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
@@ -601,6 +625,8 @@ const App: React.FC = () => {
                 onUpdateWeatherLocation={setWeatherLocation} onAddPaymentLink={l=>setPaymentLinks([...paymentLinks,l])}
                 onDeletePaymentLink={id=>setPaymentLinks(paymentLinks.filter(l=>l.id!==id))} onUpdateStreakGoal={setStreakGoal}
                 onUpdateAppConfig={handleUpdateAppConfig}
+                onAddQuote={handleAddQuote}
+                onDeleteQuote={handleDeleteQuote}
                 onExitAdmin={()=>{toggleAdminMode(); refreshData();}}
             />
         ) : (

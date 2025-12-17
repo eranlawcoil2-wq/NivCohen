@@ -14,6 +14,11 @@ export enum WorkoutType {
   HYBRID = 'היברידי'
 }
 
+export interface Quote {
+  id: string;
+  text: string;
+}
+
 export interface LocationDef {
   id: string;
   name: string; // The display name (e.g., "Park Hayarkon")

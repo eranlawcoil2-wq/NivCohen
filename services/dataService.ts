@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { User, TrainingSession, LocationDef, WorkoutType, AppConfig } from '../types';
+import { User, TrainingSession, LocationDef, WorkoutType, AppConfig, Quote } from '../types';
 import { INITIAL_USERS, INITIAL_SESSIONS } from '../constants';
 
 // Safe LocalStorage Parser
@@ -192,12 +192,38 @@ export const dataService = {
 
   saveAppConfig: async (config: AppConfig): Promise<void> => {
       if (supabase) {
-          // Assuming a single row with a fixed ID 'main' or similar, but simplified:
-          // We'll upsert with a fixed ID if table structure supports it, or just use the fields.
-          // Since we created the table dynamically, let's assume it has an 'id' column fixed to 'main'.
           const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
           if (error) console.error(error);
       }
       localStorage.setItem('niv_app_config', JSON.stringify(config));
+  },
+
+  // --- QUOTES ---
+  getQuotes: async (): Promise<Quote[]> => {
+      if (supabase) {
+          const { data, error } = await supabase.from('config_quotes').select('*');
+          if (!error && data) return data as Quote[];
+      }
+      return safeJsonParse<Quote[]>('niv_app_quotes', []);
+  },
+
+  addQuote: async (quote: Quote): Promise<void> => {
+      if (supabase) {
+          const { error } = await supabase.from('config_quotes').insert([quote]);
+          if (error) throw error;
+      } else {
+          const quotes = safeJsonParse<Quote[]>('niv_app_quotes', []);
+          localStorage.setItem('niv_app_quotes', JSON.stringify([...quotes, quote]));
+      }
+  },
+
+  deleteQuote: async (id: string): Promise<void> => {
+      if (supabase) {
+          const { error } = await supabase.from('config_quotes').delete().eq('id', id);
+          if (error) throw error;
+      } else {
+          const quotes = safeJsonParse<Quote[]>('niv_app_quotes', []);
+          localStorage.setItem('niv_app_quotes', JSON.stringify(quotes.filter(q => q.id !== id)));
+      }
   }
 };

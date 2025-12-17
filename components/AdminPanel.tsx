@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef, AppConfig } from '../types';
+import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { getCityCoordinates } from '../services/weatherService';
@@ -16,6 +16,7 @@ interface AdminPanelProps {
   paymentLinks: PaymentLink[];
   streakGoal: number; 
   appConfig: AppConfig;
+  quotes?: Quote[];
   onAddUser: (user: User) => void;
   onUpdateUser: (user: User) => void;
   onDeleteUser: (userId: string) => void; 
@@ -30,6 +31,8 @@ interface AdminPanelProps {
   onDeletePaymentLink: (id: string) => void;
   onUpdateStreakGoal: (goal: number) => void;
   onUpdateAppConfig: (config: AppConfig) => void;
+  onAddQuote?: (text: string) => void;
+  onDeleteQuote?: (id: string) => void;
   onExitAdmin: () => void;
 }
 
@@ -98,6 +101,11 @@ create table if not exists config_general (
   "defaultCity" text
 );
 
+create table if not exists config_quotes (
+  id text primary key,
+  text text
+);
+
 -- 3. Add Missing Columns (Idempotent)
 do $$
 begin
@@ -154,6 +162,7 @@ alter table sessions enable row level security;
 alter table config_locations enable row level security;
 alter table config_workout_types enable row level security;
 alter table config_general enable row level security;
+alter table config_quotes enable row level security;
 
 -- Create policies if they don't exist (Drop first to be safe for updates)
 drop policy if exists "Public Access Users" on users;
@@ -170,6 +179,9 @@ create policy "Public Access Types" on config_workout_types for all using (true)
 
 drop policy if exists "Public Access General" on config_general;
 create policy "Public Access General" on config_general for all using (true);
+
+drop policy if exists "Public Access Quotes" on config_quotes;
+create policy "Public Access Quotes" on config_quotes for all using (true);
 `;
 
 const getSunday = (d: Date) => {
@@ -244,10 +256,11 @@ END:VCALENDAR`;
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
     users, sessions, primaryColor, workoutTypes, locations, weatherLocation,
-    paymentLinks, streakGoal, appConfig, onAddUser, onUpdateUser, onDeleteUser, 
+    paymentLinks, streakGoal, appConfig, quotes = [], onAddUser, onUpdateUser, onDeleteUser, 
     onAddSession, onUpdateSession, onDeleteSession, onColorChange,
     onUpdateWorkoutTypes, onUpdateLocations, onUpdateWeatherLocation,
-    onAddPaymentLink, onDeletePaymentLink, onUpdateStreakGoal, onUpdateAppConfig, onExitAdmin
+    onAddPaymentLink, onDeletePaymentLink, onUpdateStreakGoal, onUpdateAppConfig, 
+    onAddQuote, onDeleteQuote, onExitAdmin
 }) => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'new_users' | 'connections'>('attendance');
   
@@ -273,7 +286,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [copyTargetDate, setCopyTargetDate] = useState(formatDateForInput(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)));
   const [citySearch, setCitySearch] = useState('');
   const [isSearchingCity, setIsSearchingCity] = useState(false);
-  
+  const [newQuoteText, setNewQuoteText] = useState('');
+
   // --- Settings Editing State ---
   const [newTypeName, setNewTypeName] = useState('');
   const [editingTypeOriginalName, setEditingTypeOriginalName] = useState<string | null>(null);
@@ -485,6 +499,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSaveAppConfig = () => {
       onUpdateAppConfig(tempConfig);
       alert('פרטי מאמן נשמרו בהצלחה!');
+  };
+
+  const handleAddQuoteClick = () => {
+      if (!newQuoteText.trim()) return;
+      if (onAddQuote) {
+          onAddQuote(newQuoteText.trim());
+          setNewQuoteText('');
+      }
   };
   
   const handleResetDefaults = () => {
@@ -1180,6 +1202,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-2 font-bold">צבע ראשי לאפליקציה</h3>
                   <div className="flex gap-2">{SESSION_COLORS.map(c => <button key={c} onClick={() => onColorChange(c)} className={`w-8 h-8 rounded-full ${primaryColor===c?'border-2 border-white':''}`} style={{backgroundColor:c}}/>)}</div>
+              </div>
+
+               {/* Quotes Management */}
+              <div className="bg-gray-800 p-4 rounded border border-gray-700">
+                  <h3 className="text-white mb-3 font-bold">משפטי מוטיבציה</h3>
+                  <p className="text-gray-400 text-xs mb-3">
+                      אם תוסיף משפטים משלך, המערכת תבחר אחד מהם באופן אקראי למתאמנים. אם לא יהיו משפטים, המערכת תשתמש בבינה מלאכותית (AI).
+                  </p>
+                  <div className="flex gap-2 mb-4">
+                      <input 
+                        type="text" 
+                        placeholder="כתוב משפט מוטיבציה..." 
+                        className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600"
+                        value={newQuoteText}
+                        onChange={e => setNewQuoteText(e.target.value)}
+                      />
+                      <Button onClick={handleAddQuoteClick}>הוסף</Button>
+                  </div>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {quotes.length > 0 ? (
+                          quotes.map((quote) => (
+                              <div key={quote.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700">
+                                  <span className="text-white text-sm italic">"{quote.text}"</span>
+                                  <button onClick={() => onDeleteQuote && onDeleteQuote(quote.id)} className="text-xs text-red-400 hover:text-white px-2">
+                                      🗑️
+                                  </button>
+                              </div>
+                          ))
+                      ) : (
+                          <div className="text-gray-500 text-xs italic text-center py-2">משתמש ב-AI בלבד</div>
+                      )}
+                  </div>
               </div>
               
               {/* Type and Location editors */}
