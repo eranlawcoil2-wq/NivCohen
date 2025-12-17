@@ -7,16 +7,18 @@
     
     <script>
       (function() {
+        // Detect view based on URL path
         const path = window.location.pathname.toUpperCase();
         const isAdmin = path.includes('/ADMIN');
         const isWork = path.includes('/WORK');
 
-        const themeColor = isAdmin ? '#EF4444' : '#A3E635'; 
+        // Branding configuration
+        const themeColor = isAdmin ? '#EF4444' : '#A3E635'; // Red for Admin, Green for Trainee
         const appLabel = isAdmin ? 'ADMIN' : (isWork ? 'WORK' : 'NIV');
         const startUrl = isAdmin ? '/ADMIN' : (isWork ? '/WORK' : '/');
         
-        // Dynamic SVG Icon for PWA
-        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2255%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
+        // Dynamic SVG Icon: Text "NIV" on colored background
+        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2258%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
 
         function addLink(rel, href) {
           const link = document.createElement('link');
@@ -25,11 +27,13 @@
           document.head.appendChild(link);
         }
 
+        // Add Favicons
         addLink('icon', svgIcon);
         addLink('apple-touch-icon', svgIcon);
 
+        // Dynamic PWA Manifest
         const manifest = {
-          "name": isAdmin ? "Niv Cohen - Admin" : "Niv Cohen - Work",
+          "name": isAdmin ? "NIV COHEN - ADMIN" : "NIV COHEN - WORK",
           "short_name": `NIV ${appLabel}`,
           "start_url": startUrl,
           "display": "standalone",
@@ -48,6 +52,7 @@
 
         document.title = `NIV COHEN | ${appLabel}`;
 
+        // Meta tags
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
         metaTheme.content = '#121212';
@@ -63,9 +68,10 @@
     
     <style>
       :root { --brand-primary: #A3E635; }
-      body { background-color: #121212; color: #E5E7EB; -webkit-tap-highlight-color: transparent; font-family: 'Heebo', sans-serif; }
+      body { background-color: #121212; color: #E5E7EB; -webkit-tap-highlight-color: transparent; font-family: 'Heebo', sans-serif; overflow-x: hidden; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .shadow-3xl { shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.3); }
     </style>
     <script>
       tailwind.config = {
@@ -85,19 +91,19 @@
         }
       }
     </script>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
-    "vite": "https://esm.sh/vite@^7.3.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.3"
-  }
-}
-</script>
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+        "vite": "https://esm.sh/vite@^7.3.0",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.3"
+      }
+    }
+    </script>
 </head>
   <body>
     <div id="root"></div>
