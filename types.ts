@@ -5,9 +5,6 @@ export enum PaymentStatus {
   OVERDUE = 'OVERDUE'
 }
 
-/**
- * Added WorkoutType enum to fix missing export errors across the application.
- */
 export enum WorkoutType {
   FUNCTIONAL = 'FUNCTIONAL',
   STRENGTH = 'STRENGTH',
