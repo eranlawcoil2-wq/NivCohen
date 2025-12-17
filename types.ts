@@ -68,6 +68,7 @@ export interface AppConfig {
   coachNameHeb: string;
   coachNameEng: string;
   coachPhone: string;
+  coachAdditionalPhone?: string; // New field for additional number/password
   coachEmail: string;
   defaultCity: string;
 }

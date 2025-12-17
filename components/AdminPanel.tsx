@@ -63,7 +63,7 @@ create table if not exists config_workout_types (
 
 create table if not exists config_general (
   id text primary key, "coachNameHeb" text, "coachNameEng" text, 
-  "coachPhone" text, "coachEmail" text, "defaultCity" text
+  "coachPhone" text, "coachEmail" text, "defaultCity" text, "coachAdditionalPhone" text
 );
 
 -- 3. עדכון עמודות חסרות בטבלאות קיימות
@@ -77,6 +77,8 @@ alter table users add column if not exists "userColor" text;
 alter table users add column if not exists "isRestricted" boolean default false;
 
 alter table config_locations add column if not exists color text default '#3B82F6';
+
+alter table config_general add column if not exists "coachAdditionalPhone" text;
 
 -- 4. הגדרות אבטחה
 alter table users enable row level security;
@@ -115,6 +117,24 @@ const normalizePhone = (phone: string): string => {
     let cleaned = phone.replace(/\D/g, '');
     if (cleaned.startsWith('972')) cleaned = '0' + cleaned.substring(3);
     return cleaned;
+};
+
+const getPaymentStatusText = (status: PaymentStatus) => {
+    switch (status) {
+        case PaymentStatus.PAID: return 'שולם';
+        case PaymentStatus.PENDING: return 'בהמתנה';
+        case PaymentStatus.OVERDUE: return 'חוב';
+        default: return status;
+    }
+};
+
+const getPaymentStatusColor = (status: PaymentStatus) => {
+    switch (status) {
+        case PaymentStatus.PAID: return 'bg-green-500/20 text-green-400';
+        case PaymentStatus.PENDING: return 'bg-yellow-500/20 text-yellow-400';
+        case PaymentStatus.OVERDUE: return 'bg-red-500/20 text-red-400';
+        default: return 'text-gray-400';
+    }
 };
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
@@ -822,6 +842,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                        <input type="number" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.monthlyRecord || 0} onChange={e => setFormUser({...formUser, monthlyRecord: parseInt(e.target.value) || 0})}/>
                    </div>
                    <div className="flex flex-col">
+                       <label className="text-xs text-gray-400 mb-1">תשלום</label>
+                       <select className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.paymentStatus} onChange={e => setFormUser({...formUser, paymentStatus: e.target.value as PaymentStatus})}>
+                           <option value={PaymentStatus.PAID}>שולם</option>
+                           <option value={PaymentStatus.PENDING}>בהמתנה</option>
+                           <option value={PaymentStatus.OVERDUE}>חוב</option>
+                       </select>
+                   </div>
+                </div>
+                <div className="mb-2">
+                   <div className="flex flex-col">
                        <label className="text-xs text-gray-400 mb-1">צבע</label>
                        <input type="color" className="w-full h-10 rounded cursor-pointer bg-transparent border-none p-0" value={formUser.userColor || '#A3E635'} onChange={e => setFormUser({...formUser, userColor: e.target.value})}/>
                    </div>
@@ -851,10 +881,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                 </div>
                 <div className="grid grid-cols-12 bg-gray-900 p-3 border-b border-gray-700 text-xs text-gray-400 font-bold sticky top-0 z-10 text-right">
-                    <div className="col-span-4 cursor-pointer hover:text-white" onClick={() => handleSort('fullName')}>שם {sortKey==='fullName' && (sortDirection==='asc'?'↑':'↓')}</div>
+                    <div className="col-span-3 cursor-pointer hover:text-white" onClick={() => handleSort('fullName')}>שם {sortKey==='fullName' && (sortDirection==='asc'?'↑':'↓')}</div>
+                    <div className="col-span-2 text-center">סטטוס</div>
                     <div className="col-span-2 text-center cursor-pointer hover:text-white" onClick={() => handleSort('streak')}>רצף {sortKey==='streak' && (sortDirection==='asc'?'↑':'↓')}</div>
                     <div className="col-span-2 text-center cursor-pointer hover:text-white" onClick={() => handleSort('monthCount')}>חודש {sortKey==='monthCount' && (sortDirection==='asc'?'↑':'↓')}</div>
-                    <div className="col-span-2 text-center cursor-pointer hover:text-white" onClick={() => handleSort('record')}>שיא {sortKey==='record' && (sortDirection==='asc'?'↑':'↓')}</div>
+                    <div className="col-span-1 text-center cursor-pointer hover:text-white" onClick={() => handleSort('record')}>שיא</div>
                     <div className="col-span-2 text-center">פעולות</div>
                 </div>
                 <div className="overflow-y-auto flex-1">
@@ -865,12 +896,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         
                         return (
                             <div key={user.id} className={`grid grid-cols-12 p-3 border-b border-gray-700 items-center hover:bg-gray-700/30 transition-colors ${user.isRestricted ? 'bg-red-900/10' : ''}`}>
-                                <div className="col-span-4 flex flex-col">
-                                    <div className="font-bold text-white flex items-center gap-1">
+                                <div className="col-span-3 flex flex-col">
+                                    <div className="font-bold text-white flex items-center gap-1 truncate">
                                         <span style={{color: user.userColor}}>{user.fullName}</span>
                                         {user.isRestricted && <span className="text-[9px] bg-red-600 text-white px-1 rounded">חסום</span>}
                                     </div>
                                     <div className="text-[10px] text-gray-500">{user.phone}</div>
+                                </div>
+                                <div className="col-span-2 text-center flex justify-center">
+                                     <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getPaymentStatusColor(user.paymentStatus)}`}>
+                                         {getPaymentStatusText(user.paymentStatus)}
+                                     </span>
                                 </div>
                                 <div className="col-span-2 text-center">
                                     <span className="bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded text-xs font-bold">{streak} 🔥</span>
@@ -878,7 +914,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 <div className="col-span-2 text-center">
                                     <span className="text-white text-sm font-bold">{monthCount}</span>
                                 </div>
-                                <div className="col-span-2 text-center">
+                                <div className="col-span-1 text-center">
                                     <span className="text-brand-primary text-sm font-bold">{record}</span>
                                 </div>
                                 <div className="col-span-2 flex justify-center gap-1">
@@ -955,13 +991,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
-                          <label className="text-xs text-gray-400">טלפון מאמן</label>
+                          <label className="text-xs text-gray-400">טלפון מאמן (וואטסאפ ראשי)</label>
                           <input type="tel" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachPhone} onChange={e=>setTempConfig({...tempConfig, coachPhone: e.target.value})}/>
                       </div>
                       <div>
                           <label className="text-xs text-gray-400">אימייל מאמן</label>
                           <input type="email" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachEmail} onChange={e=>setTempConfig({...tempConfig, coachEmail: e.target.value})}/>
                       </div>
+                  </div>
+                  <div className="mb-3">
+                      <label className="text-xs text-gray-400">מספר נוסף (סיסמא)</label>
+                      <input type="tel" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachAdditionalPhone || ''} onChange={e=>setTempConfig({...tempConfig, coachAdditionalPhone: e.target.value})}/>
                   </div>
                   <div className="mb-3">
                       <label className="text-xs text-gray-400">עיר ברירת מחדל (מזג אוויר)</label>

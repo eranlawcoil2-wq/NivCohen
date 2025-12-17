@@ -26,6 +26,7 @@ const DEFAULT_CONFIG: AppConfig = {
     coachNameHeb: 'ניב כהן',
     coachNameEng: 'NIV COHEN',
     coachPhone: '0500000000',
+    coachAdditionalPhone: '',
     coachEmail: '',
     defaultCity: 'נס ציונה'
 };
@@ -193,8 +194,7 @@ export const dataService = {
       if (supabase) {
           // Assuming a single row with a fixed ID 'main' or similar, but simplified:
           // We'll upsert with a fixed ID if table structure supports it, or just use the fields.
-          // Since we created the table dynamically, let's assume it has an ID column or single row logic.
-          // For simplicity in this app structure, we'll assume the table has an 'id' column fixed to 'main'.
+          // Since we created the table dynamically, let's assume it has an 'id' column fixed to 'main'.
           const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
           if (error) console.error(error);
       }
