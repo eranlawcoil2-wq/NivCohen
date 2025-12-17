@@ -35,28 +35,29 @@ const WhatsAppIcon = () => (
 );
 
 const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canInstall: boolean, isIos: boolean }> = ({ onClose, onInstall, canInstall, isIos }) => (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-        <div className="bg-gray-800 border border-gray-700 p-6 rounded-2xl shadow-2xl w-full max-w-sm relative">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="bg-gray-800 border border-gray-700 p-6 rounded-2xl shadow-2xl w-full max-w-sm relative mb-4">
             <button onClick={onClose} className="absolute top-3 left-3 text-gray-400 hover:text-white p-2">✕</button>
             <div className="text-center mb-4">
                 <div className="text-4xl mb-2">📲</div>
                 <h3 className="text-white font-black text-xl mb-1">הורד את האפליקציה!</h3>
-                <p className="text-gray-400 text-sm">גישה מהירה לאימונים ישירות ממסך הבית</p>
             </div>
             
             {isIos ? (
-                 <div className="bg-gray-900/80 rounded-xl p-4 text-sm text-gray-300 space-y-3">
+                 <div className="bg-gray-900/80 rounded-xl p-4 text-sm text-gray-300 space-y-3 relative">
+                     <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-brand-primary animate-bounce text-2xl">⬇</div>
+                     <p className="font-bold text-white text-center mb-2">איך מתקינים באייפון?</p>
                      <div className="flex items-center gap-3">
                          <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
-                         <span>לחץ על כפתור השיתוף <span className="inline-block align-middle mx-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span> בתחתית הדפדפן</span>
+                         <span>לחץ על כפתור השיתוף <span className="inline-block align-middle mx-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span> למטה</span>
                      </div>
                      <div className="flex items-center gap-3">
                          <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
-                         <span>גלול ובחר <b>"הוסף למסך הבית"</b> (Add to Home Screen)</span>
+                         <span>גלול ובחר <b>"הוסף למסך הבית"</b></span>
                      </div>
                      <div className="flex items-center gap-3">
                          <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">3</span>
-                         <span>לחץ על <b>"הוסף"</b> (Add) בצד שמאל למעלה</span>
+                         <span>לחץ על <b>"הוסף"</b> למעלה</span>
                      </div>
                  </div>
             ) : canInstall ? (
@@ -149,7 +150,8 @@ const App: React.FC = () => {
       coachNameEng: 'NIV COHEN',
       coachPhone: '0500000000',
       coachEmail: '',
-      defaultCity: 'נס ציונה'
+      defaultCity: 'נס ציונה',
+      coachAdditionalPhone: '123456' // Default fallback
   });
 
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
@@ -162,6 +164,9 @@ const App: React.FC = () => {
   
   // Modals State
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showStreakTooltip, setShowStreakTooltip] = useState(false);
   const [showLegalModal, setShowLegalModal] = useState(false);
@@ -202,22 +207,40 @@ const App: React.FC = () => {
       const checkAdmin = () => {
           const isPathAdmin = window.location.pathname === '/admin';
           const isParamAdmin = new URLSearchParams(window.location.search).get('mode') === 'admin';
-          if (isPathAdmin || isParamAdmin) setIsAdminMode(true);
+          if (isPathAdmin || isParamAdmin) {
+              // Instead of setting Admin Mode directly, maybe show login?
+              // For now, URL access still grants entry or should we block?
+              // Let's force login even for URL if we want strictness.
+              // BUT, user asked for "Clicking logo enters management with password".
+              // We will treat URL access as intent to login.
+              setShowAdminLoginModal(true);
+          }
       };
       checkAdmin();
       window.addEventListener('popstate', checkAdmin);
       return () => window.removeEventListener('popstate', checkAdmin);
   }, []);
 
-  const toggleAdminMode = () => {
+  const handleLogoClick = () => {
       if (isAdminMode) {
-          // Exit admin
+          // If already in admin mode, exit
           window.history.pushState({}, '', '/');
           setIsAdminMode(false);
       } else {
-          // Enter admin
-          window.history.pushState({}, '', '/admin');
+          // If not in admin mode, show password modal
+          setAdminPasswordInput('');
+          setShowAdminLoginModal(true);
+      }
+  };
+
+  const handleAdminLoginSubmit = () => {
+      const requiredPassword = appConfig.coachAdditionalPhone?.trim() || '123456'; // Default if not set
+      if (adminPasswordInput === requiredPassword) {
           setIsAdminMode(true);
+          setShowAdminLoginModal(false);
+          window.history.pushState({}, '', '/admin');
+      } else {
+          alert('סיסמא שגויה. נסה שוב.');
       }
   };
 
@@ -576,7 +599,7 @@ const App: React.FC = () => {
   return (
     <div className={mainBackgroundClass}>
       <header className="bg-brand-dark p-4 sticky top-0 z-20 border-b border-gray-800 flex justify-between items-center shadow-lg">
-          <div onClick={toggleAdminMode} className="cursor-pointer group select-none">
+          <div onClick={handleLogoClick} className="cursor-pointer group select-none">
               <h1 className="text-2xl font-black text-white italic uppercase group-hover:opacity-80 transition-opacity">
                   {appConfig.coachNameEng.split(' ')[0]} <span className="text-brand-primary">{appConfig.coachNameEng.split(' ').slice(1).join(' ')}</span>
               </h1>
@@ -666,7 +689,7 @@ const App: React.FC = () => {
                 onUpdateAppConfig={handleUpdateAppConfig}
                 onAddQuote={handleAddQuote}
                 onDeleteQuote={handleDeleteQuote}
-                onExitAdmin={toggleAdminMode}
+                onExitAdmin={() => { setIsAdminMode(false); window.history.pushState({}, '', '/'); }}
             />
         ) : (
             <>
@@ -711,6 +734,27 @@ const App: React.FC = () => {
             </>
         )}
       </main>
+
+      {/* Admin Login Modal */}
+      {showAdminLoginModal && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
+                  <h3 className="text-white font-bold mb-4 text-xl text-center">כניסה לניהול 🔒</h3>
+                  <p className="text-gray-400 text-sm mb-2 text-center">הכנס את סיסמת הניהול</p>
+                  <input 
+                    type="password" 
+                    placeholder={appConfig.coachAdditionalPhone ? `רמז: ${appConfig.coachAdditionalPhone}` : 'הזן סיסמא...'}
+                    className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 text-center text-lg border border-gray-700 focus:border-brand-primary outline-none" 
+                    value={adminPasswordInput} 
+                    onChange={e=>setAdminPasswordInput(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                      <Button onClick={handleAdminLoginSubmit} className="flex-1 py-3">כניסה</Button>
+                      <Button onClick={()=>setShowAdminLoginModal(false)} variant="secondary" className="flex-1 py-3">ביטול</Button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* ... (Viewing Session, Login, Profile Modals - Unchanged) ... */}
       {viewingSession && (
