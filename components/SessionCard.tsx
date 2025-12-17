@@ -11,6 +11,7 @@ interface SessionCardProps {
   onRegisterClick: (sessionId: string) => void;
   onViewDetails: (sessionId: string) => void;
   locations?: LocationDef[];
+  isAdmin?: boolean; // New prop for admin styling
 }
 
 const stringToColor = (str: string) => {
@@ -38,7 +39,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   weather,
   onRegisterClick,
   onViewDetails,
-  locations = []
+  locations = [],
+  isAdmin = false
 }) => {
   const spotsLeft = session.maxCapacity - session.registeredPhoneNumbers.length;
   const isFull = spotsLeft <= 0;
@@ -80,7 +82,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
   const handleButtonClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!isCancelled) {
+      if (!isCancelled || isAdmin) {
         onRegisterClick(session.id);
       }
   };
@@ -196,12 +198,20 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           
           <Button 
             size="sm" 
-            variant={isRegistered && !isCancelled ? 'outline' : 'primary'}
-            className={`w-full text-xs py-1.5 h-8 ${isRegistered ? 'bg-transparent border-gray-600 text-gray-300' : ''}`}
+            variant={isAdmin ? 'danger' : (isRegistered && !isCancelled ? 'outline' : 'primary')}
+            className={`w-full text-xs py-1.5 h-8 ${isRegistered && !isAdmin ? 'bg-transparent border-gray-600 text-gray-300' : ''}`}
             onClick={handleButtonClick}
-            disabled={(!isRegistered && isFull) || isCancelled}
+            disabled={(!isRegistered && isFull && !isAdmin) || (isCancelled && !isAdmin)}
           >
-            {isCancelled ? 'מבוטל ✕' : isRegistered ? 'רשום ✅' : isFull ? 'מלא ⛔' : 'הירשם +'}
+            {isAdmin 
+                ? 'ניהול / אישורים' 
+                : isCancelled 
+                    ? 'מבוטל ✕' 
+                    : isRegistered 
+                        ? 'רשום ✅' 
+                        : isFull 
+                            ? 'מלא ⛔' 
+                            : 'הירשם +'}
           </Button>
       </div>
     </div>

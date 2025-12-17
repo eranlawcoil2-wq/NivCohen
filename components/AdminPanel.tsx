@@ -190,9 +190,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const currentYear = now.getFullYear();
     return sessions.filter(session => {
         const sessionDate = new Date(session.date);
-        const didAttend = session.attendedPhoneNumbers 
-            ? session.attendedPhoneNumbers.includes(normalizedPhone)
-            : session.registeredPhoneNumbers.includes(normalizedPhone);
+        
+        // Correct logic: If attended list exists, check it. If not, use registered.
+        const hasAttendedList = session.attendedPhoneNumbers !== undefined && session.attendedPhoneNumbers !== null;
+        let didAttend = false;
+        
+        if (hasAttendedList) {
+            didAttend = session.attendedPhoneNumbers!.includes(normalizedPhone);
+        } else {
+            didAttend = session.registeredPhoneNumbers.includes(normalizedPhone);
+        }
+
         return (
             sessionDate.getMonth() === currentMonth &&
             sessionDate.getFullYear() === currentYear &&
@@ -205,9 +213,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       if (!sessions || sessions.length === 0 || !phone) return 0;
       const normalized = normalizePhone(phone);
       
-      const userSessions = sessions.filter(s => 
-         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers?.includes(normalized)
-      ).map(s => new Date(s.date));
+      const userSessions = sessions.filter(s => {
+         const hasAttendedList = s.attendedPhoneNumbers !== undefined && s.attendedPhoneNumbers !== null;
+         if (hasAttendedList) {
+             return s.attendedPhoneNumbers!.includes(normalized);
+         } else {
+             return s.registeredPhoneNumbers?.includes(normalized);
+         }
+      }).map(s => new Date(s.date));
 
       if (userSessions.length === 0) return 0;
 
@@ -393,6 +406,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setAttendanceSession(session);
       setIsEditingInModal(false); 
       let initialSet: Set<string>;
+      // If attendance list doesn't exist yet, assume all registered are attending (auto V)
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
           initialSet = new Set(session.registeredPhoneNumbers);
       } else {
@@ -500,6 +514,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
   
   const handleRemoveUserFromSession = async (phoneToRemove: string) => {
+      // Logic changed: Now done by unchecking the box and saving.
+      // Keeping this function for safety but removing the button that calls it.
       if (!attendanceSession) return;
       if (confirm('להסיר את המתאמן מהרשימה? (פעולה זו תבטל את הרישום שלו)')) {
           const updatedRegistered = attendanceSession.registeredPhoneNumbers.filter(p => p !== phoneToRemove);
@@ -735,6 +751,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                                         onViewDetails={() => openAttendanceModal(session)} 
                                                         locations={locations}
                                                         weather={weatherData ? weatherData[session.date] : undefined} // Pass weather
+                                                        isAdmin={true} // Enable admin styling
                                                       />
                                                   </div>
                                               ))}
@@ -847,9 +864,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                                   <button onClick={() => toggleAttendance(phone)} className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${isMarked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-500 hover:bg-gray-700'}`}>
                                                       {isMarked ? '✓' : ''}
                                                   </button>
-                                                  <button onClick={() => handleRemoveUserFromSession(phone)} className="text-red-500 hover:text-red-300 p-1 text-sm border border-red-900/50 rounded bg-red-900/20" title="הסר מתאמן מהרשימה">
-                                                      🗑️
-                                                  </button>
+                                                  {/* Trash button removed as requested */}
                                               </div>
                                           </div>
                                       );

@@ -169,7 +169,9 @@ const App: React.FC = () => {
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
   const [primaryColor, setPrimaryColor] = useState<string>(localStorage.getItem('niv_app_color') || '#A3E635');
   const [weekOffset, setWeekOffset] = useState(0); 
-  const [isAdminMode, setIsAdminMode] = useState(false);
+  
+  // Initialize admin mode from localStorage to persist login
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => localStorage.getItem('niv_app_is_admin') === 'true');
   
   // Modals State
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -217,24 +219,24 @@ const App: React.FC = () => {
           const isPathAdmin = window.location.pathname === '/admin';
           const isParamAdmin = new URLSearchParams(window.location.search).get('mode') === 'admin';
           if (isPathAdmin || isParamAdmin) {
-              // Instead of setting Admin Mode directly, maybe show login?
-              // For now, URL access still grants entry or should we block?
-              // Let's force login even for URL if we want strictness.
-              // BUT, user asked for "Clicking logo enters management with password".
-              // We will treat URL access as intent to login.
-              setShowAdminLoginModal(true);
+              // If already logged in (via localStorage check in useState), fine.
+              // If not, show login modal.
+              if (!isAdminMode) {
+                  setShowAdminLoginModal(true);
+              }
           }
       };
       checkAdmin();
       window.addEventListener('popstate', checkAdmin);
       return () => window.removeEventListener('popstate', checkAdmin);
-  }, []);
+  }, [isAdminMode]);
 
   const handleLogoClick = () => {
       if (isAdminMode) {
           // If already in admin mode, exit
           window.history.pushState({}, '', '/');
           setIsAdminMode(false);
+          localStorage.removeItem('niv_app_is_admin');
       } else {
           // If not in admin mode, show password modal
           setAdminPasswordInput('');
@@ -247,6 +249,7 @@ const App: React.FC = () => {
       const requiredPassword = appConfig.coachAdditionalPhone?.trim() || 'admin'; 
       if (adminPasswordInput === requiredPassword) {
           setIsAdminMode(true);
+          localStorage.setItem('niv_app_is_admin', 'true'); // Persist Login
           setShowAdminLoginModal(false);
           window.history.pushState({}, '', '/admin');
       } else {
@@ -400,17 +403,36 @@ const App: React.FC = () => {
       return sessions.filter(s => {
           const d = new Date(s.date);
           const isRegistered = s.registeredPhoneNumbers?.includes(normalized);
-          const isAttended = s.attendedPhoneNumbers?.includes(normalized);
-          return d.getMonth() === now.getMonth() && (isRegistered || isAttended);
+          
+          // Logic: If attendedPhoneNumbers exists (not null), check it. 
+          // If it doesn't exist (null/undefined), assume registered = attended (auto V).
+          const hasAttendedList = s.attendedPhoneNumbers !== undefined && s.attendedPhoneNumbers !== null;
+          
+          let didAttend = false;
+          if (hasAttendedList) {
+              didAttend = s.attendedPhoneNumbers!.includes(normalized);
+          } else {
+              didAttend = isRegistered || false;
+          }
+
+          return d.getMonth() === now.getMonth() && didAttend;
       }).length;
   };
 
   const calculateStreak = (phone: string) => {
       if (!sessions || sessions.length === 0) return 0;
       const normalized = normalizePhone(phone);
-      const userSessions = sessions.filter(s => 
-         s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers?.includes(normalized)
-      ).map(s => new Date(s.date));
+      
+      const userSessions = sessions.filter(s => {
+         const isRegistered = s.registeredPhoneNumbers?.includes(normalized);
+         const hasAttendedList = s.attendedPhoneNumbers !== undefined && s.attendedPhoneNumbers !== null;
+         
+         if (hasAttendedList) {
+             return s.attendedPhoneNumbers!.includes(normalized);
+         } else {
+             return isRegistered;
+         }
+      }).map(s => new Date(s.date));
 
       if (userSessions.length === 0) return 0;
 
@@ -481,13 +503,22 @@ const App: React.FC = () => {
       const phone = normalizePhone(currentUserPhone);
       const isReg = session.registeredPhoneNumbers.includes(phone);
       if (!isReg && session.registeredPhoneNumbers.length >= session.maxCapacity) { alert('מלא'); return; }
+      
       const updated = { ...session, registeredPhoneNumbers: isReg ? session.registeredPhoneNumbers.filter(p => p !== phone) : [...session.registeredPhoneNumbers, phone] };
+      
+      // OPTIMISTIC UPDATE
       setSessions(prev => prev.map(s => s.id === sid ? updated : s));
+      
+      // CRITICAL FIX: If the modal is open for this session, update it too!
+      if (viewingSession && viewingSession.id === sid) {
+          setViewingSession(updated);
+      }
+
       try {
           await dataService.updateSession(updated);
       } catch (e) {
           alert('שגיאה בעדכון ההרשמה, נסה שנית');
-          refreshData();
+          refreshData(); // Revert on error
       }
   };
 
@@ -699,7 +730,11 @@ const App: React.FC = () => {
                 onUpdateAppConfig={handleUpdateAppConfig}
                 onAddQuote={handleAddQuote}
                 onDeleteQuote={handleDeleteQuote}
-                onExitAdmin={() => { setIsAdminMode(false); window.history.pushState({}, '', '/'); }}
+                onExitAdmin={() => { 
+                    setIsAdminMode(false); 
+                    localStorage.removeItem('niv_app_is_admin');
+                    window.history.pushState({}, '', '/'); 
+                }}
             />
         ) : (
             <>
@@ -753,7 +788,7 @@ const App: React.FC = () => {
                   <p className="text-gray-400 text-sm mb-2 text-center">הכנס את סיסמת הניהול</p>
                   <input 
                     type="password" 
-                    placeholder={appConfig.coachAdditionalPhone ? `רמז: ${appConfig.coachAdditionalPhone}` : 'הזן סיסמא (ברירת מחדל: admin)'}
+                    placeholder='הזן סיסמא (ברירת מחדל: admin)'
                     className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 text-center text-lg border border-gray-700 focus:border-brand-primary outline-none" 
                     value={adminPasswordInput} 
                     onChange={e=>setAdminPasswordInput(e.target.value)}
