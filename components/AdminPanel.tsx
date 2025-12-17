@@ -163,6 +163,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   
   // Messaging State
   const [messageText, setMessageText] = useState('');
+  
+  // Feedback State
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [attendanceSavedSuccess, setAttendanceSavedSuccess] = useState(false);
 
   // App Config Form
   const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
@@ -410,11 +414,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setMessageText(`היי! תזכורת לאימון ${session.type} היום ב-${session.time} ב${session.location}. מחכה לכם! 💪`);
 
       let initialSet: Set<string>;
-      // If attendance list doesn't exist yet, assume all registered are attending (auto V)
+      
+      // If attendance list is undefined or null, it means it hasn't been taken yet.
+      // In this case, we default to ALL registered users being present (Check All).
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
-          // Changed: Default to checking ALL registered users initially
           initialSet = new Set(session.registeredPhoneNumbers);
       } else {
+          // If it exists (even if empty []), use it.
           initialSet = new Set(session.attendedPhoneNumbers);
       }
       setMarkedAttendees(initialSet);
@@ -429,13 +435,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const saveAttendance = async () => {
       if (!attendanceSession) return;
+      setIsSavingAttendance(true);
       const updatedSession: TrainingSession = {
           ...attendanceSession,
           attendedPhoneNumbers: Array.from(markedAttendees)
       };
-      await onUpdateSession(updatedSession);
-      alert('נוכחות אושרה ועודכנה! ✅');
-      setAttendanceSession(null);
+      
+      try {
+          await onUpdateSession(updatedSession);
+          // Instead of alert, show button success state
+          setAttendanceSavedSuccess(true);
+          setTimeout(() => {
+              setAttendanceSavedSuccess(false);
+              setAttendanceSession(null); // Close modal after success (optional, or keep open)
+          }, 1500);
+      } catch (error) {
+          alert('שגיאה בשמירה');
+      } finally {
+          setIsSavingAttendance(false);
+      }
   };
   
   const handleAddToCalendar = () => {
@@ -475,8 +493,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           ...attendanceSession, 
           ...editSessionForm,
           registeredPhoneNumbers: attendanceSession?.registeredPhoneNumbers || [],
-          attendedPhoneNumbers: attendanceSession?.attendedPhoneNumbers || [],
+          // Keep waitingList and attended as they were if in edit mode, or from form
           waitingList: attendanceSession?.waitingList || [],
+          attendedPhoneNumbers: attendanceSession?.attendedPhoneNumbers // Preserve this
       } as TrainingSession;
 
       if (!sessionToSave.id) {
@@ -516,7 +535,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           date: attendanceSession.date, 
           time: newTime,
           registeredPhoneNumbers: [], 
-          attendedPhoneNumbers: [],
+          attendedPhoneNumbers: undefined, // Reset for new session
           waitingList: [],
           isHidden: attendanceSession.isHidden,
           isCancelled: false 
@@ -644,7 +663,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       id: uniqueId,
                       date: newDateStr,
                       registeredPhoneNumbers: [],
-                      attendedPhoneNumbers: [],
+                      attendedPhoneNumbers: undefined, // Fresh copy
                       waitingList: [],
                       isHidden: s.isHidden,
                       isCancelled: false
@@ -684,7 +703,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           location: locations[0]?.name || '',
           maxCapacity: 15,
           registeredPhoneNumbers: [],
-          attendedPhoneNumbers: [],
+          attendedPhoneNumbers: undefined, // Ensure it's not [], so defaults to 'all checked'
           waitingList: [],
           description: '',
           color: SESSION_COLORS[0],
@@ -698,6 +717,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   return (
     <div className="p-4 bg-gray-900 rounded-lg pb-24">
+      {/* ... Header and Tabs ... */}
       <div className="flex justify-between items-center mb-4 sticky top-0 bg-gray-900 z-10 py-2 border-b border-gray-800">
         <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold text-white">פאנל ניהול</h2>
@@ -775,6 +795,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                  {isEditingInModal ? (
                       <div className="space-y-4">
+                          {/* ... (Edit Session Form - Unchanged) ... */}
                           <h3 className="text-xl font-bold text-white mb-2">עריכת אימון</h3>
                           <div className="grid grid-cols-2 gap-2">
                               <select className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.type} onChange={e=>setEditSessionForm({...editSessionForm, type: e.target.value})}>
@@ -892,6 +913,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
 
                           <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded max-h-52">
+                              {/* Visual Feedback Banner */}
+                              {attendanceSession.attendedPhoneNumbers !== undefined && attendanceSession.attendedPhoneNumbers !== null ? (
+                                  <div className="bg-green-900/40 border border-green-500/50 p-2 rounded mb-3 text-center">
+                                      <span className="text-green-400 font-bold text-xs">✅ נוכחות דווחה ושמורה במערכת</span>
+                                      <div className="text-[10px] text-green-300/70 mt-0.5">עריכה תשנה את הנתונים הקיימים</div>
+                                  </div>
+                              ) : (
+                                  <div className="bg-yellow-900/40 border border-yellow-500/50 p-2 rounded mb-3 text-center">
+                                      <span className="text-yellow-400 font-bold text-xs">⚠️ טרם דווחה נוכחות</span>
+                                      <div className="text-[10px] text-yellow-300/70 mt-0.5">ברירת מחדל: כולם מסומנים כהגיעו</div>
+                                  </div>
+                              )}
+
                               <div className="text-xs text-gray-400 mb-2 sticky top-0 bg-gray-900 p-1 flex justify-between">
                                   <span>סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</span>
                                   {attendanceSession.waitingList && attendanceSession.waitingList.length > 0 && <span className="text-orange-400 font-bold">ממתינים: {attendanceSession.waitingList.length}</span>}
@@ -929,7 +963,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               )}
                           </div>
                           <div className="flex gap-2">
-                              <Button onClick={saveAttendance} className="flex-1">אישור נוכחות</Button>
+                              <Button 
+                                onClick={saveAttendance} 
+                                className={`flex-1 transition-all duration-300 ${attendanceSavedSuccess ? 'bg-green-600 scale-105' : ''}`}
+                                disabled={isSavingAttendance}
+                              >
+                                  {attendanceSavedSuccess ? 'נשמר! ✅' : (isSavingAttendance ? 'שומר...' : 'אישור נוכחות')}
+                              </Button>
                           </div>
                       </>
                   )}
@@ -937,9 +977,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
          </div>
       )}
 
+      {/* ... Other Tabs (Users, Settings, etc. - Unchanged) ... */}
       {activeTab === 'users' && (
          <div className="space-y-6">
-            {/* ... (Users Tab Content Unchanged) ... */}
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                  <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>
                 {editingUserId && formUser.phone && (
@@ -1092,7 +1132,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       
       {activeTab === 'connections' && (
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 text-white space-y-4">
-              {/* ... (Connections Tab Content Unchanged) ... */}
               <h3 className="text-xl font-bold mb-4">חיבור ל-Supabase (ענן)</h3>
               <div className="space-y-2">
                   <label className="text-xs text-gray-400">Project URL</label>
@@ -1118,7 +1157,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       
       {activeTab === 'settings' && (
           <div className="space-y-6">
-              {/* ... (Settings Tab Content Unchanged) ... */}
                <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-3 font-bold">פרטי מאמן והגדרות כלליות</h3>
                   

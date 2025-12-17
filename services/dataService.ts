@@ -93,10 +93,12 @@ export const dataService = {
 
   addSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
+      // NOTE: We do NOT force attendedPhoneNumbers to [] here. 
+      // We want it to be undefined/null so AdminPanel knows it hasn't been marked yet.
       const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          attendedPhoneNumbers: session.attendedPhoneNumbers || [],
+          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is
           waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').insert([safeSession]);
@@ -112,7 +114,7 @@ export const dataService = {
        const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          attendedPhoneNumbers: session.attendedPhoneNumbers || [],
+          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is
           waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);

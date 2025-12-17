@@ -516,9 +516,11 @@ const App: React.FC = () => {
           updatedSession.registeredPhoneNumbers = session.registeredPhoneNumbers.filter(p => p !== phone);
           
           // 2. Check if waiting list has people, if so, promote the first one
-          if (updatedSession.waitingList && updatedSession.waitingList.length > 0) {
-              const [firstInLine, ...remainingWaitlist] = updatedSession.waitingList;
-              updatedSession.registeredPhoneNumbers.push(firstInLine);
+          // Add safety check for waitingList being undefined
+          const currentWaitingList = updatedSession.waitingList || [];
+          if (currentWaitingList.length > 0) {
+              const [firstInLine, ...remainingWaitlist] = currentWaitingList;
+              updatedSession.registeredPhoneNumbers = [...updatedSession.registeredPhoneNumbers, firstInLine];
               updatedSession.waitingList = remainingWaitlist;
               // Ideally notify 'firstInLine' here (requires server/push), currently implied.
           }
@@ -551,6 +553,7 @@ const App: React.FC = () => {
       try {
           await dataService.updateSession(updatedSession);
       } catch (e) {
+          console.error(e);
           alert('שגיאה בעדכון ההרשמה, נסה שנית');
           refreshData(); // Revert on error
       }
@@ -936,129 +939,6 @@ const App: React.FC = () => {
                                 </Button>
                             );
                        })()}
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {showLoginModal && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
-                  <h3 className="text-white font-bold mb-4 text-xl">התחברות / הרשמה</h3>
-                  <input type="tel" placeholder="מספר טלפון" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-2 text-lg border border-gray-700 focus:border-brand-primary outline-none" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)}/>
-                  {(!users.find(u => normalizePhone(u.phone) === normalizePhone(loginPhone)) && loginPhone.length >= 9) && (
-                      <input type="text" placeholder="שם מלא (לנרשמים חדשים)" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 border border-gray-700 focus:border-brand-primary outline-none" value={newUserName} onChange={e=>setNewUserName(e.target.value)}/>
-                  )}
-                  <div className="flex gap-2">
-                      <Button onClick={handleLogin} className="flex-1 py-3">אישור</Button>
-                      <Button onClick={()=>setShowLoginModal(false)} variant="secondary" className="flex-1 py-3">ביטול</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {showProfileModal && (
-           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl overflow-y-auto max-h-[90vh]">
-                  <h3 className="text-white font-bold mb-4 text-xl">עריכת פרופיל</h3>
-                  <div className="space-y-4 mb-6">
-                      <div><label className="text-xs text-gray-400 mb-1 block">שם מלא</label><input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.fullName} onChange={e=>setEditProfileData({...editProfileData, fullName: e.target.value})}/></div>
-                      <div><label className="text-xs text-gray-400 mb-1 block">טלפון</label><input type="tel" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.phone} onChange={e=>setEditProfileData({...editProfileData, phone: e.target.value})}/></div>
-                      <div><label className="text-xs text-gray-400 mb-1 block">כינוי באפליקציה</label><input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.displayName} onChange={e=>setEditProfileData({...editProfileData, displayName: e.target.value})}/></div>
-                      <div><label className="text-xs text-gray-400 mb-1 block">אימייל</label><input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/></div>
-                      <div>
-                          <label className="text-xs text-gray-400 mb-1 flex justify-between items-center">
-                              <span>הצהרת בריאות</span>
-                              <button onClick={() => openLegal('health')} className="text-brand-primary underline text-[10px]">חתום על הצהרה</button>
-                          </label>
-                          <div className={`flex items-center gap-2 p-3 rounded border ${currentUser?.healthDeclarationDate ? 'bg-green-900/20 border-green-500/50' : 'bg-gray-900 border-gray-700'}`}>
-                              {currentUser?.healthDeclarationDate ? (
-                                  <div className="flex flex-col">
-                                      <span className="text-green-500 font-bold text-sm">✓ נחתם דיגיטלית</span>
-                                      <span className="text-[10px] text-gray-400">בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</span>
-                                  </div>
-                              ) : (
-                                  <div className="text-sm text-gray-400">טרם נחתם</div>
-                              )}
-                          </div>
-                      </div>
-                      <div><label className="text-xs text-gray-400 mb-1 block">צבע משתמש</label><div className="flex items-center gap-2"><input type="color" className="w-12 h-12 rounded cursor-pointer bg-transparent border-none" value={editProfileData.userColor} onChange={e=>setEditProfileData({...editProfileData, userColor: e.target.value})}/><span className="text-gray-400 text-sm">{editProfileData.userColor}</span></div></div>
-                  </div>
-                  <div className="flex gap-2">
-                      <Button onClick={handleUpdateProfile} className="flex-1 py-3">שמור</Button>
-                      <Button onClick={()=>setShowProfileModal(false)} variant="secondary" className="flex-1 py-3">ביטול</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-      
-      {showLegalModal && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-lg border border-gray-700 shadow-2xl h-[80vh] flex flex-col">
-                  <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                      <h3 className="text-white font-bold text-xl">מידע משפטי</h3>
-                      <button onClick={()=>setShowLegalModal(false)} className="text-gray-400 hover:text-white">✕</button>
-                  </div>
-                  <div className="flex gap-2 mb-4">
-                      <button onClick={()=>setLegalTab('privacy')} className={`px-3 py-1 rounded text-sm ${legalTab==='privacy'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>פרטיות</button>
-                      <button onClick={()=>setLegalTab('terms')} className={`px-3 py-1 rounded text-sm ${legalTab==='terms'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>תנאי שימוש</button>
-                      <button onClick={()=>setLegalTab('health')} className={`px-3 py-1 rounded text-sm ${legalTab==='health'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>הצהרת בריאות</button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto bg-gray-900/50 rounded border border-gray-700/50 p-3">
-                      <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed mb-6">
-                          {LEGAL_TEXTS[legalTab]}
-                      </div>
-                      
-                      {/* Health Declaration Form */}
-                      {legalTab === 'health' && currentUser && (
-                          <div className="border-t border-gray-700 pt-4 mt-4">
-                              <h4 className="text-white font-bold mb-3">חתימה ואישור</h4>
-                              
-                              <div className="space-y-3 mb-4">
-                                  <div>
-                                      <label className="text-xs text-gray-500 block">שם מלא (מהפרופיל)</label>
-                                      <div className="text-gray-300 bg-gray-800 p-2 rounded text-sm border border-gray-700">{currentUser.fullName}</div>
-                                  </div>
-                                  <div>
-                                      <label className="text-xs text-gray-500 block">טלפון (מהפרופיל)</label>
-                                      <div className="text-gray-300 bg-gray-800 p-2 rounded text-sm border border-gray-700">{currentUser.phone}</div>
-                                  </div>
-                                  <div>
-                                      <label className="text-xs text-gray-500 block mb-1">מספר תעודת זהות</label>
-                                      <input 
-                                          type="tel" 
-                                          className="w-full bg-gray-800 text-white p-2 rounded border border-gray-600 focus:border-brand-primary outline-none"
-                                          placeholder="הזן ת.ז"
-                                          value={signId}
-                                          onChange={e => setSignId(e.target.value)}
-                                          disabled={!!currentUser.healthDeclarationDate} // Disable if already signed? Optional. Currently editable.
-                                      />
-                                  </div>
-                              </div>
-                              
-                              {currentUser.healthDeclarationDate ? (
-                                   <div className="bg-green-900/30 border border-green-500 p-3 rounded text-center mb-4">
-                                       <div className="text-green-400 font-bold mb-1">✓ המסמך נחתם</div>
-                                       <div className="text-xs text-gray-400">בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleString('he-IL')}</div>
-                                       <div className="text-xs text-gray-400">ת.ז: {currentUser.healthDeclarationId}</div>
-                                       <button onClick={() => { setSignCheck(false); }} className="text-[10px] text-gray-500 underline mt-2">ערוך חתימה מחדש</button>
-                                   </div>
-                              ) : null}
-
-                              {(!currentUser.healthDeclarationDate || !signCheck && currentUser.healthDeclarationDate) && (
-                                  <>
-                                      <label className="flex items-start gap-2 mb-4 cursor-pointer">
-                                          <input type="checkbox" className="mt-1 w-4 h-4 accent-brand-primary" checked={signCheck} onChange={e => setSignCheck(e.target.checked)}/>
-                                          <span className="text-xs text-gray-400">אני מאשר/ת שקראתי את הצהרת הבריאות, שהפרטים שמסרתי נכונים ושאיני סובל/ת ממגבלות רפואיות המונעות ממני להתאמן.</span>
-                                      </label>
-                                      <Button onClick={handleDigitalSign} disabled={!signCheck || !signId} className="w-full">אשר וחתום דיגיטלית ✍️</Button>
-                                  </>
-                              )}
-                          </div>
-                      )}
-                  </div>
-                  <div className="mt-4">
-                      <Button onClick={()=>setShowLegalModal(false)} variant="secondary" className="w-full">סגור</Button>
                   </div>
               </div>
           </div>
