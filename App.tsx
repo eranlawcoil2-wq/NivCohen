@@ -19,8 +19,7 @@ const normalizePhone = (phone: string): string => {
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
-  const [isLoadingData, setIsLoadingData] = useState(true);
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(new URLSearchParams(window.location.search).get('mode') === 'admin');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
@@ -37,12 +36,13 @@ const App: React.FC = () => {
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
-  // PWA Install Prompt Logic
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handler = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
-    });
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
   const handleInstallClick = async () => {
@@ -74,7 +74,8 @@ const App: React.FC = () => {
     let streak = 0;
     let check = new Date(); check.setDate(check.getDate() - check.getDay());
     while(true) {
-        if ((weekMap[check.toISOString().split('T')[0]] || 0) >= 3) { streak++; check.setDate(check.getDate() - 7); }
+        const key = check.toISOString().split('T')[0];
+        if ((weekMap[key] || 0) >= 3) { streak++; check.setDate(check.getDate() - 7); }
         else break;
         if (check.getFullYear() < 2024) break;
     }
@@ -107,7 +108,6 @@ const App: React.FC = () => {
   }, [isAdminMode]);
 
   const refreshData = useCallback(async () => {
-      setIsLoadingData(true);
       try {
           const [u, s, locs, types, config, q] = await Promise.all([
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
@@ -125,7 +125,7 @@ const App: React.FC = () => {
             return d.toISOString().split('T')[0];
           });
           getWeatherForDates(dates).then(setWeatherData);
-      } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
+      } catch (e) { console.error(e); } finally { }
   }, []);
 
   useEffect(() => { refreshData(); }, [refreshData]);
@@ -155,72 +155,75 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {/* Urgent Message Banner */}
-      {appConfig.urgentMessage && !isAdminMode && (
-          <div className="bg-red-600 text-white p-3 text-center text-[10px] font-black uppercase tracking-widest animate-pulse sticky top-0 z-[60] shadow-lg">
-             🚨 {appConfig.urgentMessage}
-          </div>
-      )}
+      {/* Grouping header and banner for better sticky logic */}
+      <div className="sticky top-0 z-50">
+        {/* Urgent Message Banner */}
+        {appConfig.urgentMessage && !isAdminMode && (
+            <div className="bg-red-600 text-white p-3 text-center text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg">
+               🚨 {appConfig.urgentMessage}
+            </div>
+        )}
 
-      <header className={`p-6 border-b border-gray-800/50 ${isAdminMode ? 'bg-red-900/20 border-red-500/30' : 'bg-brand-dark/80'}`}>
-          <div className="flex justify-between items-center mb-6">
-              <div onClick={() => isAdminMode ? setIsAdminMode(false) : document.getElementById('admin-modal')?.classList.remove('hidden')} className="cursor-pointer">
-                  <h1 className={`text-2xl font-black italic uppercase leading-none transition-colors duration-500 ${isAdminMode ? 'text-red-500' : 'text-white'}`}>
-                      {appConfig.coachNameEng.split(' ')[0]} <span className={isAdminMode ? 'text-white' : 'text-brand-primary'}>{appConfig.coachNameEng.split(' ').slice(1).join(' ')}</span>
-                  </h1>
-                  <p className="text-[8px] font-black tracking-[0.4em] text-gray-500 uppercase mt-1">CONSIST TRAINING</p>
-              </div>
-              {currentUser && !isAdminMode && (
-                  <div className="flex items-center gap-3">
-                    <div onClick={() => setIsLinksModalOpen(true)} className="bg-gray-800 p-2.5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/10 transition-colors shadow-xl">
-                        <span className="text-xl">🔗</span>
+        <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
+            <div className="flex justify-between items-center mb-6">
+                <div onClick={() => !isAdminMode && document.getElementById('admin-modal')?.classList.remove('hidden')} className="cursor-pointer">
+                    <h1 className={`text-4xl font-black italic uppercase leading-none transition-all duration-500 ${isAdminMode ? 'text-red-500' : 'text-white'}`}>
+                        {isAdminMode ? 'ADMIN' : 'WORK'}
+                    </h1>
+                    <p className="text-[8px] font-black tracking-[0.4em] text-gray-500 uppercase mt-1">CONSIST TRAINING</p>
+                </div>
+                {currentUser && !isAdminMode && (
+                    <div className="flex items-center gap-3">
+                      <div onClick={() => setIsLinksModalOpen(true)} className="bg-gray-800 p-2.5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/10 transition-colors shadow-xl">
+                          <span className="text-xl">🔗</span>
+                      </div>
+                      <div onClick={() => setIsProfileModalOpen(true)} className="text-right cursor-pointer group">
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
+                          <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
+                      </div>
                     </div>
-                    <div onClick={() => setIsProfileModalOpen(true)} className="text-right cursor-pointer group">
-                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
-                        <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
-                    </div>
-                  </div>
-              )}
-          </div>
+                )}
+            </div>
 
-          {currentUser && !isAdminMode && (
-              <div className="grid grid-cols-4 gap-2">
-                  <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
-                     <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">החודש</p>
-                     <p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p>
-                  </div>
-                  <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
-                     <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">שיא</p>
-                     <p className="text-white font-black text-3xl leading-none">{stats.record}</p>
-                  </div>
-                  <div className="bg-orange-500/10 p-4 rounded-2xl border border-orange-500/20 flex flex-col items-center justify-center text-center">
-                     <p className="text-[9px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1">רצף 🔥</p>
-                     <p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p>
-                  </div>
-                  <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex flex-col items-center justify-center text-center overflow-hidden">
-                     <p className="text-[9px] text-brand-primary font-bold uppercase mb-1">אלוף 🏆</p>
-                     <p className="text-white font-black text-lg leading-none truncate w-full">{monthLeader.name}</p>
-                  </div>
-              </div>
-          )}
-      </header>
+            {currentUser && !isAdminMode && (
+                <div className="grid grid-cols-4 gap-2">
+                    <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                       <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">החודש</p>
+                       <p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p>
+                    </div>
+                    <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                       <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">שיא</p>
+                       <p className="text-white font-black text-3xl leading-none">{stats.record}</p>
+                    </div>
+                    <div className="bg-orange-500/10 p-4 rounded-2xl border border-orange-500/20 flex flex-col items-center justify-center text-center">
+                       <p className="text-[9px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1">רצף 🔥</p>
+                       <p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p>
+                    </div>
+                    <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex flex-col items-center justify-center text-center overflow-hidden">
+                       <p className="text-[9px] text-brand-primary font-bold uppercase mb-1">אלוף 🏆</p>
+                       <p className="text-white font-black text-lg leading-none truncate w-full">{monthLeader.name}</p>
+                    </div>
+                </div>
+            )}
+        </header>
+      </div>
 
       <main className="max-w-4xl mx-auto p-4">
         {isAdminMode ? (
              <AdminPanel 
                 users={users} sessions={sessions} primaryColor="#EF4444" workoutTypes={workoutTypes}
                 locations={locations} weatherLocation={{name: appConfig.defaultCity, lat:0, lon:0}} paymentLinks={[]} streakGoal={3}
-                appConfig={appConfig} quotes={quotes} weatherData={weatherData}
-                onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
-                onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
-                onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
-                onAddSession={async s => { await dataService.addSession(s); setSessions([...sessions, s]); }}
-                onUpdateSession={async s => { await dataService.updateSession(s); setSessions(sessions.map(x=>x.id===s.id?s:x)); }}
-                onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(sessions.filter(x=>x.id!==id)); }}
-                onColorChange={()=>{}} onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); }} 
-                onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); }}
+                appConfig={appConfig} quotes={quotes} weatherData={weatherData} deferredPrompt={deferredPrompt} onInstall={handleInstallClick}
+                onAddUser={async u => { await dataService.addUser(u); setUsers(prev => [...prev, u]); }}
+                onUpdateUser={async u => { await dataService.updateUser(u); setUsers(prev => prev.map(x=>x.id===u.id?u:x)); }}
+                onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
+                onAddSession={async s => { await dataService.addSession(s); setSessions(prev => [...prev, s]); }}
+                onUpdateSession={async s => { await dataService.updateSession(s); setSessions(prev => prev.map(x=>x.id===s.id?s:x)); }}
+                onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
+                onColorChange={()=>{}} onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
+                onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
-                onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => setIsAdminMode(false)}
+                onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => { setIsAdminMode(false); window.history.pushState({}, '', '/?mode=work'); }}
             />
         ) : (
             <div className="space-y-6">
@@ -238,7 +241,6 @@ const App: React.FC = () => {
                       const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                       return (
                           <div key={dateStr} className="relative">
-                              {/* STICKY DAY HEADER */}
                               <div className="sticky top-[10px] z-30 bg-brand-black/90 backdrop-blur-md py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
                                  <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${isToday ? 'text-brand-primary' : 'text-gray-500'}`}>
                                      {d.toLocaleDateString('he-IL',{weekday:'long'})}
@@ -261,7 +263,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Links Modal */}
+      {/* Modals */}
       {isLinksModalOpen && (
         <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 backdrop-blur-2xl">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-sm border border-white/10 flex flex-col shadow-3xl text-right" dir="rtl">
@@ -297,7 +299,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Profile Modal */}
       {isProfileModalOpen && currentUser && (
         <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-4 backdrop-blur-2xl overflow-y-auto no-scrollbar">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 flex flex-col shadow-3xl text-right my-auto" dir="rtl">
@@ -344,19 +345,12 @@ const App: React.FC = () => {
                             </div>
                         </div>
                     </div>
-
-                    <div>
-                        <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">אימייל לעדכונים</label>
-                        <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold outline-none focus:border-brand-primary" value={currentUser.email || ''} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} placeholder="email@example.com" />
-                    </div>
                 </div>
-
                 <Button onClick={() => setIsProfileModalOpen(false)} className="w-full py-6 mt-10 rounded-[40px] text-xl font-black italic uppercase">שמור שינויים ✓</Button>
             </div>
         </div>
       )}
 
-      {/* Viewing Session Modal */}
       {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 backdrop-blur-xl">
            <div className="bg-gray-900 p-10 rounded-[50px] w-full max-w-md border border-gray-800 flex flex-col shadow-3xl text-right" dir="rtl">
@@ -365,40 +359,9 @@ const App: React.FC = () => {
                     <h3 className="text-4xl font-black text-white italic uppercase leading-none mb-2">{viewingSession.type}</h3>
                     <div className="flex items-center gap-3">
                       <p className="text-brand-primary font-mono text-2xl font-black uppercase tracking-widest">{viewingSession.time}</p>
-                      {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
-                         <span className="text-gray-400 text-sm font-bold flex items-center gap-2 border-r border-gray-700 pr-3">
-                           {getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}
-                           {Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°
-                         </span>
-                      )}
                     </div>
                  </div>
                  <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
-              </div>
-              <div className="space-y-8">
-                 <div className="bg-gray-800/50 p-6 rounded-[35px] border border-white/5">
-                    <p className="text-gray-500 text-[10px] font-black uppercase mb-2 tracking-widest">מיקום האימון</p>
-                    <p className="text-white font-black text-2xl italic">{viewingSession.location}</p>
-                 </div>
-                 {viewingSession.description && (
-                    <div className="bg-brand-primary/5 p-8 rounded-[35px] border border-brand-primary/10">
-                       <p className="text-brand-primary text-[10px] font-black uppercase mb-3 tracking-widest">דגשי המאמן 📣</p>
-                       <p className="text-white font-bold text-xl leading-relaxed">{viewingSession.description}</p>
-                    </div>
-                 )}
-                 <div>
-                    <p className="text-gray-500 text-[10px] font-black uppercase mb-4 tracking-widest">רשומים ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                       {viewingSession.registeredPhoneNumbers.map(p => {
-                           const u = users.find(x => normalizePhone(x.phone) === normalizePhone(p));
-                           return (
-                             <span key={p} className="bg-gray-800 text-gray-300 px-5 py-3 rounded-2xl text-[11px] font-black border border-white/5 italic" style={{ borderColor: u?.userColor || 'transparent' }}>
-                               {u?.displayName || u?.fullName || 'מתאמן'}
-                             </span>
-                           );
-                       })}
-                    </div>
-                 </div>
               </div>
               <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className="w-full py-7 mt-12 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">
                  {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה לאימון ⚡'}
@@ -407,14 +370,17 @@ const App: React.FC = () => {
         </div>
       )}
       
-      {/* Admin Login & User Login Modals */}
       <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl">
               <h3 className="text-white font-black text-3xl mb-10 text-center italic uppercase">כניסת מאמן 🔒</h3>
               <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-8 bg-gray-800 text-white rounded-[35px] mb-6 text-center border border-gray-700 outline-none focus:border-red-500 text-4xl font-mono" />
               <Button onClick={() => { 
                   const pass = (document.getElementById('admin-pass') as HTMLInputElement).value;
-                  if(pass === (appConfig.coachAdditionalPhone || 'admin')) { setIsAdminMode(true); document.getElementById('admin-modal')?.classList.add('hidden'); }
+                  if(pass === (appConfig.coachAdditionalPhone || 'admin')) { 
+                      setIsAdminMode(true); 
+                      window.history.pushState({}, '', '/?mode=admin');
+                      document.getElementById('admin-modal')?.classList.add('hidden'); 
+                  }
                   else alert('סיסמה שגויה');
               }} className="w-full py-7 rounded-[40px] bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
           </div>
@@ -423,7 +389,6 @@ const App: React.FC = () => {
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl text-center">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 shadow-2xl">
               <h3 className="text-white font-black text-4xl mb-3 italic uppercase">מי המתאמן? 🤔</h3>
-              <p className="text-gray-500 text-[11px] mb-12 font-black uppercase tracking-[0.3em]">הכנס מספר טלפון להרשמה</p>
               <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center border border-gray-700 outline-none focus:border-brand-primary text-5xl font-mono" />
               <Button onClick={() => { 
                   const p = (document.getElementById('user-phone') as HTMLInputElement).value;

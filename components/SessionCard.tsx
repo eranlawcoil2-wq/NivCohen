@@ -86,8 +86,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       style={{ borderColor: borderColor }}
     >
       <div className="absolute -top-2.5 -left-1 flex gap-1 z-10">
-         <div className={`${statusBg} text-black text-[7px] font-black px-2 sm:px-4 py-1 rounded-full shadow-lg flex items-center gap-1 uppercase italic tracking-tighter`}>
-            {isHappening && <span className="w-1 h-1 bg-black rounded-full animate-ping"></span>}
+         <div className={`${statusBg} text-black text-[9px] sm:text-[13px] font-black px-3 sm:px-5 py-1 sm:py-2 rounded-full shadow-xl flex items-center gap-1.5 uppercase italic tracking-tighter`}>
+            {isHappening && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
             {statusLabel}
          </div>
       </div>
