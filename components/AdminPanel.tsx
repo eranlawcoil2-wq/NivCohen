@@ -331,6 +331,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       onUpdateAppConfig(tempConfig);
       alert('פרטי מאמן נשמרו בהצלחה!');
   };
+  
+  const handleResetDefaults = () => {
+      if(confirm('פעולה זו תאפס את סוגי האימונים והמיקומים לברירת המחדל (נס ציונה). האם להמשיך?')) {
+          localStorage.removeItem('niv_app_locations');
+          localStorage.removeItem('niv_app_types');
+          alert('הנתונים אופסו. הטעינה תתבצע מחדש.');
+          window.location.reload();
+      }
+  };
 
   // --- Attendance Logic ---
   const getCurrentWeekDates = (offset: number) => {
@@ -381,8 +390,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           attendedPhoneNumbers: Array.from(markedAttendees)
       };
       await onUpdateSession(updatedSession);
-      alert('נוכחות עודכנה בהצלחה!');
+      alert('נוכחות אושרה ועודכנה! ✅');
       setAttendanceSession(null);
+  };
+  
+  const handleAddToCalendar = () => {
+      if (!attendanceSession) return;
+      const startTime = new Date(`${attendanceSession.date}T${attendanceSession.time}`);
+      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); 
+      const formatTime = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+      const title = encodeURIComponent(`אימון ${attendanceSession.type} - ${appConfig.coachNameHeb}`);
+      const details = encodeURIComponent(attendanceSession.description || '');
+      const location = encodeURIComponent(attendanceSession.location);
+      const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatTime(startTime)}/${formatTime(endTime)}&details=${details}&location=${location}&sf=true&output=xml`;
+      window.open(googleUrl, '_blank');
   };
 
   const handleEditFromAttendance = () => {
@@ -682,7 +703,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
 
-      {/* Attendance Modal (Unchanged content wrapper) */}
+      {/* Attendance Modal */}
       {attendanceSession && (
          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
             <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -742,12 +763,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                           
                           <div className="flex gap-2 mb-4 bg-gray-900 p-2 rounded-lg">
-                              <Button size="sm" variant="secondary" onClick={handleEditFromAttendance} className="flex-1 text-xs">✏️ ערוך פרטים</Button>
-                              <Button size="sm" variant="secondary" onClick={handleDuplicateFromAttendance} className="flex-1 text-xs">📄 שכפל (+1 שעה)</Button>
-                              <Button size="sm" variant="danger" onClick={handleDeleteFromAttendance} className="flex-1 text-xs">🗑️ מחק</Button>
+                              <button onClick={handleEditFromAttendance} className="bg-red-900/50 hover:bg-red-900 text-red-200 text-xs py-2 px-3 rounded flex-1 border border-red-900 transition-colors">✏️ ערוך פרטים</button>
+                              <button onClick={handleDuplicateFromAttendance} className="bg-red-900/50 hover:bg-red-900 text-red-200 text-xs py-2 px-3 rounded flex-1 border border-red-900 transition-colors">📄 שכפל (+1 שעה)</button>
+                              <button onClick={handleDeleteFromAttendance} className="bg-red-900/50 hover:bg-red-900 text-red-200 text-xs py-2 px-3 rounded flex-1 border border-red-900 transition-colors">🗑️ מחק</button>
+                          </div>
+                          
+                          <div className="mb-4">
+                              <Button size="sm" variant="secondary" onClick={handleAddToCalendar} className="w-full text-xs gap-2">📅 הוסף ליומן {appConfig.coachNameHeb}</Button>
                           </div>
 
-                          <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded max-h-60">
+                          <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded max-h-52">
                               <div className="text-xs text-gray-400 mb-2 sticky top-0 bg-gray-900 p-1">סימון נוכחות ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</div>
                               {attendanceSession.registeredPhoneNumbers.length === 0 ? <p className="text-center text-gray-500 py-4">אין נרשמים</p> :
                                   attendanceSession.registeredPhoneNumbers.map(phone => {
@@ -765,7 +790,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               }
                           </div>
                           <div className="flex gap-2">
-                              <Button onClick={saveAttendance} className="flex-1">שמור נוכחות</Button>
+                              <Button onClick={saveAttendance} className="flex-1">אישור נוכחות</Button>
                           </div>
                       </>
                   )}
@@ -1006,6 +1031,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
                       <Button onClick={handleCopyWeek} isLoading={isProcessingCopy} className="mt-2">העתק שבוע 📋</Button>
                   </div>
+              </div>
+              
+              <div className="bg-red-900/20 p-4 rounded border border-red-900/50 mt-8">
+                  <h3 className="text-red-400 mb-2 font-bold text-sm">אזור סכנה / טיפול בבעיות</h3>
+                  <p className="text-gray-400 text-xs mb-3">אם המיקומים (כמו "פארק הירקון") מופיעים בטעות בנייד ואינם מסתנכרנים, לחץ כאן לאיפוס.</p>
+                  <Button variant="danger" size="sm" onClick={handleResetDefaults} className="w-full">איפוס נתונים לברירת מחדל (מחיקת זכרון מקומי)</Button>
               </div>
           </div>
       )}
