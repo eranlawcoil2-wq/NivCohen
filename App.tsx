@@ -153,6 +153,10 @@ const App: React.FC = () => {
   // Profile Edit State
   const [editProfileData, setEditProfileData] = useState<{fullName: string, email: string, displayName: string, userColor: string, phone: string, healthFile?: string}>({ fullName: '', email: '', displayName: '', userColor: '#A3E635', phone: '', healthFile: '' });
 
+  // Digital Signature State
+  const [signId, setSignId] = useState('');
+  const [signCheck, setSignCheck] = useState(false);
+
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, { maxTemp: number; weatherCode: number }>>({});
@@ -462,8 +466,35 @@ const App: React.FC = () => {
       }
   };
   
+  const handleDigitalSign = async () => {
+      if (!currentUser) return;
+      if (!signId || signId.length < 8) { alert('נא להזין מספר ת"ז תקין'); return; }
+      if (!signCheck) { alert('עליך לאשר את ההצהרה בתיבת הסימון'); return; }
+      
+      const now = new Date().toISOString();
+      const updatedUser: User = {
+          ...currentUser,
+          healthDeclarationDate: now,
+          healthDeclarationId: signId
+      };
+      
+      try {
+          await dataService.updateUser(updatedUser);
+          setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+          alert('הצהרת בריאות נחתמה בהצלחה! ✅');
+          setShowLegalModal(false);
+          setSignId('');
+          setSignCheck(false);
+      } catch (e) {
+          alert('שגיאה בחתימה, נסה שנית');
+      }
+  };
+
   const openLegal = (tab: 'privacy' | 'terms' | 'health') => {
       setLegalTab(tab);
+      if (tab === 'health' && currentUser) {
+          setSignId(currentUser.healthDeclarationId || '');
+      }
       setShowLegalModal(true);
   };
 
@@ -684,13 +715,19 @@ const App: React.FC = () => {
                       <div><label className="text-xs text-gray-400 mb-1 block">אימייל</label><input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/></div>
                       <div>
                           <label className="text-xs text-gray-400 mb-1 flex justify-between items-center">
-                              <span>הצהרת בריאות (קובץ)</span>
-                              <button onClick={() => openLegal('health')} className="text-brand-primary underline text-[10px]">קרא את ההצהרה</button>
+                              <span>הצהרת בריאות</span>
+                              <button onClick={() => openLegal('health')} className="text-brand-primary underline text-[10px]">חתום על הצהרה</button>
                           </label>
-                          <div className="flex items-center gap-2 bg-gray-900 p-2 rounded border border-gray-700">
-                              <input type="file" accept="image/*,application/pdf" className="text-xs text-gray-300 w-full" onChange={handleHealthFileUpload}/>
+                          <div className={`flex items-center gap-2 p-3 rounded border ${currentUser?.healthDeclarationDate ? 'bg-green-900/20 border-green-500/50' : 'bg-gray-900 border-gray-700'}`}>
+                              {currentUser?.healthDeclarationDate ? (
+                                  <div className="flex flex-col">
+                                      <span className="text-green-500 font-bold text-sm">✓ נחתם דיגיטלית</span>
+                                      <span className="text-[10px] text-gray-400">בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</span>
+                                  </div>
+                              ) : (
+                                  <div className="text-sm text-gray-400">טרם נחתם</div>
+                              )}
                           </div>
-                          {editProfileData.healthFile && <span className="text-green-500 text-xs mt-1 block">✓ קובץ מצורף</span>}
                       </div>
                       <div><label className="text-xs text-gray-400 mb-1 block">צבע משתמש</label><div className="flex items-center gap-2"><input type="color" className="w-12 h-12 rounded cursor-pointer bg-transparent border-none" value={editProfileData.userColor} onChange={e=>setEditProfileData({...editProfileData, userColor: e.target.value})}/><span className="text-gray-400 text-sm">{editProfileData.userColor}</span></div></div>
                   </div>
@@ -714,11 +751,61 @@ const App: React.FC = () => {
                       <button onClick={()=>setLegalTab('terms')} className={`px-3 py-1 rounded text-sm ${legalTab==='terms'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>תנאי שימוש</button>
                       <button onClick={()=>setLegalTab('health')} className={`px-3 py-1 rounded text-sm ${legalTab==='health'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>הצהרת בריאות</button>
                   </div>
-                  <div className="flex-1 overflow-y-auto text-gray-300 text-sm whitespace-pre-wrap leading-relaxed p-2 bg-gray-900/50 rounded border border-gray-700/50">
-                      {LEGAL_TEXTS[legalTab]}
+                  <div className="flex-1 overflow-y-auto bg-gray-900/50 rounded border border-gray-700/50 p-3">
+                      <div className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed mb-6">
+                          {LEGAL_TEXTS[legalTab]}
+                      </div>
+                      
+                      {/* Health Declaration Form */}
+                      {legalTab === 'health' && currentUser && (
+                          <div className="border-t border-gray-700 pt-4 mt-4">
+                              <h4 className="text-white font-bold mb-3">חתימה ואישור</h4>
+                              
+                              <div className="space-y-3 mb-4">
+                                  <div>
+                                      <label className="text-xs text-gray-500 block">שם מלא (מהפרופיל)</label>
+                                      <div className="text-gray-300 bg-gray-800 p-2 rounded text-sm border border-gray-700">{currentUser.fullName}</div>
+                                  </div>
+                                  <div>
+                                      <label className="text-xs text-gray-500 block">טלפון (מהפרופיל)</label>
+                                      <div className="text-gray-300 bg-gray-800 p-2 rounded text-sm border border-gray-700">{currentUser.phone}</div>
+                                  </div>
+                                  <div>
+                                      <label className="text-xs text-gray-500 block mb-1">מספר תעודת זהות</label>
+                                      <input 
+                                          type="tel" 
+                                          className="w-full bg-gray-800 text-white p-2 rounded border border-gray-600 focus:border-brand-primary outline-none"
+                                          placeholder="הזן ת.ז"
+                                          value={signId}
+                                          onChange={e => setSignId(e.target.value)}
+                                          disabled={!!currentUser.healthDeclarationDate} // Disable if already signed? Optional. Currently editable.
+                                      />
+                                  </div>
+                              </div>
+                              
+                              {currentUser.healthDeclarationDate ? (
+                                   <div className="bg-green-900/30 border border-green-500 p-3 rounded text-center mb-4">
+                                       <div className="text-green-400 font-bold mb-1">✓ המסמך נחתם</div>
+                                       <div className="text-xs text-gray-400">בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleString('he-IL')}</div>
+                                       <div className="text-xs text-gray-400">ת.ז: {currentUser.healthDeclarationId}</div>
+                                       <button onClick={() => { setSignCheck(false); }} className="text-[10px] text-gray-500 underline mt-2">ערוך חתימה מחדש</button>
+                                   </div>
+                              ) : null}
+
+                              {(!currentUser.healthDeclarationDate || !signCheck && currentUser.healthDeclarationDate) && (
+                                  <>
+                                      <label className="flex items-start gap-2 mb-4 cursor-pointer">
+                                          <input type="checkbox" className="mt-1 w-4 h-4 accent-brand-primary" checked={signCheck} onChange={e => setSignCheck(e.target.checked)}/>
+                                          <span className="text-xs text-gray-400">אני מאשר/ת שקראתי את הצהרת הבריאות, שהפרטים שמסרתי נכונים ושאיני סובל/ת ממגבלות רפואיות המונעות ממני להתאמן.</span>
+                                      </label>
+                                      <Button onClick={handleDigitalSign} disabled={!signCheck || !signId} className="w-full">אשר וחתום דיגיטלית ✍️</Button>
+                                  </>
+                              )}
+                          </div>
+                      )}
                   </div>
                   <div className="mt-4">
-                      <Button onClick={()=>setShowLegalModal(false)} className="w-full">סגור</Button>
+                      <Button onClick={()=>setShowLegalModal(false)} variant="secondary" className="w-full">סגור</Button>
                   </div>
               </div>
           </div>

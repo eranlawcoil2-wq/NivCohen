@@ -52,7 +52,9 @@ create table if not exists users (
   "userColor" text,
   "monthlyRecord" int default 0,
   "isRestricted" boolean default false,
-  "healthDeclarationFile" text
+  "healthDeclarationFile" text,
+  "healthDeclarationDate" text,
+  "healthDeclarationId" text
 );
 
 create table if not exists sessions (
@@ -111,6 +113,13 @@ begin
   if not exists (select 1 from information_schema.columns where table_name='users' and column_name='healthDeclarationFile') then
     alter table users add column "healthDeclarationFile" text;
   end if;
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='healthDeclarationDate') then
+    alter table users add column "healthDeclarationDate" text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='healthDeclarationId') then
+    alter table users add column "healthDeclarationId" text;
+  end if;
+
 
   -- Sessions columns
   if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='attendedPhoneNumbers') then
@@ -243,7 +252,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     fullName: '', displayName: '', phone: '', email: '',
     startDate: new Date().toISOString().split('T')[0],
     paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0,
-    isRestricted: false
+    isRestricted: false,
+    healthDeclarationId: '',
+    healthDeclarationDate: ''
   });
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
 
@@ -379,8 +390,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               valA = a.paymentStatus;
               valB = b.paymentStatus;
           } else if (sortKey === 'health') {
-              valA = !!a.healthDeclarationFile;
-              valB = !!b.healthDeclarationFile;
+              // Priority: Signed Date > File Upload > None
+              valA = a.healthDeclarationDate ? 2 : (a.healthDeclarationFile ? 1 : 0);
+              valB = b.healthDeclarationDate ? 2 : (b.healthDeclarationFile ? 1 : 0);
           }
 
           if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
@@ -654,12 +666,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           monthlyRecord: formUser.monthlyRecord || 0,
           isNew: false,
           isRestricted: formUser.isRestricted || false,
-          healthDeclarationFile: formUser.healthDeclarationFile
+          healthDeclarationFile: formUser.healthDeclarationFile,
+          healthDeclarationDate: formUser.healthDeclarationDate,
+          healthDeclarationId: formUser.healthDeclarationId
       } as User;
 
       if (editingUserId) { onUpdateUser(userData); alert('פרטי משתמש עודכנו'); setEditingUserId(null); } 
       else { onAddUser(userData); alert('משתמש נוסף בהצלחה'); }
-      setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0, isRestricted: false });
+      setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0, isRestricted: false, healthDeclarationFile: undefined, healthDeclarationId: '', healthDeclarationDate: '' });
   };
 
   const handleEditUserClick = (user: User) => {
@@ -963,6 +977,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                        </select>
                    </div>
                 </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className="flex flex-col">
+                        <label className="text-xs text-gray-400 mb-1">ת.ז (הצהרת בריאות)</label>
+                        <input type="text" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.healthDeclarationId || ''} onChange={e => setFormUser({...formUser, healthDeclarationId: e.target.value})}/>
+                    </div>
+                    <div className="flex flex-col">
+                        <label className="text-xs text-gray-400 mb-1">תאריך חתימה (ISO)</label>
+                        <input type="text" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" placeholder="2023-10-25T14:00..." value={formUser.healthDeclarationDate || ''} onChange={e => setFormUser({...formUser, healthDeclarationDate: e.target.value})}/>
+                    </div>
+                </div>
                 <div className="mb-2">
                    <div className="flex flex-col">
                        <label className="text-xs text-gray-400 mb-1">צבע</label>
@@ -979,7 +1003,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div className="flex gap-2 mt-4">
                     <Button onClick={handleUserSubmit} className="flex-1">{editingUserId ? 'עדכן פרטים' : 'הוסף משתמש'}</Button>
-                    {editingUserId && <Button variant="secondary" onClick={() => {setEditingUserId(null); setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0, isRestricted: false, healthDeclarationFile: undefined });}}>ביטול</Button>}
+                    {editingUserId && <Button variant="secondary" onClick={() => {setEditingUserId(null); setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0, isRestricted: false, healthDeclarationFile: undefined, healthDeclarationId: '', healthDeclarationDate: '' });}}>ביטול</Button>}
                 </div>
             </div>
             
@@ -1023,8 +1047,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                      </span>
                                 </div>
                                 <div className="col-span-1 text-center flex justify-center">
-                                    {user.healthDeclarationFile ? (
-                                        <a href={user.healthDeclarationFile} download={`health_decl_${user.fullName}.pdf`} className="text-green-500 hover:text-green-400 text-lg" title="הורד הצהרת בריאות">📋✓</a>
+                                    {user.healthDeclarationDate ? (
+                                        <span className="text-green-500 text-lg" title={`נחתם ב-${new Date(user.healthDeclarationDate).toLocaleDateString()}`}>✍️✓</span>
+                                    ) : user.healthDeclarationFile ? (
+                                        <a href={user.healthDeclarationFile} download={`health_decl_${user.fullName}.pdf`} className="text-blue-500 hover:text-blue-400 text-lg" title="הורד קובץ">📎✓</a>
                                     ) : (
                                         <span className="text-gray-600 text-lg" title="אין הצהרה">−</span>
                                     )}

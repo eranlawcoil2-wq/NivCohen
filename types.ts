@@ -34,6 +34,8 @@ export interface User {
   monthlyRecord?: number; // Personal best: max workouts in a month
   isRestricted?: boolean; // If true, user cannot register for workouts
   healthDeclarationFile?: string; // Base64 string or URL of the uploaded file
+  healthDeclarationDate?: string; // ISO Date string of when they signed
+  healthDeclarationId?: string; // ID number provided during signature
 }
 
 export interface TrainingSession {
