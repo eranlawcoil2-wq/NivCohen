@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
@@ -163,6 +163,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   
   // App Config Form
   const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
+  
+  // --- SYNC CONFIG WHEN LOADED ---
+  // This useEffect ensures that when the appConfig is fetched from the server/localstorage asynchronously,
+  // the form updates to reflect the saved values instead of sticking to the initial defaults.
+  useEffect(() => {
+      setTempConfig(appConfig);
+  }, [appConfig]);
 
   // Cloud Config State
   const [sbUrl, setSbUrl] = useState(localStorage.getItem('niv_app_supabase_url') || '');
