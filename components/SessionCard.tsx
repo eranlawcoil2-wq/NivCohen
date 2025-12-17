@@ -50,19 +50,6 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       }
   }
 
-  const handleCalendar = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      const cleanDate = session.date.replace(/-/g, '');
-      const cleanTime = session.time.replace(':', '');
-      const start = `${cleanDate}T${cleanTime}00`;
-      const [h, m] = session.time.split(':').map(Number);
-      const endHour = (h + 1).toString().padStart(2, '0');
-      const end = `${cleanDate}T${endHour}${m.toString().padStart(2, '0')}00`;
-      const details = session.description ? `${session.description}` : `אימון ${session.type} עם ניב כהן`;
-      const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('אימון: ' + session.type)}&dates=${start}/${end}&location=${encodeURIComponent(session.location)}&details=${encodeURIComponent(details)}`;
-      window.open(url, '_blank');
-  };
-
   let borderColor = isAdmin ? '#EF4444' : '#333';
   if (isCancelled) borderColor = '#EF4444';
   else if (isHappening && isZoom) borderColor = '#3B82F6';

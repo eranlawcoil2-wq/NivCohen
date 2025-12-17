@@ -21,7 +21,7 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
         href={`https://wa.me/${phone.replace(/\D/g, '')}`} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-[100] bg-green-500 text-white p-4 rounded-full shadow-2xl shadow-green-500/40 whatsapp-float flex items-center justify-center transition-transform hover:scale-110 active:scale-90"
+        className="fixed bottom-6 right-6 z-[100] bg-green-500 text-white p-4 rounded-full shadow-2xl whatsapp-float flex items-center justify-center transition-transform hover:scale-110 active:scale-90"
         aria-label="WhatsApp"
     >
         <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
@@ -30,11 +30,33 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     </a>
 );
 
+const ShareButton: React.FC = () => {
+    const handleShare = () => {
+        const url = window.location.origin;
+        if (navigator.share) {
+            navigator.share({ title: 'ניב כהן - Consistency Training', url: url });
+        } else {
+            navigator.clipboard.writeText(url);
+            alert('הקישור הועתק ללוח!');
+        }
+    };
+    return (
+        <button 
+            onClick={handleShare}
+            className="fixed bottom-24 right-6 z-[100] bg-white text-black p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border border-gray-200"
+            title="שתף לינק"
+        >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            </svg>
+        </button>
+    );
+};
+
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   
-  // URL Routing Handling for external links
   const getInitialView = () => {
     const path = window.location.pathname.toUpperCase();
     if (path.includes('/ADMIN')) return 'admin';
@@ -44,9 +66,9 @@ const App: React.FC = () => {
 
   const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(getInitialView());
   const isAdminMode = currentView === 'admin';
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(localStorage.getItem('niv_admin_auth') === 'true');
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationDef[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -62,11 +84,18 @@ const App: React.FC = () => {
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
   const navigateTo = (view: 'landing' | 'work' | 'admin') => {
+      if (view === 'admin' && !isAdminAuthenticated) {
+          const pass = prompt('קוד גישה למאמן:');
+          if(pass === (appConfig.coachAdditionalPhone || 'admin')) {
+              setIsAdminAuthenticated(true);
+              localStorage.setItem('niv_admin_auth', 'true');
+          } else {
+              return;
+          }
+      }
       setCurrentView(view);
       const path = view === 'landing' ? '/' : `/${view.toUpperCase()}`;
       window.history.pushState({}, '', path);
-      // To ensure manifest/icons update on path change if they are pinned, 
-      // some users prefer a full refresh, but we keep SPA state for speed.
   };
 
   useEffect(() => {
@@ -90,13 +119,12 @@ const App: React.FC = () => {
     if (!currentUser) return { monthly: 0, record: 0, streak: 0 };
     const phone = normalizePhone(currentUser.phone);
     const now = new Date();
-    const attendedSessions = sessions.filter(s => s.attendedPhoneNumbers?.includes(phone));
+    const attendedSessions = sessions.filter(s => (s.attendedPhoneNumbers || []).includes(phone));
     const monthlyCount = attendedSessions.filter(s => {
         const d = new Date(s.date);
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
     
-    // Sunday Logic
     const weekMap: Record<string, number> = {};
     attendedSessions.forEach(s => {
         const d = new Date(s.date);
@@ -177,18 +205,28 @@ const App: React.FC = () => {
       await dataService.updateSession(updated);
   };
 
-  const handleUpdateProfile = async (updatedUser: User) => {
-      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-      await dataService.updateUser(updatedUser);
-  };
-
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // --- Landing Page View ---
+  const addToCalendar = (session: TrainingSession) => {
+      const cleanDate = session.date.replace(/-/g, '');
+      const cleanTime = session.time.replace(':', '');
+      const start = `${cleanDate}T${cleanTime}00`;
+      const [h, m] = session.time.split(':').map(Number);
+      const endHour = (h + 1).toString().padStart(2, '0');
+      const end = `${cleanDate}T${endHour}${m.toString().padStart(2, '0')}00`;
+      const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Consistency Training: ' + session.type)}&dates=${start}/${end}&location=${encodeURIComponent(session.location)}`;
+      window.open(url, '_blank');
+  };
+
+  const navigateToLocation = (locationName: string) => {
+      const loc = locations.find(l => l.name === locationName);
+      const addr = loc ? loc.address : locationName;
+      window.open(`https://waze.com/ul?q=${encodeURIComponent(addr)}`, '_blank');
+  };
+
   if (currentView === 'landing') {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-        {/* Silhouette */}
         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-10 pointer-events-none">
             <svg viewBox="0 0 100 100" className="w-[85vw] h-[85vw] text-white">
                 <path fill="currentColor" d="M48 0 L52 0 L52 10 L48 10 Z" />
@@ -198,28 +236,15 @@ const App: React.FC = () => {
                 <rect x="75" y="90" width="10" height="2" fill="currentColor" />
             </svg>
         </div>
-
         <div className="z-10 max-w-2xl space-y-12">
-            <div>
-                <h1 className="text-8xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
-                <p className="text-2xl sm:text-4xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSIST TRAINING</p>
-            </div>
-
-            <div className="space-y-6">
-                <h2 className="text-4xl font-black text-white italic leading-tight underline decoration-brand-primary/50 underline-offset-8">אימוני כוח עקביים ללא פשרות.</h2>
-                <div className="space-y-4 max-w-md mx-auto text-gray-400 font-bold text-xl">
-                  בניית חוסן גופני ומנטלי דרך עבודה קשה, התמדה וליווי מקצועי.
-                </div>
-            </div>
-
+            <h1 className="text-8xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
+            <p className="text-2xl sm:text-4xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             <div className="bg-gray-900/60 backdrop-blur-2xl p-10 rounded-[60px] border border-white/5 shadow-2xl">
                 <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
-
-            <div className="flex flex-col gap-5 pt-8">
-                <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
-            </div>
+            <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase">כניסה ללו"ז אימונים ⚡</Button>
         </div>
+        <ShareButton />
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
     );
@@ -227,141 +252,124 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      <div className="sticky top-0 z-50">
-        {appConfig.urgentMessage && !isAdminMode && (
-            <div className="bg-red-600 text-white p-3 text-center text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg">
-               🚨 {appConfig.urgentMessage}
-            </div>
-        )}
-
-        <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
-            <div className="flex justify-between items-center mb-6">
-                <div 
-                    onClick={() => {
-                        if(isAdminMode) {
-                            navigateTo('work'); // In Admin, logo click goes to WORK as requested
-                        } else {
-                            const pass = prompt('קוד גישה למאמן:');
-                            if(pass === (appConfig.coachAdditionalPhone || 'admin')) navigateTo('admin');
-                            else navigateTo('landing');
-                        }
-                    }} 
-                    className="cursor-pointer group"
-                >
-                    <h1 className="text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">
-                        NIV COHEN
-                    </h1>
-                    <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSIST TRAINING</p>
-                </div>
-                {currentUser && !isAdminMode && (
-                    <div className="flex items-center gap-3">
-                      <div onClick={() => setIsLinksModalOpen(true)} className="bg-gray-800 p-2.5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/10 transition-colors shadow-xl">
-                          <span className="text-xl">🔗</span>
-                      </div>
-                      <div onClick={() => setIsProfileModalOpen(true)} className="text-right cursor-pointer group">
-                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
-                          <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
-                      </div>
-                    </div>
-                )}
-            </div>
-
-            {currentUser && !isAdminMode && (
-                <div className="grid grid-cols-4 gap-2">
-                    <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
-                       <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">החודש</p>
-                       <p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p>
-                    </div>
-                    <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
-                       <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">שיא</p>
-                       <p className="text-white font-black text-3xl leading-none">{stats.record}</p>
-                    </div>
-                    <div className="bg-orange-500/10 p-4 rounded-2xl border border-orange-500/20 flex flex-col items-center justify-center text-center">
-                       <p className="text-[9px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1">רצף 🔥</p>
-                       <p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p>
-                    </div>
-                    <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex flex-col items-center justify-center text-center overflow-hidden">
-                       <p className="text-[9px] text-brand-primary font-bold uppercase mb-1">אלוף 🏆</p>
-                       <p className="text-white font-black text-lg leading-none truncate w-full">{monthLeader.name}</p>
-                    </div>
-                </div>
-            )}
-        </header>
-      </div>
+      <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
+          <div className="flex justify-between items-center mb-6">
+              <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group">
+                  <h1 className="text-5xl font-black italic text-white uppercase leading-none">NIV COHEN</h1>
+                  <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
+              </div>
+              {currentUser && !isAdminMode && (
+                  <div className="text-right cursor-pointer" onClick={() => setIsProfileModalOpen(true)}>
+                      <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">פרופיל אישי</p>
+                      <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
+                  </div>
+              )}
+          </div>
+          {currentUser && !isAdminMode && (
+              <div className="grid grid-cols-4 gap-2">
+                  <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">החודש</p><p className="text-brand-primary font-black text-3xl">{stats.monthly}</p></div>
+                  <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl">{stats.record}</p></div>
+                  <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl">{stats.streak}</p></div>
+                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg truncate">{monthLeader.name}</p></div>
+              </div>
+          )}
+      </header>
 
       <main className="max-w-4xl mx-auto p-4">
         {isAdminMode ? (
              <AdminPanel 
                 users={users} sessions={sessions} primaryColor="#EF4444" workoutTypes={workoutTypes}
                 locations={locations} weatherLocation={{name: appConfig.defaultCity, lat:0, lon:0}} paymentLinks={[]} streakGoal={3}
-                appConfig={appConfig} quotes={quotes} weatherData={weatherData} deferredPrompt={deferredPrompt} onInstall={handleInstallClick}
-                onAddUser={async u => { await dataService.addUser(u); setUsers(prev => [...prev, u]); }}
+                appConfig={appConfig} quotes={quotes} weatherData={weatherData} onAddUser={async u => { await dataService.addUser(u); setUsers(prev => [...prev, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(prev => prev.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
                 onAddSession={async s => { await dataService.addSession(s); setSessions(prev => [...prev, s]); }}
                 onUpdateSession={async s => { await dataService.updateSession(s); setSessions(prev => prev.map(x=>x.id===s.id?s:x)); }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
-                onColorChange={()=>{}} onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
-                onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
-                onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
+                onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); }} 
+                onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
+                onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
-            <div className="space-y-6">
-                {quote && <div className="text-center bg-gray-900/40 p-8 rounded-[40px] border border-gray-800/30 shadow-xl"><p className="text-xl font-black text-white italic leading-tight">"{quote}"</p></div>}
-                
-                {deferredPrompt && (
-                   <div className="p-6 bg-blue-600/10 border border-blue-600/20 rounded-[45px] flex flex-col items-center gap-4 shadow-2xl">
-                      <p className="text-blue-400 font-black text-sm uppercase tracking-widest text-center italic">NIV WORK - זמין להורדה למסך הבית</p>
-                      <Button onClick={handleInstallClick} className="w-full py-5 rounded-[35px] bg-blue-600 text-white font-black uppercase text-xs shadow-2xl shadow-blue-600/40 hover:scale-105 transition-all">📲 הורד עכשיו</Button>
-                   </div>
-                )}
-
-                <div className="space-y-16 pb-20">
-                  {Array.from({length:7}, (_,i) => {
-                      const d = new Date();
-                      const dayOfWeek = d.getDay(); 
-                      d.setDate(d.getDate() - dayOfWeek + i);
-                      
-                      const dateStr = d.toISOString().split('T')[0];
-                      const isToday = dateStr === todayStr;
-                      const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
-                      return (
-                          <div key={dateStr} className="relative">
-                              <div className="sticky top-[10px] z-30 bg-brand-black/90 backdrop-blur-md py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
-                                 <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${isToday ? 'text-brand-primary' : 'text-gray-500'}`}>
-                                     {d.toLocaleDateString('he-IL',{weekday:'long'})}
-                                 </h2>
-                                 <div className="text-left">
-                                    <p className="text-[10px] font-black text-gray-700 tracking-[0.4em] uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
-                                    {isToday && <span className="bg-brand-primary text-black text-[8px] font-black px-2 py-0.5 rounded-full uppercase italic">Today</span>}
-                                 </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
-                                  {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} locations={locations} weather={weatherData[s.date]}/>)}
-                                  {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
-                              </div>
+            <div className="space-y-16 pb-20">
+              {Array.from({length:7}, (_,i) => {
+                  const d = new Date(); d.setDate(d.getDate() - d.getDay() + i);
+                  const dateStr = d.toISOString().split('T')[0];
+                  const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
+                  return (
+                      <div key={dateStr}>
+                          <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
+                             <h2 className="text-4xl font-black italic uppercase text-gray-500">{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
+                             <p className="text-[10px] font-black text-gray-700 uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
-                      );
-                  })}
-                </div>
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]}/>)}
+                          </div>
+                      </div>
+                  );
+              })}
             </div>
         )}
       </main>
 
-      <WhatsAppButton phone={appConfig.coachPhone} />
+      {viewingSession && !isAdminMode && (
+        <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-2xl">
+            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 text-right shadow-3xl" dir="rtl">
+                <div className="flex justify-between items-start mb-6">
+                    <div>
+                        <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
+                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono">{viewingSession.time}</p>
+                    </div>
+                    <button onClick={() => setViewingSession(null)} className="text-gray-500 text-3xl hover:text-white transition-colors">✕</button>
+                </div>
+                <div className="space-y-6">
+                    <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
+                        <p className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">נרשמו ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
+                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1 no-scrollbar">
+                            {viewingSession.registeredPhoneNumbers.length > 0 ? viewingSession.registeredPhoneNumbers.map(phone => {
+                                const t = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
+                                return (
+                                    <div key={phone} className="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] border border-white/5 flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full" style={{ background: t?.userColor || '#A3E635' }}></div>
+                                        {t ? (t.displayName || t.fullName.split(' ')[0]) : 'מתאמן'}
+                                    </div>
+                                );
+                            }) : <p className="text-gray-600 text-xs italic">עדיין אין נרשמים...</p>}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Button onClick={() => navigateToLocation(viewingSession.location)} className="py-5 rounded-[30px] bg-blue-600/20 text-blue-400 border border-blue-500/20 flex items-center justify-center gap-2">
+                            <span>🚙</span> Waze
+                        </Button>
+                        <Button onClick={() => addToCalendar(viewingSession)} className="py-5 rounded-[30px] bg-brand-primary/20 text-brand-primary border border-brand-primary/20 flex items-center justify-center gap-2">
+                            <span>📅</span> ליומן
+                        </Button>
+                    </div>
+                    <Button 
+                        onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} 
+                        className={`w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500' : 'bg-brand-primary'}`}
+                        disabled={viewingSession.isCancelled || (viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity && !viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')))}
+                    >
+                        {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה מהירה ⚡'}
+                    </Button>
+                </div>
+            </div>
+        </div>
+      )}
 
-      {/* Login Modal */}
-      <div id="login-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl text-center">
-          <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 shadow-2xl">
-              <h3 className="text-white font-black text-4xl mb-3 italic uppercase">מי המתאמן? 🤔</h3>
-              <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center border border-gray-700 outline-none focus:border-brand-primary text-5xl font-mono" />
+      <ShareButton />
+      <WhatsAppButton phone={appConfig.coachPhone} />
+      
+      <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
+          <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 text-center shadow-3xl">
+              <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
+              <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-5xl font-mono outline-none border border-gray-700 focus:border-brand-primary" />
               <Button onClick={() => { 
                   const p = (document.getElementById('user-phone') as HTMLInputElement).value;
                   if(p.length >= 9) { setCurrentUserPhone(p); localStorage.setItem('niv_app_current_phone', p); document.getElementById('login-modal')?.classList.add('hidden'); }
                   else alert('מספר לא תקין');
-              }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
+              }} className="w-full py-8 rounded-[45px]">התחברות 🚀</Button>
           </div>
       </div>
     </div>
