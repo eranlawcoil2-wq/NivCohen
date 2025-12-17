@@ -304,7 +304,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                   {/* Health Declaration matches exactly what user sees */}
                   <div className="bg-brand-primary/5 rounded-[40px] border border-brand-primary/20 p-8 space-y-6 shadow-xl">
-                    <h4 className="text-brand-primary text-xs font-black uppercase tracking-[0.2em] border-b border-brand-primary/10 pb-3">📜 הצהרת בריאות דיגיטלית</h4>
+                    <h4 className="text-brand-primary text-xs font-black uppercase italic tracking-[0.2em] border-b border-brand-primary/10 pb-3">📜 הצהרת בריאות דיגיטלית</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                         <div>
                             <p className="text-gray-500 text-[9px] uppercase font-black mb-1">סטטוס חתימה</p>

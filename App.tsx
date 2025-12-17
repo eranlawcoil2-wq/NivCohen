@@ -21,14 +21,14 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   
   // Path-based routing logic
-  const getInitialMode = () => {
+  const getInitialView = () => {
     const path = window.location.pathname.toLowerCase();
     if (path === '/admin') return 'admin';
     if (path === '/work') return 'work';
     return 'landing';
   };
 
-  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(getInitialMode());
+  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(getInitialView());
   const isAdminMode = currentView === 'admin';
   
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -170,61 +170,69 @@ const App: React.FC = () => {
       window.history.pushState({}, '', path);
   };
 
+  // --- Landing Page View ---
   if (currentView === 'landing') {
-      return (
-          <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-6 text-center overflow-hidden relative">
-              {/* Abstract Silhouette Graphic */}
-              <div className="absolute inset-0 z-0 opacity-10 flex items-center justify-center">
-                  <svg viewBox="0 0 100 100" className="w-[80vw] h-[80vw] text-white">
-                      <path fill="currentColor" d="M50 10 L60 40 L90 45 L65 65 L75 95 L50 80 L25 95 L35 65 L10 45 L40 40 Z" />
-                      {/* Placeholder for TRX silhouette logic */}
-                      <rect x="48" y="0" width="4" height="40" fill="currentColor" transform="rotate(20 50 0)" />
-                      <rect x="48" y="0" width="4" height="40" fill="currentColor" transform="rotate(-20 50 0)" />
-                  </svg>
-              </div>
+    return (
+      <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+        {/* Background Silhouette */}
+        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-10 pointer-events-none">
+            <svg viewBox="0 0 100 100" className="w-[80vw] h-[80vw] text-white">
+                <path fill="currentColor" d="M50 0 L52 10 L48 10 Z" /> {/* Anchor */}
+                <path fill="currentColor" d="M48 10 L30 80 L35 80 L50 15 Z" /> {/* Strap 1 */}
+                <path fill="currentColor" d="M52 10 L70 80 L65 80 L50 15 Z" /> {/* Strap 2 */}
+                <circle cx="32" cy="85" r="5" fill="currentColor" /> {/* Handle 1 */}
+                <circle cx="68" cy="85" r="5" fill="currentColor" /> {/* Handle 2 */}
+                {/* Person Silhouette */}
+                <path fill="currentColor" d="M50 30 Q55 30 55 35 L55 50 L45 50 L45 35 Q45 30 50 30" /> {/* Head */}
+                <path fill="currentColor" d="M40 50 L60 50 L65 80 L35 80 Z" /> {/* Body */}
+            </svg>
+        </div>
 
-              <div className="z-10 max-w-xl space-y-12">
-                  <div>
-                      <h1 className="text-7xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
-                      <p className="text-xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSIST TRAINING</p>
-                  </div>
+        <div className="z-10 max-w-2xl space-y-12">
+            <div>
+                <h1 className="text-7xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
+                <p className="text-2xl font-black tracking-[0.4em] text-brand-primary uppercase mt-4">CONSIST TRAINING</p>
+            </div>
 
-                  <div className="space-y-6">
-                      <h2 className="text-4xl font-black text-white italic leading-tight underline decoration-brand-primary/50">אימוני כוח עקביים ללא פשרות.</h2>
-                      <p className="text-gray-400 font-bold text-lg leading-relaxed">
-                          ליווי אישי ומקצועי הממוקד בתוצאות אמיתיות. <br/>
-                          מאימונים פונקציונליים ועד בניית כוח מקסימלי - אנחנו בונים גרסה חזקה יותר של עצמך.
-                      </p>
-                  </div>
+            <div className="space-y-6">
+                <h2 className="text-4xl font-black text-white italic leading-tight underline decoration-brand-primary/50 underline-offset-8">אימוני כוח עקביים ללא פשרות.</h2>
+                <div className="space-y-4">
+                  <p className="text-gray-400 font-bold text-xl leading-relaxed">
+                    ליווי אישי ומקצועי הממוקד בתוצאות אמיתיות. <br/>
+                    אנחנו לא מחפשים קיצורי דרך, אנחנו בונים יסודות של כוח, סיבולת ומשמעת עצמית.
+                  </p>
+                  <p className="text-brand-primary/80 font-black text-lg uppercase italic tracking-widest">PERSONAL & GROUP STRENGTH TRAINING</p>
+                </div>
+            </div>
 
-                  <div className="bg-gray-900/50 backdrop-blur-xl p-8 rounded-[40px] border border-white/5 shadow-2xl">
-                      <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
-                  </div>
+            <div className="bg-gray-900/40 backdrop-blur-xl p-10 rounded-[50px] border border-white/5 shadow-3xl">
+                <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+            </div>
 
-                  <div className="flex flex-col gap-4">
-                      <Button onClick={() => navigateTo('work')} className="py-8 rounded-[40px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/30">כניסה ללו"ז אימונים ⚡</Button>
-                      <button onClick={() => document.getElementById('admin-modal')?.classList.remove('hidden')} className="text-gray-600 font-black text-xs uppercase tracking-[0.3em] hover:text-white transition-colors">Coach Portal</button>
-                  </div>
-              </div>
+            <div className="flex flex-col gap-5 pt-8">
+                <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
+                <button onClick={() => document.getElementById('admin-modal-trigger')?.classList.remove('hidden')} className="text-gray-700 font-black text-[10px] uppercase tracking-[0.4em] hover:text-white transition-colors">Coach Portal Access</button>
+            </div>
+        </div>
 
-              {/* Invisible Admin Trigger Modal remains same but call navigateTo('admin') on success */}
-              <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl">
-                  <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl">
-                      <h3 className="text-white font-black text-3xl mb-10 text-center italic uppercase">כניסת מאמן 🔒</h3>
-                      <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-8 bg-gray-800 text-white rounded-[35px] mb-6 text-center border border-gray-700 outline-none focus:border-red-500 text-4xl font-mono" />
-                      <Button onClick={() => { 
-                          const pass = (document.getElementById('admin-pass') as HTMLInputElement).value;
-                          if(pass === (appConfig.coachAdditionalPhone || 'admin')) { 
-                              navigateTo('admin');
-                              document.getElementById('admin-modal')?.classList.add('hidden'); 
-                          }
-                          else alert('סיסמה שגויה');
-                      }} className="w-full py-7 rounded-[40px] bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
-                      <button onClick={()=>document.getElementById('admin-modal')?.classList.add('hidden')} className="w-full mt-4 text-gray-500 font-bold">חזרה</button>
-                  </div>
-              </div>
-          </div>
-      );
+        {/* Hidden Admin Login */}
+        <div id="admin-modal-trigger" className="fixed inset-0 bg-black/98 z-[100] hidden flex items-center justify-center p-6 backdrop-blur-2xl">
+            <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 shadow-2xl">
+                <h3 className="text-white font-black text-3xl mb-10 text-center italic uppercase">כניסת מאמן 🔒</h3>
+                <input type="password" id="admin-pass-input" placeholder='סיסמה' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-6 text-center border border-gray-700 outline-none focus:border-red-500 text-4xl font-mono" />
+                <Button onClick={() => { 
+                    const pass = (document.getElementById('admin-pass-input') as HTMLInputElement).value;
+                    if(pass === (appConfig.coachAdditionalPhone || 'admin')) { 
+                        navigateTo('admin');
+                        document.getElementById('admin-modal-trigger')?.classList.add('hidden'); 
+                    }
+                    else alert('סיסמה שגויה');
+                }} className="w-full py-8 rounded-[45px] bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
+                <button onClick={()=>document.getElementById('admin-modal-trigger')?.classList.add('hidden')} className="w-full mt-6 text-gray-500 font-bold uppercase text-[10px] tracking-widest">סגור</button>
+            </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -242,7 +250,7 @@ const App: React.FC = () => {
                     <h1 className="text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">
                         NIV COHEN
                     </h1>
-                    <p className="text-[10px] font-black tracking-[0.5em] text-brand-primary uppercase mt-1">CONSIST TRAINING</p>
+                    <p className="text-[12px] font-black tracking-[0.5em] text-brand-primary uppercase mt-1">CONSIST TRAINING</p>
                 </div>
                 {currentUser && !isAdminMode && (
                     <div className="flex items-center gap-3">
@@ -307,10 +315,10 @@ const App: React.FC = () => {
 
                 <div className="space-y-16 pb-20">
                   {Array.from({length:7}, (_,i) => {
-                      // START WEEK FROM SUNDAY (יום ראשון)
+                      // START WEEK FROM SUNDAY
                       const d = new Date();
-                      const currentDay = d.getDay(); // 0 is Sunday
-                      d.setDate(d.getDate() - currentDay + i);
+                      const day = d.getDay(); 
+                      d.setDate(d.getDate() - day + i);
                       
                       const dateStr = d.toISOString().split('T')[0];
                       const isToday = dateStr === todayStr;
@@ -339,7 +347,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Modals remain essentially the same logic but shared profile UI can be extracted if needed */}
+      {/* Modals */}
       {isLinksModalOpen && (
         <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 backdrop-blur-2xl">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-sm border border-white/10 flex flex-col shadow-3xl text-right" dir="rtl">
@@ -446,7 +454,6 @@ const App: React.FC = () => {
         </div>
       )}
       
-      {/* Login Modal remains same */}
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl text-center">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 shadow-2xl">
               <h3 className="text-white font-black text-4xl mb-3 italic uppercase">מי המתאמן? 🤔</h3>
