@@ -53,6 +53,7 @@ export interface TrainingSession {
   zoomLink?: string; // Optional link for Zoom sessions
   isZoomSession?: boolean; // Flag to mark as Zoom even without link
   isHidden?: boolean; // If true, only visible to admin
+  isCancelled?: boolean; // New flag for cancelled sessions
 }
 
 export interface WeatherLocation {

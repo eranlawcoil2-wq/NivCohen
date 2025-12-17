@@ -71,7 +71,8 @@ create table if not exists sessions (
   "isTrial" boolean,
   "zoomLink" text,
   "isZoomSession" boolean default false,
-  "isHidden" boolean default false
+  "isHidden" boolean default false,
+  "isCancelled" boolean default false
 );
 
 -- 2. Create Configuration Tables
@@ -133,6 +134,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='isHidden') then
     alter table sessions add column "isHidden" boolean default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='isCancelled') then
+    alter table sessions add column "isCancelled" boolean default false;
   end if;
 
   -- Config columns
@@ -604,7 +608,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           time: newTime,
           registeredPhoneNumbers: [], 
           attendedPhoneNumbers: [],
-          isHidden: attendanceSession.isHidden
+          isHidden: attendanceSession.isHidden,
+          isCancelled: false // reset cancel on duplicate
       };
       
       try {
@@ -736,7 +741,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       date: newDateStr,
                       registeredPhoneNumbers: [], // Don't copy users
                       attendedPhoneNumbers: [],
-                      isHidden: s.isHidden
+                      isHidden: s.isHidden,
+                      isCancelled: false // Don't copy cancel status
                   });
                   count++;
               }
@@ -776,7 +782,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           attendedPhoneNumbers: [],
           description: '',
           color: SESSION_COLORS[0],
-          isHidden: false
+          isHidden: false,
+          isCancelled: false
       };
       setAttendanceSession(newSession); 
       setEditSessionForm(newSession);   
@@ -880,7 +887,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                       <span className="text-white text-sm font-bold text-purple-400">אימון נסתר (רואה רק מאמן)</span>
                                   </div>
                               </div>
-                              <input type="number" placeholder="מקסימום משתתפים" className="bg-gray-900 text-white p-3 rounded border border-gray-700 h-full" value={editSessionForm.maxCapacity} onChange={e=>setEditSessionForm({...editSessionForm, maxCapacity: parseInt(e.target.value)})}/>
+                              
+                              {/* New Cancelled Checkbox */}
+                              <div className="flex flex-col gap-2 h-full justify-between">
+                                  <input type="number" placeholder="מקסימום משתתפים" className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.maxCapacity} onChange={e=>setEditSessionForm({...editSessionForm, maxCapacity: parseInt(e.target.value)})}/>
+                                  <div className="flex items-center bg-red-900/30 p-2 rounded border border-red-800">
+                                      <input type="checkbox" checked={editSessionForm.isCancelled || false} onChange={e=>setEditSessionForm({...editSessionForm, isCancelled: e.target.checked})} className="w-5 h-5 mr-2 accent-red-500"/>
+                                      <span className="text-red-300 text-sm font-bold">אימון מבוטל</span>
+                                  </div>
+                              </div>
                           </div>
                           {editSessionForm.isZoomSession && (
                              <input type="text" placeholder="לינק לזום" className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 dir-ltr" value={editSessionForm.zoomLink || ''} onChange={e=>setEditSessionForm({...editSessionForm, zoomLink: e.target.value})}/>
@@ -902,6 +917,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                 <h3 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
                                     {attendanceSession.type}
                                     {attendanceSession.isHidden && <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
+                                    {attendanceSession.isCancelled && <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">🚫 מבוטל</span>}
                                 </h3>
                                 <p className="text-brand-primary font-mono">{attendanceSession.time} | {attendanceSession.location}</p>
                                 <p className="text-xs text-gray-500 mt-1">{attendanceSession.date}</p>

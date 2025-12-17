@@ -28,25 +28,45 @@ function safeJsonParse<T>(key: string, fallback: T): T {
     } catch { return fallback; }
 }
 
+const WhatsAppIcon = () => (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.008-.57-.008-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+    </svg>
+);
+
 const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canInstall: boolean, isIos: boolean }> = ({ onClose, onInstall, canInstall, isIos }) => (
-    <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-brand-primary p-4 z-50 md:hidden animate-in slide-in-from-bottom duration-300">
-        <div className="flex justify-between items-start mb-2">
-            <h3 className="text-white font-bold text-lg">שמור כאפליקציה!</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
-        </div>
-        {isIos ? (
-             <div className="text-sm text-gray-300">
-                 <p className="mb-2">כדי להתקין באייפון:</p>
-                 <div className="flex items-center gap-2 mb-1">1. לחץ על כפתור השיתוף <span className="text-xl">⎋</span> למטה</div>
-                 <div className="flex items-center gap-2">2. בחר ב"הוסף למסך הבית" <span className="text-xl">➕</span></div>
-             </div>
-        ) : canInstall ? (
-            <Button onClick={onInstall} className="w-full py-2 mb-2">התקן אפליקציה 📲</Button>
-        ) : (
-            <div className="flex items-center gap-2 text-sm text-brand-primary font-bold bg-gray-900/50 p-2 rounded">
-                <span>לחץ על שלוש הנקודות ובחר "הוסף למסך הבית"</span>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
+        <div className="bg-gray-800 border border-gray-700 p-6 rounded-2xl shadow-2xl w-full max-w-sm relative">
+            <button onClick={onClose} className="absolute top-3 left-3 text-gray-400 hover:text-white p-2">✕</button>
+            <div className="text-center mb-4">
+                <div className="text-4xl mb-2">📲</div>
+                <h3 className="text-white font-black text-xl mb-1">הורד את האפליקציה!</h3>
+                <p className="text-gray-400 text-sm">גישה מהירה לאימונים ישירות ממסך הבית</p>
             </div>
-        )}
+            
+            {isIos ? (
+                 <div className="bg-gray-900/80 rounded-xl p-4 text-sm text-gray-300 space-y-3">
+                     <div className="flex items-center gap-3">
+                         <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                         <span>לחץ על כפתור השיתוף <span className="inline-block align-middle mx-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></span> בתחתית הדפדפן</span>
+                     </div>
+                     <div className="flex items-center gap-3">
+                         <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                         <span>גלול ובחר <b>"הוסף למסך הבית"</b> (Add to Home Screen)</span>
+                     </div>
+                     <div className="flex items-center gap-3">
+                         <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">3</span>
+                         <span>לחץ על <b>"הוסף"</b> (Add) בצד שמאל למעלה</span>
+                     </div>
+                 </div>
+            ) : canInstall ? (
+                <Button onClick={onInstall} className="w-full py-3 text-lg shadow-xl shadow-brand-primary/20">התקן עכשיו</Button>
+            ) : (
+                <div className="text-center bg-gray-900 p-3 rounded text-sm text-gray-400">
+                    לחץ על תפריט הדפדפן (3 נקודות) ובחר <b>"התקן אפליקציה"</b> או <b>"הוסף למסך הבית"</b>
+                </div>
+            )}
+        </div>
     </div>
 );
 
@@ -278,7 +298,9 @@ const App: React.FC = () => {
 
     // Show prompt for iOS if not installed
     if (iOS && !isInStandaloneMode) {
-        setShowInstallPrompt(true);
+        setTimeout(() => {
+             // Optional: Auto show on first visit? For now kept manual via button
+        }, 1000);
     }
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -287,7 +309,7 @@ const App: React.FC = () => {
   const handleInstallClick = () => {
     if (deferredPrompt) { deferredPrompt.prompt(); setDeferredPrompt(null); setShowInstallPrompt(false); }
     else if (isIos) { setShowInstallPrompt(true); }
-    else { alert('התקנה נתמכת דרך תפריט הדפדפן: "הוסף למסך הבית"'); }
+    else { setShowInstallPrompt(true); /* Show generic instructions for desktop/other */ }
   };
 
   const getMonthlyWorkoutsCount = (phone: string) => {
@@ -820,7 +842,10 @@ const App: React.FC = () => {
                 <span className="text-xs text-gray-500">{isCloudConnected?'מחובר':'מקומי'}</span>
             </div>
             <div className="flex items-center gap-3">
-                <a href={`https://wa.me/${normalizePhoneForWhatsapp(appConfig.coachPhone)}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400 p-2 text-xl" title="צור קשר בוואטסאפ">📞</a>
+                <a href={`https://wa.me/${normalizePhoneForWhatsapp(appConfig.coachPhone)}`} target="_blank" rel="noreferrer" className="bg-[#25D366] hover:bg-[#20bd5a] text-white px-3 py-1.5 rounded-full flex items-center gap-2 transition-all shadow-lg" title="צור קשר בוואטסאפ">
+                    <WhatsAppIcon />
+                    <span className="font-bold text-xs">שלח הודעה</span>
+                </a>
                 <button onClick={handleInstallClick} className="text-brand-primary hover:text-white p-2 text-xl" title="התקן אפליקציה">📲</button>
                 <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2 text-xl" title="ניהול">⚙️</button>
             </div>
