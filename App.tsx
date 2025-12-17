@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, LocationDef, AppConfig, WeatherInfo } from './types';
+import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, LocationDef, AppConfig, WeatherInfo, Quote } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
@@ -22,10 +22,13 @@ const App: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationDef[]>([]);
+  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>({
-      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0502264663', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin'
+      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0502264663', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
   });
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
   const [quote, setQuote] = useState('');
@@ -34,6 +37,22 @@ const App: React.FC = () => {
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
+  // PWA Install Prompt Logic
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') setDeferredPrompt(null);
+    }
+  };
+
   const stats = useMemo(() => {
     if (!currentUser) return { monthly: 0, record: 0, streak: 0 };
     const phone = normalizePhone(currentUser.phone);
@@ -90,11 +109,17 @@ const App: React.FC = () => {
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
       try {
-          const [u, s, locs, types, config] = await Promise.all([
-              dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig()
+          const [u, s, locs, types, config, q] = await Promise.all([
+              dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
           ]);
-          setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config);
-          getMotivationQuote().then(setQuote);
+          setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
+          
+          if (q.length > 0) {
+            setQuote(q[Math.floor(Math.random() * q.length)].text);
+          } else {
+            getMotivationQuote().then(setQuote);
+          }
+          
           const dates = Array.from({length: 14}, (_, i) => {
             const d = new Date(); d.setDate(d.getDate() - 3 + i);
             return d.toISOString().split('T')[0];
@@ -124,14 +149,20 @@ const App: React.FC = () => {
   const handleUpdateProfile = async (updatedUser: User) => {
       setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
       await dataService.updateUser(updatedUser);
-      setIsProfileModalOpen(false);
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      <header className={`p-6 sticky top-0 z-40 border-b border-gray-800/50 backdrop-blur-md ${isAdminMode ? 'bg-red-900/20 border-red-500/30' : 'bg-brand-dark/80'}`}>
+      {/* Urgent Message Banner */}
+      {appConfig.urgentMessage && !isAdminMode && (
+          <div className="bg-red-600 text-white p-3 text-center text-[10px] font-black uppercase tracking-widest animate-pulse sticky top-0 z-[60] shadow-lg">
+             🚨 {appConfig.urgentMessage}
+          </div>
+      )}
+
+      <header className={`p-6 border-b border-gray-800/50 ${isAdminMode ? 'bg-red-900/20 border-red-500/30' : 'bg-brand-dark/80'}`}>
           <div className="flex justify-between items-center mb-6">
               <div onClick={() => isAdminMode ? setIsAdminMode(false) : document.getElementById('admin-modal')?.classList.remove('hidden')} className="cursor-pointer">
                   <h1 className={`text-2xl font-black italic uppercase leading-none transition-colors duration-500 ${isAdminMode ? 'text-red-500' : 'text-white'}`}>
@@ -141,11 +172,13 @@ const App: React.FC = () => {
               </div>
               {currentUser && !isAdminMode && (
                   <div className="flex items-center gap-3">
+                    <div onClick={() => setIsLinksModalOpen(true)} className="bg-gray-800 p-2.5 rounded-2xl border border-white/5 cursor-pointer hover:bg-white/10 transition-colors shadow-xl">
+                        <span className="text-xl">🔗</span>
+                    </div>
                     <div onClick={() => setIsProfileModalOpen(true)} className="text-right cursor-pointer group">
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
+                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
                         <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                     </div>
-                    <button onClick={()=>{setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone');}} className="text-[9px] text-gray-700 font-bold uppercase border border-gray-800 px-3 py-1 rounded-full hover:bg-white hover:text-black transition-all">יציאה</button>
                   </div>
               )}
           </div>
@@ -153,21 +186,20 @@ const App: React.FC = () => {
           {currentUser && !isAdminMode && (
               <div className="grid grid-cols-4 gap-2">
                   <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
-                     <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">החודש</p>
-                     <p className="text-brand-primary font-black text-4xl leading-none">{stats.monthly}</p>
+                     <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">החודש</p>
+                     <p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p>
                   </div>
                   <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
-                     <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">שיא</p>
-                     <p className="text-white font-black text-4xl leading-none">{stats.record}</p>
+                     <p className="text-[9px] text-gray-500 font-bold uppercase mb-1">שיא</p>
+                     <p className="text-white font-black text-3xl leading-none">{stats.record}</p>
                   </div>
                   <div className="bg-orange-500/10 p-4 rounded-2xl border border-orange-500/20 flex flex-col items-center justify-center text-center">
-                     <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1">רצף 🔥</p>
-                     <p className="text-orange-400 font-black text-4xl leading-none">{stats.streak}</p>
+                     <p className="text-[9px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1">רצף 🔥</p>
+                     <p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p>
                   </div>
                   <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex flex-col items-center justify-center text-center overflow-hidden">
-                     <p className="text-[10px] text-brand-primary font-bold uppercase mb-1 flex items-center gap-1">אלוף 🏆</p>
-                     <p className="text-white font-black text-xl leading-none truncate w-full">{monthLeader.name}</p>
-                     <p className="text-brand-primary font-black text-xs mt-1">{monthLeader.count} אימונים</p>
+                     <p className="text-[9px] text-brand-primary font-bold uppercase mb-1">אלוף 🏆</p>
+                     <p className="text-white font-black text-lg leading-none truncate w-full">{monthLeader.name}</p>
                   </div>
               </div>
           )}
@@ -178,7 +210,7 @@ const App: React.FC = () => {
              <AdminPanel 
                 users={users} sessions={sessions} primaryColor="#EF4444" workoutTypes={workoutTypes}
                 locations={locations} weatherLocation={{name: appConfig.defaultCity, lat:0, lon:0}} paymentLinks={[]} streakGoal={3}
-                appConfig={appConfig} quotes={[]} weatherData={weatherData}
+                appConfig={appConfig} quotes={quotes} weatherData={weatherData}
                 onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
@@ -192,21 +224,34 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-6">
-                {quote && <div className="text-center bg-gray-900/40 p-10 rounded-[40px] border border-gray-800/30"><p className="text-2xl font-black text-white italic leading-tight">"{quote}"</p></div>}
-                <div className="space-y-10">
+                {quote && <div className="text-center bg-gray-900/40 p-8 rounded-[40px] border border-gray-800/30"><p className="text-xl font-black text-white italic leading-tight">"{quote}"</p></div>}
+                
+                {deferredPrompt && (
+                   <Button onClick={handleInstallClick} className="w-full py-4 rounded-3xl bg-blue-600 text-white font-black uppercase text-xs shadow-2xl shadow-blue-600/20">📲 הורד את האפליקציה למסך הבית</Button>
+                )}
+
+                <div className="space-y-16 pb-20">
                   {Array.from({length:7}, (_,i) => {
                       const d = new Date(); d.setDate(d.getDate() - d.getDay() + i);
                       const dateStr = d.toISOString().split('T')[0];
                       const isToday = dateStr === todayStr;
                       const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                       return (
-                          <div key={dateStr} className={`rounded-[50px] p-8 border transition-all duration-500 ${isToday ? 'bg-brand-primary/10 border-brand-primary/40' : 'bg-gray-900/10 border-gray-800/20'}`}>
-                              <h2 className={`text-[14px] font-black uppercase tracking-[0.2em] mb-8 pb-2 border-b border-white/5 ${isToday ? 'text-white' : 'text-gray-600'}`}>
-                                  {d.toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'numeric'})}
-                              </h2>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                          <div key={dateStr} className="relative">
+                              {/* STICKY DAY HEADER */}
+                              <div className="sticky top-[10px] z-30 bg-brand-black/90 backdrop-blur-md py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
+                                 <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${isToday ? 'text-brand-primary' : 'text-gray-500'}`}>
+                                     {d.toLocaleDateString('he-IL',{weekday:'long'})}
+                                 </h2>
+                                 <div className="text-left">
+                                    <p className="text-[10px] font-black text-gray-700 tracking-[0.4em] uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
+                                    {isToday && <span className="bg-brand-primary text-black text-[8px] font-black px-2 py-0.5 rounded-full uppercase italic">Today</span>}
+                                 </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                                   {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} locations={locations} weather={weatherData[s.date]}/>)}
-                                  {daySessions.length === 0 && <p className="text-gray-700 text-[10px] uppercase font-black tracking-widest col-span-full text-center py-4 italic">יום מנוחה</p>}
+                                  {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                               </div>
                           </div>
                       );
@@ -216,9 +261,45 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* Links Modal */}
+      {isLinksModalOpen && (
+        <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 backdrop-blur-2xl">
+            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-sm border border-white/10 flex flex-col shadow-3xl text-right" dir="rtl">
+                <div className="flex justify-between items-center mb-10">
+                    <h3 className="text-3xl font-black text-white italic uppercase">חיבורים 🔗</h3>
+                    <button onClick={() => setIsLinksModalOpen(false)} className="text-gray-500 text-3xl">✕</button>
+                </div>
+                <div className="space-y-4">
+                    <button onClick={()=>window.open(`https://wa.me/${appConfig.coachPhone}`, '_blank')} className="w-full p-6 bg-green-500/10 border border-green-500/20 rounded-[35px] flex items-center gap-5 hover:bg-green-500/20 transition-all">
+                        <span className="text-4xl">💬</span>
+                        <div className="text-right">
+                           <p className="text-green-500 font-black text-xl italic uppercase">WhatsApp</p>
+                           <p className="text-green-500/60 text-[9px] uppercase font-bold tracking-widest">שיחה ישירה עם ניב</p>
+                        </div>
+                    </button>
+                    <button onClick={()=>window.open('https://instagram.com/', '_blank')} className="w-full p-6 bg-pink-500/10 border border-pink-500/20 rounded-[35px] flex items-center gap-5 hover:bg-pink-500/20 transition-all">
+                        <span className="text-4xl">📸</span>
+                        <div className="text-right">
+                           <p className="text-pink-500 font-black text-xl italic uppercase">Instagram</p>
+                           <p className="text-pink-500/60 text-[9px] uppercase font-bold tracking-widest">עקבו אחרינו</p>
+                        </div>
+                    </button>
+                    <button onClick={()=>window.open('https://paybox.app/', '_blank')} className="w-full p-6 bg-blue-500/10 border border-blue-500/20 rounded-[35px] flex items-center gap-5 hover:bg-blue-500/20 transition-all">
+                        <span className="text-4xl">💰</span>
+                        <div className="text-right">
+                           <p className="text-blue-500 font-black text-xl italic uppercase">PayBox</p>
+                           <p className="text-blue-500/60 text-[9px] uppercase font-bold tracking-widest">תשלום מהיר ונוח</p>
+                        </div>
+                    </button>
+                </div>
+                <Button onClick={() => setIsLinksModalOpen(false)} className="w-full py-6 mt-10 rounded-[40px] font-black italic uppercase">סגור</Button>
+            </div>
+        </div>
+      )}
+
       {/* Profile Modal */}
       {isProfileModalOpen && currentUser && (
-        <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-4 backdrop-blur-2xl no-scrollbar overflow-y-auto">
+        <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-4 backdrop-blur-2xl overflow-y-auto no-scrollbar">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 flex flex-col shadow-3xl text-right my-auto" dir="rtl">
                 <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
                     <h3 className="text-3xl font-black text-white italic uppercase">עריכת פרופיל 👤</h3>
@@ -226,88 +307,92 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="space-y-6 overflow-y-auto max-h-[70vh] px-2 no-scrollbar">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-4">
                         <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי (איך יראו אותך ברשימות)</label>
-                            <input className="w-full bg-gray-800 border border-white/5 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} placeholder="כינוי..." />
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">שם מלא (המאמן רואה את זה)</label>
+                            <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold text-lg outline-none focus:border-brand-primary" value={currentUser.fullName || ''} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} />
                         </div>
                         <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">צבע אישי</label>
-                            <input type="color" className="w-full h-14 bg-gray-800 border border-white/5 rounded-2xl p-1 cursor-pointer" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">מספר טלפון</label>
+                            <input className="w-full bg-gray-800/50 border border-white/5 p-5 rounded-3xl text-gray-500 font-mono text-xl" value={currentUser.phone} disabled />
                         </div>
                     </div>
 
-                    <div className="bg-brand-primary/5 p-6 rounded-3xl border border-brand-primary/20 space-y-4">
-                        <h4 className="text-brand-primary font-black uppercase italic text-sm border-b border-brand-primary/10 pb-2">הצהרת בריאות דיגיטלית</h4>
-                        <p className="text-gray-400 text-xs">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי (איך יראו אותך ברשימות)</label>
+                            <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold outline-none focus:border-brand-primary" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} placeholder="כינוי..." />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">צבע אישי</label>
+                            <input type="color" className="w-full h-16 bg-gray-800 border border-white/10 rounded-3xl p-1 cursor-pointer" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <div className="bg-brand-primary/5 p-6 rounded-[35px] border border-brand-primary/20 space-y-4">
+                        <h4 className="text-brand-primary font-black uppercase italic text-xs tracking-widest border-b border-brand-primary/10 pb-2">הצהרת בריאות דיגיטלית</h4>
+                        <p className="text-gray-400 text-[11px] leading-relaxed">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה בשיטת CONSIST TRAINING.</p>
                         
                         <div className="grid grid-cols-1 gap-4">
                             <div>
-                                <label className="text-[10px] text-gray-400 font-black block mb-2">מספר תעודת זהות</label>
-                                <input className="w-full bg-gray-900 border border-white/5 p-4 rounded-xl text-white font-mono" placeholder="123456789" value={currentUser.healthDeclarationId || ''} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationId: e.target.value})} />
+                                <label className="text-[9px] text-gray-400 font-black block mb-2">מספר תעודת זהות</label>
+                                <input className="w-full bg-gray-900 border border-white/5 p-4 rounded-2xl text-white font-mono text-lg" placeholder="123456789" value={currentUser.healthDeclarationId || ''} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationId: e.target.value})} />
                             </div>
-                            <div className="flex items-center gap-3 bg-gray-900/50 p-4 rounded-xl">
-                                <input type="checkbox" id="health-check" className="w-6 h-6 rounded bg-gray-800 border-white/10" checked={!!currentUser.healthDeclarationDate} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationDate: e.target.checked ? new Date().toISOString() : ''})} />
-                                <label htmlFor="health-check" className="text-white text-xs font-bold">אני מאשר את נכונות ההצהרה</label>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">העלאת קובץ חתום (אופציונלי)</label>
-                            <div className="border-2 border-dashed border-white/10 p-6 rounded-2xl text-center cursor-pointer hover:border-brand-primary transition-all">
-                                <p className="text-gray-500 text-[10px] font-black italic uppercase">לחץ להעלאת הצהרה חתומה</p>
-                                {currentUser.healthDeclarationFile && <p className="text-brand-primary text-[8px] mt-2 font-black uppercase">קובץ הועלה בהצלחה ✓</p>}
+                            <div className="flex items-center gap-4 bg-gray-900/50 p-5 rounded-2xl">
+                                <input type="checkbox" id="health-check" className="w-8 h-8 rounded-xl bg-gray-800 border-white/10" checked={!!currentUser.healthDeclarationDate} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationDate: e.target.checked ? new Date().toISOString() : ''})} />
+                                <label htmlFor="health-check" className="text-white text-xs font-black uppercase tracking-tighter">אני מאשר את נכונות ההצהרה</label>
                             </div>
                         </div>
                     </div>
 
                     <div>
                         <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">אימייל לעדכונים</label>
-                        <input className="w-full bg-gray-800 border border-white/5 p-4 rounded-2xl text-white font-bold" value={currentUser.email || ''} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} placeholder="email@example.com" />
+                        <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold outline-none focus:border-brand-primary" value={currentUser.email || ''} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} placeholder="email@example.com" />
                     </div>
                 </div>
 
-                <Button onClick={() => setIsProfileModalOpen(false)} className="w-full py-6 mt-8 rounded-[30px] text-xl font-black italic uppercase">שמור הכל ✅</Button>
+                <Button onClick={() => setIsProfileModalOpen(false)} className="w-full py-6 mt-10 rounded-[40px] text-xl font-black italic uppercase">שמור שינויים ✓</Button>
             </div>
         </div>
       )}
 
+      {/* Viewing Session Modal */}
       {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 backdrop-blur-xl">
            <div className="bg-gray-900 p-10 rounded-[50px] w-full max-w-md border border-gray-800 flex flex-col shadow-3xl text-right" dir="rtl">
-              <div className="flex justify-between items-start mb-6">
+              <div className="flex justify-between items-start mb-8">
                  <div>
-                    <h3 className="text-3xl font-black text-white italic uppercase leading-none mb-1">{viewingSession.type}</h3>
-                    <div className="flex items-center gap-2">
-                      <p className="text-brand-primary font-mono text-lg font-black uppercase tracking-widest">{viewingSession.time}</p>
+                    <h3 className="text-4xl font-black text-white italic uppercase leading-none mb-2">{viewingSession.type}</h3>
+                    <div className="flex items-center gap-3">
+                      <p className="text-brand-primary font-mono text-2xl font-black uppercase tracking-widest">{viewingSession.time}</p>
                       {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
-                         <span className="text-gray-400 text-sm font-bold flex items-center gap-1 border-r border-gray-700 pr-2">
+                         <span className="text-gray-400 text-sm font-bold flex items-center gap-2 border-r border-gray-700 pr-3">
                            {getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}
                            {Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°
                          </span>
                       )}
                     </div>
                  </div>
-                 <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-3xl">✕</button>
+                 <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
               </div>
-              <div className="space-y-6">
-                 <div className="bg-gray-800/50 p-4 rounded-3xl border border-white/5">
-                    <p className="text-gray-500 text-[10px] font-black uppercase mb-1">מיקום האימון</p>
-                    <p className="text-white font-black text-xl">{viewingSession.location}</p>
+              <div className="space-y-8">
+                 <div className="bg-gray-800/50 p-6 rounded-[35px] border border-white/5">
+                    <p className="text-gray-500 text-[10px] font-black uppercase mb-2 tracking-widest">מיקום האימון</p>
+                    <p className="text-white font-black text-2xl italic">{viewingSession.location}</p>
                  </div>
                  {viewingSession.description && (
-                    <div className="bg-brand-primary/5 p-6 rounded-3xl border border-brand-primary/10">
-                       <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן 📣</p>
-                       <p className="text-white font-bold text-lg leading-relaxed">{viewingSession.description}</p>
+                    <div className="bg-brand-primary/5 p-8 rounded-[35px] border border-brand-primary/10">
+                       <p className="text-brand-primary text-[10px] font-black uppercase mb-3 tracking-widest">דגשי המאמן 📣</p>
+                       <p className="text-white font-bold text-xl leading-relaxed">{viewingSession.description}</p>
                     </div>
                  )}
                  <div>
-                    <p className="text-gray-500 text-[10px] font-black uppercase mb-1">רשומים ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
+                    <p className="text-gray-500 text-[10px] font-black uppercase mb-4 tracking-widest">רשומים ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
                     <div className="flex flex-wrap gap-2 mt-2">
                        {viewingSession.registeredPhoneNumbers.map(p => {
                            const u = users.find(x => normalizePhone(x.phone) === normalizePhone(p));
                            return (
-                             <span key={p} className="bg-gray-800 text-gray-300 px-4 py-2 rounded-2xl text-xs font-bold border border-white/5" style={{ borderColor: u?.userColor || 'transparent' }}>
+                             <span key={p} className="bg-gray-800 text-gray-300 px-5 py-3 rounded-2xl text-[11px] font-black border border-white/5 italic" style={{ borderColor: u?.userColor || 'transparent' }}>
                                {u?.displayName || u?.fullName || 'מתאמן'}
                              </span>
                            );
@@ -315,36 +400,36 @@ const App: React.FC = () => {
                     </div>
                  </div>
               </div>
-              <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className="w-full py-6 mt-8 rounded-[30px] text-xl font-black italic uppercase">
+              <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className="w-full py-7 mt-12 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">
                  {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה לאימון ⚡'}
               </Button>
            </div>
         </div>
       )}
       
-      {/* Admin Login & User Phone Login Modals remain as before */}
-      <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-4 backdrop-blur-xl">
-          <div className="bg-gray-900 p-12 rounded-[50px] w-full max-sm border border-gray-800 shadow-2xl">
-              <h3 className="text-white font-black text-3xl mb-8 text-center italic uppercase">כניסת מאמן 🔒</h3>
-              <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-6 bg-gray-800 text-white rounded-3xl mb-4 text-center border border-gray-700 outline-none focus:border-red-500 text-3xl font-mono" />
+      {/* Admin Login & User Login Modals */}
+      <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl">
+          <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl">
+              <h3 className="text-white font-black text-3xl mb-10 text-center italic uppercase">כניסת מאמן 🔒</h3>
+              <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-8 bg-gray-800 text-white rounded-[35px] mb-6 text-center border border-gray-700 outline-none focus:border-red-500 text-4xl font-mono" />
               <Button onClick={() => { 
                   const pass = (document.getElementById('admin-pass') as HTMLInputElement).value;
                   if(pass === (appConfig.coachAdditionalPhone || 'admin')) { setIsAdminMode(true); document.getElementById('admin-modal')?.classList.add('hidden'); }
                   else alert('סיסמה שגויה');
-              }} className="w-full py-6 rounded-3xl bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
+              }} className="w-full py-7 rounded-[40px] bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
           </div>
       </div>
 
-      <div id="login-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-4 backdrop-blur-xl">
-          <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl text-center">
-              <h3 className="text-white font-black text-3xl mb-2 italic uppercase">מי המתאמן? 🤔</h3>
-              <p className="text-gray-500 text-[10px] mb-10 font-black uppercase tracking-widest">הכנס מספר טלפון להרשמה</p>
-              <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-6 bg-gray-800 text-white rounded-3xl mb-8 text-center border border-gray-700 outline-none focus:border-brand-primary text-4xl font-mono" />
+      <div id="login-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl text-center">
+          <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 shadow-2xl">
+              <h3 className="text-white font-black text-4xl mb-3 italic uppercase">מי המתאמן? 🤔</h3>
+              <p className="text-gray-500 text-[11px] mb-12 font-black uppercase tracking-[0.3em]">הכנס מספר טלפון להרשמה</p>
+              <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center border border-gray-700 outline-none focus:border-brand-primary text-5xl font-mono" />
               <Button onClick={() => { 
                   const p = (document.getElementById('user-phone') as HTMLInputElement).value;
                   if(p.length >= 9) { setCurrentUserPhone(p); localStorage.setItem('niv_app_current_phone', p); document.getElementById('login-modal')?.classList.add('hidden'); }
                   else alert('מספר לא תקין');
-              }} className="w-full py-6 rounded-3xl shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
+              }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
           </div>
       </div>
     </div>
