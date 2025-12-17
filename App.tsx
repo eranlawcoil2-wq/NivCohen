@@ -593,7 +593,15 @@ const App: React.FC = () => {
                         <button className="text-brand-primary mt-2 text-[10px] underline" onClick={()=>setShowStreakTooltip(false)}>סגור</button>
                     </div>
                 )}
-                <div className="text-right text-gray-500 italic text-sm mt-2 border-t border-gray-800 pt-2">"{quote}"</div>
+                
+                {appConfig.urgentMessage ? (
+                    <div className="bg-red-600 border border-red-400 text-white font-black text-center p-3 rounded-lg shadow-lg mt-2 animate-pulse flex flex-col items-center justify-center">
+                        <span className="text-xl">📢</span>
+                        <span className="text-sm">{appConfig.urgentMessage}</span>
+                    </div>
+                ) : (
+                    <div className="text-right text-gray-500 italic text-sm mt-2 border-t border-gray-800 pt-2">"{quote}"</div>
+                )}
             </div>
         )}
 

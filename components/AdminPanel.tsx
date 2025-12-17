@@ -98,7 +98,8 @@ create table if not exists config_general (
   "coachPhone" text,
   "coachAdditionalPhone" text,
   "coachEmail" text,
-  "defaultCity" text
+  "defaultCity" text,
+  "urgentMessage" text
 );
 
 create table if not exists config_quotes (
@@ -153,6 +154,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name='config_general' and column_name='coachAdditionalPhone') then
     alter table config_general add column "coachAdditionalPhone" text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='config_general' and column_name='urgentMessage') then
+    alter table config_general add column "urgentMessage" text;
   end if;
 end $$;
 
@@ -1168,6 +1172,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               
               <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-3 font-bold">פרטי מאמן והגדרות כלליות</h3>
+                  
+                  {/* Urgent Message Input */}
+                  <div className="bg-red-900/20 border border-red-500/50 p-3 rounded mb-4">
+                      <label className="text-xs text-red-300 font-bold mb-1 block">הודעה דחופה למסך הבית (מחליף את המוטיבציה)</label>
+                      <input 
+                        type="text" 
+                        placeholder="לדוגמה: האימון הערב בוטל עקב גשם!" 
+                        className="w-full bg-gray-900 text-white p-2 rounded border border-red-500/50 focus:border-red-500 outline-none"
+                        value={tempConfig.urgentMessage || ''} 
+                        onChange={e=>setTempConfig({...tempConfig, urgentMessage: e.target.value})}
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">השאר ריק כדי להציג את משפט המוטיבציה הרגיל.</p>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
                           <label className="text-xs text-gray-400">שם בעברית</label>

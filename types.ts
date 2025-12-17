@@ -80,4 +80,5 @@ export interface AppConfig {
   coachAdditionalPhone?: string; // New field for additional number/password
   coachEmail: string;
   defaultCity: string;
+  urgentMessage?: string; // New field for urgent announcements
 }
