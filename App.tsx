@@ -36,15 +36,16 @@ const ShareButton: React.FC = () => {
         if (navigator.share) {
             navigator.share({ title: 'ניב כהן - Consistency Training', url: url });
         } else {
-            navigator.clipboard.writeText(url);
-            alert('הקישור הועתק ללוח!');
+            navigator.clipboard.writeText(url).then(() => {
+                alert('הקישור לאתר הועתק ללוח!');
+            });
         }
     };
     return (
         <button 
             onClick={handleShare}
             className="fixed bottom-24 right-6 z-[100] bg-white text-black p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border border-gray-200"
-            title="שתף לינק"
+            title="שתף קישור"
         >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -214,7 +215,7 @@ const App: React.FC = () => {
       const [h, m] = session.time.split(':').map(Number);
       const endHour = (h + 1).toString().padStart(2, '0');
       const end = `${cleanDate}T${endHour}${m.toString().padStart(2, '0')}00`;
-      const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Consistency Training: ' + session.type)}&dates=${start}/${end}&location=${encodeURIComponent(session.location)}`;
+      const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('אימון: ' + session.type)}&dates=${start}/${end}&location=${encodeURIComponent(session.location)}`;
       window.open(url, '_blank');
   };
 
@@ -255,7 +256,7 @@ const App: React.FC = () => {
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
           <div className="flex justify-between items-center mb-6">
               <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group">
-                  <h1 className="text-5xl font-black italic text-white uppercase leading-none">NIV COHEN</h1>
+                  <h1 className="text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
               {currentUser && !isAdminMode && (
@@ -267,10 +268,10 @@ const App: React.FC = () => {
           </div>
           {currentUser && !isAdminMode && (
               <div className="grid grid-cols-4 gap-2">
-                  <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">החודש</p><p className="text-brand-primary font-black text-3xl">{stats.monthly}</p></div>
-                  <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl">{stats.record}</p></div>
-                  <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl">{stats.streak}</p></div>
-                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg truncate">{monthLeader.name}</p></div>
+                  <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">החודש</p><p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p></div>
+                  <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl leading-none">{stats.record}</p></div>
+                  <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p></div>
+                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg leading-none truncate w-full">{monthLeader.name}</p></div>
               </div>
           )}
       </header>
@@ -286,25 +287,30 @@ const App: React.FC = () => {
                 onAddSession={async s => { await dataService.addSession(s); setSessions(prev => [...prev, s]); }}
                 onUpdateSession={async s => { await dataService.updateSession(s); setSessions(prev => prev.map(x=>x.id===s.id?s:x)); }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
-                onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); }} 
-                onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); }}
+                onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
+                onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
             <div className="space-y-16 pb-20">
               {Array.from({length:7}, (_,i) => {
-                  const d = new Date(); d.setDate(d.getDate() - d.getDay() + i);
+                  const d = new Date();
+                  const dayOfWeek = d.getDay(); 
+                  d.setDate(d.getDate() - dayOfWeek + i);
                   const dateStr = d.toISOString().split('T')[0];
                   const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                   return (
-                      <div key={dateStr}>
+                      <div key={dateStr} className="relative">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
-                             <h2 className="text-4xl font-black italic uppercase text-gray-500">{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
+                             <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${dateStr === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>
+                                {d.toLocaleDateString('he-IL',{weekday:'long'})}
+                             </h2>
                              <p className="text-[10px] font-black text-gray-700 uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                               {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]}/>)}
+                              {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                           </div>
                       </div>
                   );
@@ -315,18 +321,23 @@ const App: React.FC = () => {
 
       {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-2xl">
-            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 text-right shadow-3xl" dir="rtl">
+            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 text-right shadow-3xl overflow-y-auto no-scrollbar max-h-[90vh]" dir="rtl">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
-                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono">{viewingSession.time}</p>
+                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest">{viewingSession.time}</p>
                     </div>
                     <button onClick={() => setViewingSession(null)} className="text-gray-500 text-3xl hover:text-white transition-colors">✕</button>
                 </div>
                 <div className="space-y-6">
+                    {viewingSession.description && (
+                        <div className="p-4 bg-brand-primary/5 border border-brand-primary/10 rounded-3xl">
+                            <p className="text-white text-sm font-bold">{viewingSession.description}</p>
+                        </div>
+                    )}
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
                         <p className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">נרשמו ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
-                        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1 no-scrollbar">
+                        <div className="flex flex-wrap gap-2">
                             {viewingSession.registeredPhoneNumbers.length > 0 ? viewingSession.registeredPhoneNumbers.map(phone => {
                                 const t = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
                                 return (
@@ -348,7 +359,7 @@ const App: React.FC = () => {
                     </div>
                     <Button 
                         onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} 
-                        className={`w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500' : 'bg-brand-primary'}`}
+                        className={`w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500 shadow-red-500/20' : 'bg-brand-primary shadow-brand-primary/20'}`}
                         disabled={viewingSession.isCancelled || (viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity && !viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')))}
                     >
                         {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה מהירה ⚡'}
@@ -369,7 +380,7 @@ const App: React.FC = () => {
                   const p = (document.getElementById('user-phone') as HTMLInputElement).value;
                   if(p.length >= 9) { setCurrentUserPhone(p); localStorage.setItem('niv_app_current_phone', p); document.getElementById('login-modal')?.classList.add('hidden'); }
                   else alert('מספר לא תקין');
-              }} className="w-full py-8 rounded-[45px]">התחברות 🚀</Button>
+              }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
           </div>
       </div>
     </div>
