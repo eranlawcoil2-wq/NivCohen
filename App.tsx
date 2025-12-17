@@ -22,21 +22,58 @@ function safeJsonParse<T>(key: string, fallback: T): T {
     } catch { return fallback; }
 }
 
-const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canInstall: boolean }> = ({ onClose, onInstall, canInstall }) => (
+const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canInstall: boolean, isIos: boolean }> = ({ onClose, onInstall, canInstall, isIos }) => (
     <div className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-brand-primary p-4 z-50 md:hidden animate-in slide-in-from-bottom duration-300">
         <div className="flex justify-between items-start mb-2">
             <h3 className="text-white font-bold text-lg">שמור כאפליקציה!</h3>
             <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
         </div>
-        {canInstall ? (
+        {isIos ? (
+             <div className="text-sm text-gray-300">
+                 <p className="mb-2">כדי להתקין באייפון:</p>
+                 <div className="flex items-center gap-2 mb-1">1. לחץ על כפתור השיתוף <span className="text-xl">⎋</span> למטה</div>
+                 <div className="flex items-center gap-2">2. בחר ב"הוסף למסך הבית" <span className="text-xl">➕</span></div>
+             </div>
+        ) : canInstall ? (
             <Button onClick={onInstall} className="w-full py-2 mb-2">התקן אפליקציה 📲</Button>
         ) : (
             <div className="flex items-center gap-2 text-sm text-brand-primary font-bold bg-gray-900/50 p-2 rounded">
-                <span>לחץ על שתף ובחר "הוסף למסך הבית"</span>
+                <span>לחץ על שלוש הנקודות ובחר "הוסף למסך הבית"</span>
             </div>
         )}
     </div>
 );
+
+// --- ICS File Generation Helper ---
+const downloadIcsFile = (session: TrainingSession, coachName: string) => {
+    const startTime = new Date(`${session.date}T${session.time}`);
+    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 hour duration
+
+    const formatDate = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//NivCohenFitness//IL
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+DTSTART:${formatDate(startTime)}
+DTEND:${formatDate(endTime)}
+SUMMARY:אימון ${session.type} - ${coachName}
+DESCRIPTION:${session.description || 'אימון כושר'}
+LOCATION:${session.location}
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR`;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `workout_${session.date}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
 
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -84,6 +121,7 @@ const App: React.FC = () => {
   const [weatherData, setWeatherData] = useState<Record<string, { maxTemp: number; weatherCode: number }>>({});
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [isIos, setIsIos] = useState(false);
 
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
@@ -186,8 +224,22 @@ const App: React.FC = () => {
   useEffect(() => { getMotivationQuote().then(setQuote); getWeatherForDates(getCurrentWeekDates(0), weatherLocation.lat, weatherLocation.lon).then(setWeatherData); }, []);
   
   useEffect(() => {
+    // Detect iOS
+    const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIos(iOS);
+    
+    // Check if running in standalone mode (installed)
+    const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator as any).standalone;
+    
+    // Android PWA prompt
     const handler = (e: Event) => { e.preventDefault(); setDeferredPrompt(e); setShowInstallPrompt(true); };
     window.addEventListener('beforeinstallprompt', handler);
+
+    // Show prompt for iOS if not installed
+    if (iOS && !isInStandaloneMode) {
+        setShowInstallPrompt(true);
+    }
+
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
@@ -294,16 +346,7 @@ const App: React.FC = () => {
 
   const handleAddToCalendar = () => {
       if (!viewingSession) return;
-      
-      const startTime = new Date(`${viewingSession.date}T${viewingSession.time}`);
-      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); 
-
-      const formatTime = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-      const title = encodeURIComponent(`אימון ${viewingSession.type} עם ${appConfig.coachNameHeb}`);
-      const details = encodeURIComponent(viewingSession.description || 'אימון כושר');
-      const location = encodeURIComponent(viewingSession.location);
-      const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatTime(startTime)}/${formatTime(endTime)}&details=${details}&location=${location}&sf=true&output=xml`;
-      window.open(googleUrl, '_blank');
+      downloadIcsFile(viewingSession, appConfig.coachNameHeb);
   };
 
   const handleLogin = async () => {
@@ -517,7 +560,7 @@ const App: React.FC = () => {
                         <a href={`https://waze.com/ul?q=${encodeURIComponent(viewingSession.location)}&navigate=yes`} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors border border-gray-600"><span>נווט</span><span>🚗</span></a>
                       </div>
                       <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">{viewingSession.description || 'ללא תיאור'}</p>
-                      <div className="relative z-10 mt-3 flex"><Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">📅 הוסף ליומן {appConfig.coachNameHeb}</Button></div>
+                      <div className="relative z-10 mt-3 flex"><Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">📅 הוסף ליומן (קובץ) {appConfig.coachNameHeb}</Button></div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 bg-gray-800">
                       <div className="flex justify-between items-center mb-3">
@@ -582,7 +625,7 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {showInstallPrompt && <InstallPrompt onClose={()=>setShowInstallPrompt(false)} onInstall={handleInstallClick} canInstall={!!deferredPrompt}/>}
+      {showInstallPrompt && <InstallPrompt onClose={()=>setShowInstallPrompt(false)} onInstall={handleInstallClick} canInstall={!!deferredPrompt} isIos={isIos}/>}
       
       <footer className="fixed bottom-0 w-full bg-black/90 p-3 flex justify-between items-center border-t border-gray-800 z-50 backdrop-blur-md">
           <div className="flex items-center gap-2">
