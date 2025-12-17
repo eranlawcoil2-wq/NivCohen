@@ -161,6 +161,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
   
+  // Messaging State
+  const [messageText, setMessageText] = useState('');
+
   // App Config Form
   const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
   
@@ -403,9 +406,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const openAttendanceModal = (session: TrainingSession) => {
       setAttendanceSession(session);
       setIsEditingInModal(false); 
+      // Set Default message
+      setMessageText(`היי! תזכורת לאימון ${session.type} היום ב-${session.time} ב${session.location}. מחכה לכם! 💪`);
+
       let initialSet: Set<string>;
       // If attendance list doesn't exist yet, assume all registered are attending (auto V)
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
+          // Changed: Default to checking ALL registered users initially
           initialSet = new Set(session.registeredPhoneNumbers);
       } else {
           initialSet = new Set(session.attendedPhoneNumbers);
@@ -442,20 +449,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setIsEditingInModal(true);
   };
   
-  const handleSendReminder = () => {
-      if (!attendanceSession) return;
-      const attendees = attendanceSession.registeredPhoneNumbers;
-      if (attendees.length === 0) {
-          alert('אין נרשמים לאימון זה');
-          return;
-      }
-      
-      const message = `היי כולם! 
-תזכורת לאימון ${attendanceSession.type} היום בשעה ${attendanceSession.time} ב${attendanceSession.location}.
-מחכה לכם! 💪
-${appConfig.coachNameHeb}`;
-
-      const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+  const handleSendSingleMessage = (phone: string) => {
+      if (!attendanceSession || !messageText) return;
+      const url = `https://wa.me/${normalizePhoneForWhatsapp(phone)}?text=${encodeURIComponent(messageText)}`;
       window.open(url, '_blank');
   };
 
@@ -469,7 +465,7 @@ ${appConfig.coachNameHeb}`;
           return clean;
       }).join(',');
       
-      navigator.clipboard.writeText(numbers).then(() => alert('מספרי הטלפון הועתקו ללוח! 📋'));
+      navigator.clipboard.writeText(numbers).then(() => alert('מספרי הטלפון הועתקו ללוח! 📋\nניתן להדביק ברשימת תפוצה בוואטסאפ.'));
   };
 
   const handleSaveEditedSession = async () => {
@@ -854,13 +850,41 @@ ${appConfig.coachNameHeb}`;
                           </div>
 
                           {/* NOTIFICATIONS SECTION */}
-                          <div className="flex gap-2 mb-4 bg-gray-900 p-2 rounded-lg border border-gray-700">
-                               <Button size="sm" onClick={handleSendReminder} className="flex-1 text-xs gap-1 bg-[#25D366] hover:bg-[#20bd5a] text-white border-none shadow-none">
-                                   <span className="text-sm">📣</span> שלח תזכורת
-                               </Button>
-                               <Button size="sm" variant="secondary" onClick={handleCopyNumbers} className="flex-1 text-xs gap-1">
-                                   <span className="text-sm">📋</span> העתק טלפונים
-                               </Button>
+                          <div className="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
+                               <div className="flex justify-between items-center mb-2">
+                                   <div className="text-sm font-bold text-white flex items-center gap-2">💬 שליחת הודעות למתאמנים</div>
+                                   <Button size="sm" variant="secondary" onClick={handleCopyNumbers} className="text-[10px] py-1 h-6">
+                                       📋 העתק מספרי טלפון (לרשימת תפוצה)
+                                   </Button>
+                               </div>
+                               
+                               <textarea 
+                                  className="w-full bg-gray-800 text-white text-sm p-2 rounded border border-gray-600 mb-2 h-20"
+                                  placeholder="כתוב הודעה כאן..."
+                                  value={messageText}
+                                  onChange={e => setMessageText(e.target.value)}
+                               />
+                               
+                               <div className="max-h-32 overflow-y-auto space-y-1">
+                                   {attendanceSession.registeredPhoneNumbers.length > 0 ? (
+                                       attendanceSession.registeredPhoneNumbers.map(phone => {
+                                           const user = users.find(u => u.phone.replace(/\D/g,'') === phone.replace(/\D/g,''));
+                                           return (
+                                               <div key={phone} className="flex justify-between items-center bg-gray-800 p-1.5 rounded border border-gray-700/50">
+                                                   <span className="text-xs text-white">{user?.fullName || phone}</span>
+                                                   <button 
+                                                      onClick={() => handleSendSingleMessage(phone)}
+                                                      className="bg-[#25D366] hover:bg-[#20bd5a] text-white px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1"
+                                                   >
+                                                       שלח 📤
+                                                   </button>
+                                               </div>
+                                           );
+                                       })
+                                   ) : (
+                                       <div className="text-gray-500 text-xs text-center">אין נרשמים לשליחת הודעה</div>
+                                   )}
+                               </div>
                           </div>
                           
                           <div className="mb-4">
