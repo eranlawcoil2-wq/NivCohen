@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef } from '../types';
+import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef, AppConfig } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { getCityCoordinates } from '../services/weatherService';
@@ -15,6 +15,7 @@ interface AdminPanelProps {
   weatherLocation: WeatherLocation;
   paymentLinks: PaymentLink[];
   streakGoal: number; 
+  appConfig: AppConfig;
   onAddUser: (user: User) => void;
   onUpdateUser: (user: User) => void;
   onDeleteUser: (userId: string) => void; 
@@ -28,6 +29,7 @@ interface AdminPanelProps {
   onAddPaymentLink: (link: PaymentLink) => void;
   onDeletePaymentLink: (id: string) => void;
   onUpdateStreakGoal: (goal: number) => void;
+  onUpdateAppConfig: (config: AppConfig) => void;
   onExitAdmin: () => void;
 }
 
@@ -59,6 +61,11 @@ create table if not exists config_workout_types (
   id text primary key, name text
 );
 
+create table if not exists config_general (
+  id text primary key, "coachNameHeb" text, "coachNameEng" text, 
+  "coachPhone" text, "coachEmail" text, "defaultCity" text
+);
+
 -- 3. עדכון עמודות חסרות בטבלאות קיימות
 alter table sessions add column if not exists "attendedPhoneNumbers" text[] default '{}';
 alter table sessions add column if not exists "isZoomSession" boolean default false;
@@ -76,6 +83,7 @@ alter table users enable row level security;
 alter table sessions enable row level security;
 alter table config_locations enable row level security;
 alter table config_workout_types enable row level security;
+alter table config_general enable row level security;
 
 drop policy if exists "Public Access Users" on users;
 create policy "Public Access Users" on users for all using (true);
@@ -88,6 +96,9 @@ create policy "Public Access Locations" on config_locations for all using (true)
 
 drop policy if exists "Public Access Types" on config_workout_types;
 create policy "Public Access Types" on config_workout_types for all using (true);
+
+drop policy if exists "Public Access General" on config_general;
+create policy "Public Access General" on config_general for all using (true);
 `;
 
 const getSunday = (d: Date) => {
@@ -108,10 +119,10 @@ const normalizePhone = (phone: string): string => {
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
     users, sessions, primaryColor, workoutTypes, locations, weatherLocation,
-    paymentLinks, streakGoal, onAddUser, onUpdateUser, onDeleteUser, 
+    paymentLinks, streakGoal, appConfig, onAddUser, onUpdateUser, onDeleteUser, 
     onAddSession, onUpdateSession, onDeleteSession, onColorChange,
     onUpdateWorkoutTypes, onUpdateLocations, onUpdateWeatherLocation,
-    onAddPaymentLink, onDeletePaymentLink, onUpdateStreakGoal, onExitAdmin
+    onAddPaymentLink, onDeletePaymentLink, onUpdateStreakGoal, onUpdateAppConfig, onExitAdmin
 }) => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'new_users' | 'connections'>('attendance');
   
@@ -146,6 +157,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
   const [newPaymentUrl, setNewPaymentUrl] = useState('');
+  
+  // App Config Form
+  const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
 
   // Cloud Config State
   const [sbUrl, setSbUrl] = useState(localStorage.getItem('niv_app_supabase_url') || '');
@@ -312,6 +326,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setEditingLocation(null);
   };
   const handleDeleteLocation = (id: string) => { if (confirm('למחוק מיקום זה?')) { onUpdateLocations(locations.filter(l => l.id !== id)); } };
+
+  const handleSaveAppConfig = () => {
+      onUpdateAppConfig(tempConfig);
+      alert('פרטי מאמן נשמרו בהצלחה!');
+  };
 
   // --- Attendance Logic ---
   const getCurrentWeekDates = (offset: number) => {
@@ -548,7 +567,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       id: uniqueId,
                       date: newDateStr,
                       registeredPhoneNumbers: [], // Don't copy users
-                      attendedPhoneNumbers: []
+                      attendedPhoneNumbers: [],
+                      isHidden: s.isHidden
                   });
                   count++;
               }
@@ -713,7 +733,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                              <div>
                                 <h3 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
                                     {attendanceSession.type}
-                                    {attendanceSession.isHidden && <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
+                                    {attendanceSession.isHidden && <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
                                 </h3>
                                 <p className="text-brand-primary font-mono">{attendanceSession.time} | {attendanceSession.location}</p>
                                 <p className="text-xs text-gray-500 mt-1">{attendanceSession.date}</p>
@@ -887,6 +907,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <div className="mt-6 pt-6 border-t border-gray-700">
                  <h4 className="text-sm font-bold mb-2">הוראות התקנה (חובה לעדכון):</h4>
+                 <p className="text-xs text-gray-400 mb-2">הוספנו טבלת הגדרות כלליות (שם מאמן, טלפון, וכו'). העתק את הסקריפט והרץ מחדש.</p>
                  <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">העתק סקריפט SQL</Button>
               </div>
           </div>
@@ -894,6 +915,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       
       {activeTab === 'settings' && (
           <div className="space-y-6">
+              
+              <div className="bg-gray-800 p-4 rounded border border-gray-700">
+                  <h3 className="text-white mb-3 font-bold">פרטי מאמן והגדרות כלליות</h3>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                          <label className="text-xs text-gray-400">שם בעברית</label>
+                          <input type="text" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachNameHeb} onChange={e=>setTempConfig({...tempConfig, coachNameHeb: e.target.value})}/>
+                      </div>
+                      <div>
+                          <label className="text-xs text-gray-400">שם באנגלית (לכותרת)</label>
+                          <input type="text" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachNameEng} onChange={e=>setTempConfig({...tempConfig, coachNameEng: e.target.value})}/>
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                          <label className="text-xs text-gray-400">טלפון מאמן</label>
+                          <input type="tel" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachPhone} onChange={e=>setTempConfig({...tempConfig, coachPhone: e.target.value})}/>
+                      </div>
+                      <div>
+                          <label className="text-xs text-gray-400">אימייל מאמן</label>
+                          <input type="email" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.coachEmail} onChange={e=>setTempConfig({...tempConfig, coachEmail: e.target.value})}/>
+                      </div>
+                  </div>
+                  <div className="mb-3">
+                      <label className="text-xs text-gray-400">עיר ברירת מחדל (מזג אוויר)</label>
+                      <input type="text" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.defaultCity} onChange={e=>setTempConfig({...tempConfig, defaultCity: e.target.value})}/>
+                  </div>
+                  <Button onClick={handleSaveAppConfig} className="w-full">שמור פרטים</Button>
+              </div>
+
               <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-2 font-bold">צבע ראשי לאפליקציה</h3>
                   <div className="flex gap-2">{SESSION_COLORS.map(c => <button key={c} onClick={() => onColorChange(c)} className={`w-8 h-8 rounded-full ${primaryColor===c?'border-2 border-white':''}`} style={{backgroundColor:c}}/>)}</div>
@@ -955,11 +1006,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       </div>
                       <Button onClick={handleCopyWeek} isLoading={isProcessingCopy} className="mt-2">העתק שבוע 📋</Button>
                   </div>
-              </div>
-              
-              <div className="bg-gray-800 p-4 rounded border border-gray-700 flex gap-2">
-                  <input type="text" placeholder="חיפוש עיר (מזג אוויר)" className="bg-gray-900 text-white p-2 rounded flex-1" value={citySearch} onChange={e=>setCitySearch(e.target.value)}/>
-                  <Button onClick={handleSearchCity}>{isSearchingCity?'...':'עדכן'}</Button>
               </div>
           </div>
       )}

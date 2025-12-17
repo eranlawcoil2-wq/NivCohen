@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef } from './types';
-import { COACH_PHONE_NUMBER } from './constants';
+import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef, AppConfig } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
@@ -52,6 +51,14 @@ const App: React.FC = () => {
         { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה', color: '#3B82F6' },
   ]));
   
+  const [appConfig, setAppConfig] = useState<AppConfig>({
+      coachNameHeb: 'ניב כהן',
+      coachNameEng: 'NIV COHEN',
+      coachPhone: '0500000000',
+      coachEmail: '',
+      defaultCity: 'נס ציונה'
+  });
+
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
   const [streakGoal, setStreakGoal] = useState<number>(() => parseInt(localStorage.getItem('niv_app_streak_goal') || '3'));
   const [weatherLocation, setWeatherLocation] = useState<WeatherLocation>(() => safeJsonParse('niv_app_weather_loc', { name: 'נס ציונה', lat: 31.93, lon: 34.80 }));
@@ -97,6 +104,12 @@ const App: React.FC = () => {
 
           const types = await dataService.getWorkoutTypes();
           if (types && types.length > 0) setWorkoutTypes(types);
+          
+          const config = await dataService.getAppConfig();
+          setAppConfig(config);
+          
+          // Update document title
+          document.title = `${config.coachNameHeb} - אימוני כושר`;
 
       } catch (e) { 
           console.error(e); 
@@ -109,26 +122,24 @@ const App: React.FC = () => {
 
   // Handlers for updating config
   const handleUpdateLocations = async (newLocations: LocationDef[]) => {
-      // Determine what was deleted by comparing IDs
       const currentIds = newLocations.map(l => l.id);
       const deleted = locations.filter(l => !currentIds.includes(l.id));
-      
-      // Delete removed ones
-      for (const d of deleted) {
-          await dataService.deleteLocation(d.id);
-      }
-      // Save new list (Upsert)
+      for (const d of deleted) await dataService.deleteLocation(d.id);
       await dataService.saveLocations(newLocations);
       setLocations(newLocations);
   };
 
   const handleUpdateWorkoutTypes = async (newTypes: string[]) => {
       const deleted = workoutTypes.filter(t => !newTypes.includes(t));
-      for (const d of deleted) {
-          await dataService.deleteWorkoutType(d);
-      }
+      for (const d of deleted) await dataService.deleteWorkoutType(d);
       await dataService.saveWorkoutTypes(newTypes);
       setWorkoutTypes(newTypes);
+  };
+  
+  const handleUpdateAppConfig = async (newConfig: AppConfig) => {
+      await dataService.saveAppConfig(newConfig);
+      setAppConfig(newConfig);
+      document.title = `${newConfig.coachNameHeb} - אימוני כושר`;
   };
   
   useEffect(() => {
@@ -273,7 +284,7 @@ const App: React.FC = () => {
       const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); 
 
       const formatTime = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-      const title = encodeURIComponent(`אימון ${viewingSession.type} עם ניב כהן`);
+      const title = encodeURIComponent(`אימון ${viewingSession.type} עם ${appConfig.coachNameHeb}`);
       const details = encodeURIComponent(viewingSession.description || 'אימון כושר');
       const location = encodeURIComponent(viewingSession.location);
       const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatTime(startTime)}/${formatTime(endTime)}&details=${details}&location=${location}&sf=true&output=xml`;
@@ -341,7 +352,7 @@ const App: React.FC = () => {
   return (
     <div className={mainBackgroundClass}>
       <header className="bg-brand-dark p-4 sticky top-0 z-20 border-b border-gray-800 flex justify-between items-center shadow-lg">
-          <div><h1 className="text-2xl font-black text-white italic">NIV <span className="text-brand-primary">COHEN</span></h1></div>
+          <div><h1 className="text-2xl font-black text-white italic uppercase">{appConfig.coachNameEng.split(' ')[0]} <span className="text-brand-primary">{appConfig.coachNameEng.split(' ').slice(1).join(' ')}</span></h1></div>
           {currentUser && (
               <div className="text-right flex items-center gap-3">
                   <div>
@@ -392,6 +403,7 @@ const App: React.FC = () => {
              <AdminPanel 
                 users={users} sessions={sessions} primaryColor={primaryColor} workoutTypes={workoutTypes}
                 locations={locations} weatherLocation={weatherLocation} paymentLinks={paymentLinks} streakGoal={streakGoal}
+                appConfig={appConfig}
                 onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
@@ -413,6 +425,7 @@ const App: React.FC = () => {
                 onUpdateLocations={handleUpdateLocations}
                 onUpdateWeatherLocation={setWeatherLocation} onAddPaymentLink={l=>setPaymentLinks([...paymentLinks,l])}
                 onDeletePaymentLink={id=>setPaymentLinks(paymentLinks.filter(l=>l.id!==id))} onUpdateStreakGoal={setStreakGoal}
+                onUpdateAppConfig={handleUpdateAppConfig}
                 onExitAdmin={()=>{toggleAdminMode(); refreshData();}}
             />
         ) : (
@@ -489,7 +502,7 @@ const App: React.FC = () => {
                         <a href={`https://waze.com/ul?q=${encodeURIComponent(viewingSession.location)}&navigate=yes`} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors border border-gray-600"><span>נווט</span><span>🚗</span></a>
                       </div>
                       <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">{viewingSession.description || 'ללא תיאור'}</p>
-                      <div className="relative z-10 mt-3 flex"><Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">📅 הוסף ליומן</Button></div>
+                      <div className="relative z-10 mt-3 flex"><Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">📅 הוסף ליומן {appConfig.coachNameHeb}</Button></div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-4 bg-gray-800">
                       <div className="flex justify-between items-center mb-3">

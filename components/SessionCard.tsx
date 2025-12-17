@@ -60,10 +60,15 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       onRegisterClick(session.id);
   };
 
+  // Distinct background for hidden sessions
+  const hiddenStyleClass = session.isHidden 
+    ? 'bg-[#3f1010] border-red-800/60 shadow-none' // Dark Red background for hidden
+    : 'bg-brand-dark border-gray-800 hover:border-gray-600';
+
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
-      className={`relative bg-brand-dark rounded-xl p-3 border shadow-lg cursor-pointer transition-all hover:-translate-y-1 group flex flex-col gap-2 ${isRegistered ? 'shadow-lg' : 'border-gray-800 hover:border-gray-600'} h-full justify-between ${session.isHidden ? 'opacity-70 border-dashed border-gray-600' : ''}`}
+      className={`relative rounded-xl p-3 border shadow-lg cursor-pointer transition-all hover:-translate-y-1 group flex flex-col gap-2 ${isRegistered ? 'shadow-lg' : ''} h-full justify-between ${hiddenStyleClass}`}
       style={{ 
           borderColor: isRegistered ? cardColor : undefined,
           boxShadow: isRegistered ? `0 4px 14px 0 ${cardColor}20` : undefined
@@ -84,7 +89,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
            </div>
         )}
         {session.isHidden && (
-            <div className="bg-gray-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+            <div className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
                <span>👻 נסתר</span>
            </div>
         )}
@@ -118,7 +123,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           </div>
       </div>
 
-      <div className="mt-auto pt-2 border-t border-gray-800">
+      <div className="mt-auto pt-2 border-t border-gray-800/50">
           <div className="flex justify-between items-center mb-2 text-xs">
              <span className={`font-bold ${isFull ? 'text-red-400' : 'text-gray-300'}`}>
                 {registeredCount}/{session.maxCapacity} רשומים

@@ -63,3 +63,11 @@ export interface PaymentLink {
   title: string;
   url: string;
 }
+
+export interface AppConfig {
+  coachNameHeb: string;
+  coachNameEng: string;
+  coachPhone: string;
+  coachEmail: string;
+  defaultCity: string;
+}

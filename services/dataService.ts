@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { User, TrainingSession, LocationDef, WorkoutType } from '../types';
+import { User, TrainingSession, LocationDef, WorkoutType, AppConfig } from '../types';
 import { INITIAL_USERS, INITIAL_SESSIONS } from '../constants';
 
 // Safe LocalStorage Parser
@@ -21,6 +21,14 @@ const DEFAULT_LOCATIONS: LocationDef[] = [
     { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה', color: '#A3E635' },
     { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה', color: '#3B82F6' }
 ];
+
+const DEFAULT_CONFIG: AppConfig = {
+    coachNameHeb: 'ניב כהן',
+    coachNameEng: 'NIV COHEN',
+    coachPhone: '0500000000',
+    coachEmail: '',
+    defaultCity: 'נס ציונה'
+};
 
 export const dataService = {
   // --- USERS ---
@@ -126,14 +134,9 @@ export const dataService = {
   
   saveLocations: async (locations: LocationDef[]): Promise<void> => {
     if (supabase) {
-        // Simple replace strategy for simplicity: Delete all and insert all
-        // In production, better to upsert, but since this is small config, this ensures full sync.
-        // HOWEVER, Supabase delete all requires a where clause.
-        // Safer approach: Upsert each.
         const { error } = await supabase.from('config_locations').upsert(locations);
         if (error) {
              console.error("Error saving locations:", error);
-             // Fallback to local if table doesn't exist yet
              localStorage.setItem('niv_app_locations', JSON.stringify(locations));
         }
     } else {
@@ -146,7 +149,6 @@ export const dataService = {
           const { error } = await supabase.from('config_locations').delete().eq('id', id);
           if (error) throw error;
       }
-      // Also update local cache
       const current = safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
       localStorage.setItem('niv_app_locations', JSON.stringify(current.filter(l => l.id !== id)));
   },
@@ -162,7 +164,6 @@ export const dataService = {
 
   saveWorkoutTypes: async (types: string[]): Promise<void> => {
       if (supabase) {
-           // We store them as { id: name, name: name } for simplicity
            const records = types.map(t => ({ id: t, name: t }));
            const { error } = await supabase.from('config_workout_types').upsert(records);
            if (error) console.error(error);
@@ -177,5 +178,26 @@ export const dataService = {
       }
       const current = safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
       localStorage.setItem('niv_app_types', JSON.stringify(current.filter(t => t !== type)));
+  },
+
+  // --- APP CONFIG ---
+  getAppConfig: async (): Promise<AppConfig> => {
+      if (supabase) {
+          const { data, error } = await supabase.from('config_general').select('*').single();
+          if (!error && data) return data as AppConfig;
+      }
+      return safeJsonParse<AppConfig>('niv_app_config', DEFAULT_CONFIG);
+  },
+
+  saveAppConfig: async (config: AppConfig): Promise<void> => {
+      if (supabase) {
+          // Assuming a single row with a fixed ID 'main' or similar, but simplified:
+          // We'll upsert with a fixed ID if table structure supports it, or just use the fields.
+          // Since we created the table dynamically, let's assume it has an ID column or single row logic.
+          // For simplicity in this app structure, we'll assume the table has an 'id' column fixed to 'main'.
+          const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
+          if (error) console.error(error);
+      }
+      localStorage.setItem('niv_app_config', JSON.stringify(config));
   }
 };
