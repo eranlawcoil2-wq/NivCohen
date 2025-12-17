@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo } from './types';
+import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, LocationDef, AppConfig, WeatherInfo } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationDef[]>([]);
   const [appConfig, setAppConfig] = useState<AppConfig>({
@@ -29,7 +30,6 @@ const App: React.FC = () => {
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
@@ -38,7 +38,6 @@ const App: React.FC = () => {
     if (!currentUser) return { monthly: 0, record: 0, streak: 0 };
     const phone = normalizePhone(currentUser.phone);
     const now = new Date();
-    // Only count sessions where the user actually attended (marked by coach)
     const attendedSessions = sessions.filter(s => s.attendedPhoneNumbers?.includes(phone));
     
     const monthlyCount = attendedSessions.filter(s => {
@@ -46,7 +45,6 @@ const App: React.FC = () => {
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
 
-    // Streak: weeks with 3+ attended workouts
     const weekMap: Record<string, number> = {};
     attendedSessions.forEach(s => {
         const d = new Date(s.date);
@@ -64,54 +62,30 @@ const App: React.FC = () => {
     return { monthly: monthlyCount, record: Math.max(currentUser.monthlyRecord || 0, monthlyCount), streak };
   }, [currentUser, sessions]);
 
-  // Fix: Added monthLeader to calculate the top attendee of the current month
   const monthLeader = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    
     const attendanceMap: Record<string, number> = {};
-    
     sessions.forEach(s => {
-      const sDate = new Date(s.date);
-      if (sDate.getMonth() === currentMonth && sDate.getFullYear() === currentYear) {
+      if (new Date(s.date).getMonth() === currentMonth) {
         (s.attendedPhoneNumbers || []).forEach(p => {
           const np = normalizePhone(p);
           attendanceMap[np] = (attendanceMap[np] || 0) + 1;
         });
       }
     });
-
     let topCount = 0;
     let topPhone = '';
-
     Object.entries(attendanceMap).forEach(([phone, count]) => {
-      if (count > topCount) {
-        topCount = count;
-        topPhone = phone;
-      }
+      if (count > topCount) { topCount = count; topPhone = phone; }
     });
-
     const leader = users.find(u => normalizePhone(u.phone) === topPhone);
-    return {
-      name: leader ? leader.fullName : 'אין מוביל',
-      count: topCount > 0 ? `${topCount} אימונים` : '0 אימונים'
-    };
+    return { name: leader ? (leader.displayName || leader.fullName.split(' ')[0]) : '---', count: topCount };
   }, [sessions, users]);
 
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); setDeferredPrompt(e); });
-    // Dynamically update primary brand color
     document.documentElement.style.setProperty('--brand-primary', isAdminMode ? '#EF4444' : '#A3E635');
   }, [isAdminMode]);
-
-  const handleInstall = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setDeferredPrompt(null);
-    }
-  };
 
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
@@ -147,17 +121,16 @@ const App: React.FC = () => {
       await dataService.updateSession(updated);
   };
 
+  const handleUpdateProfile = async (updatedUser: User) => {
+      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+      await dataService.updateUser(updatedUser);
+      setIsProfileModalOpen(false);
+  };
+
   const todayStr = new Date().toISOString().split('T')[0];
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {deferredPrompt && !isAdminMode && (
-          <div className="bg-brand-primary p-3 flex justify-between items-center px-6 sticky top-0 z-50 shadow-xl border-b border-black/20">
-              <span className="text-black font-black text-[10px] uppercase italic">הוסף את NIV Fitness למסך הבית!</span>
-              <button onClick={handleInstall} className="bg-black text-white px-4 py-1 rounded-full text-[9px] font-bold">הוספה</button>
-          </div>
-      )}
-
       <header className={`p-6 sticky top-0 z-40 border-b border-gray-800/50 backdrop-blur-md ${isAdminMode ? 'bg-red-900/20 border-red-500/30' : 'bg-brand-dark/80'}`}>
           <div className="flex justify-between items-center mb-6">
               <div onClick={() => isAdminMode ? setIsAdminMode(false) : document.getElementById('admin-modal')?.classList.remove('hidden')} className="cursor-pointer">
@@ -167,28 +140,34 @@ const App: React.FC = () => {
                   <p className="text-[8px] font-black tracking-[0.4em] text-gray-500 uppercase mt-1">CONSIST TRAINING</p>
               </div>
               {currentUser && !isAdminMode && (
-                  <button onClick={()=>{setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone');}} className="text-[9px] text-gray-500 font-bold uppercase border border-gray-800 px-3 py-1 rounded-full">התנתק</button>
+                  <div className="flex items-center gap-3">
+                    <div onClick={() => setIsProfileModalOpen(true)} className="text-right cursor-pointer group">
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
+                        <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
+                    </div>
+                    <button onClick={()=>{setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone');}} className="text-[9px] text-gray-700 font-bold uppercase border border-gray-800 px-3 py-1 rounded-full hover:bg-white hover:text-black transition-all">יציאה</button>
+                  </div>
               )}
           </div>
 
           {currentUser && !isAdminMode && (
               <div className="grid grid-cols-4 gap-2">
-                  <div className="bg-gray-800/50 p-3 rounded-2xl border border-gray-700 flex flex-col items-center justify-center text-center">
-                     <p className="text-[8px] text-gray-500 font-black uppercase tracking-tighter mb-1">החודש</p>
-                     <p className="text-brand-primary font-black text-xl leading-none">{stats.monthly}</p>
+                  <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                     <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">החודש</p>
+                     <p className="text-brand-primary font-black text-4xl leading-none">{stats.monthly}</p>
                   </div>
-                  <div className="bg-gray-800/50 p-3 rounded-2xl border border-gray-700 flex flex-col items-center justify-center text-center">
-                     <p className="text-[8px] text-gray-500 font-black uppercase tracking-tighter mb-1">שיא חודשי</p>
-                     <p className="text-white font-black text-xl leading-none">{stats.record}</p>
+                  <div className="bg-gray-800/40 p-4 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                     <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">שיא</p>
+                     <p className="text-white font-black text-4xl leading-none">{stats.record}</p>
                   </div>
-                  <div className="bg-orange-500/10 p-3 rounded-2xl border border-orange-500/30 flex flex-col items-center justify-center text-center">
-                     <p className="text-[8px] text-orange-500 font-black uppercase tracking-tighter mb-1 flex items-center gap-1">רצף 🔥</p>
-                     <p className="text-orange-400 font-black text-xl leading-none">{stats.streak}</p>
+                  <div className="bg-orange-500/10 p-4 rounded-2xl border border-orange-500/20 flex flex-col items-center justify-center text-center">
+                     <p className="text-[10px] text-orange-500 font-bold uppercase mb-1 flex items-center gap-1">רצף 🔥</p>
+                     <p className="text-orange-400 font-black text-4xl leading-none">{stats.streak}</p>
                   </div>
-                  <div className="bg-brand-primary/10 p-3 rounded-2xl border border-brand-primary/30 flex flex-col items-center justify-center text-center overflow-hidden">
-                     <p className="text-[8px] text-brand-primary font-black uppercase tracking-tighter mb-1 flex items-center gap-1">אלוף 🏆</p>
-                     <p className="text-white font-black text-[10px] leading-none truncate w-full">{monthLeader.name}</p>
-                     <p className="text-brand-primary font-black text-[9px] mt-1">{monthLeader.count}</p>
+                  <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex flex-col items-center justify-center text-center overflow-hidden">
+                     <p className="text-[10px] text-brand-primary font-bold uppercase mb-1 flex items-center gap-1">אלוף 🏆</p>
+                     <p className="text-white font-black text-xl leading-none truncate w-full">{monthLeader.name}</p>
+                     <p className="text-brand-primary font-black text-xs mt-1">{monthLeader.count} אימונים</p>
                   </div>
               </div>
           )}
@@ -222,12 +201,9 @@ const App: React.FC = () => {
                       const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                       return (
                           <div key={dateStr} className={`rounded-[50px] p-8 border transition-all duration-500 ${isToday ? 'bg-brand-primary/10 border-brand-primary/40' : 'bg-gray-900/10 border-gray-800/20'}`}>
-                              <div className="flex justify-between items-center mb-8 border-b border-gray-800/30 pb-2">
-                                  <h2 className={`text-[10px] font-black uppercase tracking-[0.2em] ${isToday ? 'text-white' : 'text-gray-600'}`}>
-                                      {d.toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'numeric'})}
-                                  </h2>
-                                  {weatherData[dateStr] && <span className="text-gray-500 text-xs font-bold">{getWeatherIcon(weatherData[dateStr].weatherCode)} {Math.round(weatherData[dateStr].maxTemp)}°</span>}
-                              </div>
+                              <h2 className={`text-[14px] font-black uppercase tracking-[0.2em] mb-8 pb-2 border-b border-white/5 ${isToday ? 'text-white' : 'text-gray-600'}`}>
+                                  {d.toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'numeric'})}
+                              </h2>
                               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                   {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} locations={locations} weather={weatherData[s.date]}/>)}
                                   {daySessions.length === 0 && <p className="text-gray-700 text-[10px] uppercase font-black tracking-widest col-span-full text-center py-4 italic">יום מנוחה</p>}
@@ -240,44 +216,113 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* Profile Modal */}
+      {isProfileModalOpen && currentUser && (
+        <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-4 backdrop-blur-2xl no-scrollbar overflow-y-auto">
+            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 flex flex-col shadow-3xl text-right my-auto" dir="rtl">
+                <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
+                    <h3 className="text-3xl font-black text-white italic uppercase">עריכת פרופיל 👤</h3>
+                    <button onClick={() => setIsProfileModalOpen(false)} className="text-gray-500 text-3xl">✕</button>
+                </div>
+                
+                <div className="space-y-6 overflow-y-auto max-h-[70vh] px-2 no-scrollbar">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי (איך יראו אותך ברשימות)</label>
+                            <input className="w-full bg-gray-800 border border-white/5 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} placeholder="כינוי..." />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">צבע אישי</label>
+                            <input type="color" className="w-full h-14 bg-gray-800 border border-white/5 rounded-2xl p-1 cursor-pointer" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <div className="bg-brand-primary/5 p-6 rounded-3xl border border-brand-primary/20 space-y-4">
+                        <h4 className="text-brand-primary font-black uppercase italic text-sm border-b border-brand-primary/10 pb-2">הצהרת בריאות דיגיטלית</h4>
+                        <p className="text-gray-400 text-xs">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה.</p>
+                        
+                        <div className="grid grid-cols-1 gap-4">
+                            <div>
+                                <label className="text-[10px] text-gray-400 font-black block mb-2">מספר תעודת זהות</label>
+                                <input className="w-full bg-gray-900 border border-white/5 p-4 rounded-xl text-white font-mono" placeholder="123456789" value={currentUser.healthDeclarationId || ''} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationId: e.target.value})} />
+                            </div>
+                            <div className="flex items-center gap-3 bg-gray-900/50 p-4 rounded-xl">
+                                <input type="checkbox" id="health-check" className="w-6 h-6 rounded bg-gray-800 border-white/10" checked={!!currentUser.healthDeclarationDate} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationDate: e.target.checked ? new Date().toISOString() : ''})} />
+                                <label htmlFor="health-check" className="text-white text-xs font-bold">אני מאשר את נכונות ההצהרה</label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">העלאת קובץ חתום (אופציונלי)</label>
+                            <div className="border-2 border-dashed border-white/10 p-6 rounded-2xl text-center cursor-pointer hover:border-brand-primary transition-all">
+                                <p className="text-gray-500 text-[10px] font-black italic uppercase">לחץ להעלאת הצהרה חתומה</p>
+                                {currentUser.healthDeclarationFile && <p className="text-brand-primary text-[8px] mt-2 font-black uppercase">קובץ הועלה בהצלחה ✓</p>}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">אימייל לעדכונים</label>
+                        <input className="w-full bg-gray-800 border border-white/5 p-4 rounded-2xl text-white font-bold" value={currentUser.email || ''} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} placeholder="email@example.com" />
+                    </div>
+                </div>
+
+                <Button onClick={() => setIsProfileModalOpen(false)} className="w-full py-6 mt-8 rounded-[30px] text-xl font-black italic uppercase">שמור הכל ✅</Button>
+            </div>
+        </div>
+      )}
+
       {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-4 backdrop-blur-xl">
            <div className="bg-gray-900 p-10 rounded-[50px] w-full max-w-md border border-gray-800 flex flex-col shadow-3xl text-right" dir="rtl">
               <div className="flex justify-between items-start mb-6">
                  <div>
-                    <h3 className="text-2xl font-black text-white italic uppercase">{viewingSession.type}</h3>
-                    <p className="text-brand-primary font-mono text-xs uppercase tracking-widest">{viewingSession.time} | {new Date(viewingSession.date).toLocaleDateString('he-IL')}</p>
+                    <h3 className="text-3xl font-black text-white italic uppercase leading-none mb-1">{viewingSession.type}</h3>
+                    <div className="flex items-center gap-2">
+                      <p className="text-brand-primary font-mono text-lg font-black uppercase tracking-widest">{viewingSession.time}</p>
+                      {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
+                         <span className="text-gray-400 text-sm font-bold flex items-center gap-1 border-r border-gray-700 pr-2">
+                           {getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}
+                           {Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°
+                         </span>
+                      )}
+                    </div>
                  </div>
                  <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-3xl">✕</button>
               </div>
               <div className="space-y-6">
-                 <div>
-                    <p className="text-gray-500 text-[10px] font-black uppercase mb-1">מיקום</p>
-                    <p className="text-white font-bold">{viewingSession.location}</p>
+                 <div className="bg-gray-800/50 p-4 rounded-3xl border border-white/5">
+                    <p className="text-gray-500 text-[10px] font-black uppercase mb-1">מיקום האימון</p>
+                    <p className="text-white font-black text-xl">{viewingSession.location}</p>
                  </div>
+                 {viewingSession.description && (
+                    <div className="bg-brand-primary/5 p-6 rounded-3xl border border-brand-primary/10">
+                       <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן 📣</p>
+                       <p className="text-white font-bold text-lg leading-relaxed">{viewingSession.description}</p>
+                    </div>
+                 )}
                  <div>
                     <p className="text-gray-500 text-[10px] font-black uppercase mb-1">רשומים ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
                     <div className="flex flex-wrap gap-2 mt-2">
                        {viewingSession.registeredPhoneNumbers.map(p => {
                            const u = users.find(x => normalizePhone(x.phone) === normalizePhone(p));
                            return (
-                             <span key={p} className="bg-gray-800 text-gray-300 px-3 py-1 rounded-full text-[10px] font-bold">
-                               {u?.fullName || 'מתאמן'}
+                             <span key={p} className="bg-gray-800 text-gray-300 px-4 py-2 rounded-2xl text-xs font-bold border border-white/5" style={{ borderColor: u?.userColor || 'transparent' }}>
+                               {u?.displayName || u?.fullName || 'מתאמן'}
                              </span>
                            );
                        })}
-                       {viewingSession.registeredPhoneNumbers.length === 0 && <p className="text-gray-700 italic text-xs">אין נרשמים עדיין</p>}
                     </div>
                  </div>
               </div>
-              <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className="w-full py-5 mt-8 rounded-3xl">
-                 {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה לאימון'}
+              <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className="w-full py-6 mt-8 rounded-[30px] text-xl font-black italic uppercase">
+                 {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה לאימון ⚡'}
               </Button>
            </div>
         </div>
       )}
       
-      {/* Login Modals */}
+      {/* Admin Login & User Phone Login Modals remain as before */}
       <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-4 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[50px] w-full max-sm border border-gray-800 shadow-2xl">
               <h3 className="text-white font-black text-3xl mb-8 text-center italic uppercase">כניסת מאמן 🔒</h3>
