@@ -11,6 +11,7 @@ interface SessionCardProps {
   weather?: WeatherInfo;
   onRegisterClick: (sessionId: string) => void;
   onViewDetails: (sessionId: string) => void;
+  onDuplicate?: (session: TrainingSession) => void;
   locations?: LocationDef[];
   isAdmin?: boolean; 
 }
@@ -22,14 +23,16 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   weather,
   onRegisterClick,
   onViewDetails,
+  onDuplicate,
   locations = [],
   isAdmin = false
 }) => {
   const registeredCount = session.registeredPhoneNumbers.length;
-  const spotsLeft = session.maxCapacity - registeredCount;
-  const isFull = spotsLeft <= 0;
+  const isFull = registeredCount >= session.maxCapacity;
   const isCancelled = session.isCancelled || false;
+  const isZoom = session.isZoomSession || !!session.zoomLink;
   
+  // Logic for "Happening Now"
   let isHappening = false;
   if (!isCancelled) {
       if (session.manualHasStarted) {
@@ -39,60 +42,99 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           const sessionStart = new Date(`${session.date}T${session.time}`);
           const diffMs = sessionStart.getTime() - now.getTime();
           const diffHours = diffMs / (1000 * 60 * 60);
-          
-          // BLINKING LOGIC: Starts 3 hours before, until 1 hour after start
+          // Automatic: 3 hours before start until 1 hour after start
           if (diffHours <= 3 && diffHours > -1) {
               isHappening = true;
           }
       }
   }
 
-  let buttonText = isRegistered ? 'רשום ✅' : (isFull ? 'המתנה ⏳' : 'הרשם +');
-  if (isCancelled) buttonText = 'בוטל ✕';
-  if (isAdmin) buttonText = 'נוכחות / עריכה';
+  const handleNavigate = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const url = `https://waze.com/ul?q=${encodeURIComponent(session.location)}`;
+      window.open(url, '_blank');
+  };
 
-  const cardColor = isAdmin ? '#EF4444' : (session.color || '#A3E635');
+  const handleCalendar = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const start = `${session.date.replace(/-/g, '')}T${session.time.replace(':', '')}00`;
+      const end = `${session.date.replace(/-/g, '')}T${(parseInt(session.time.split(':')[0]) + 1).toString().padStart(2, '0')}${session.time.split(':')[1]}00`;
+      const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('אימון: ' + session.type)}&dates=${start}/${end}&details=${encodeURIComponent(session.description || '')}&location=${encodeURIComponent(session.location)}`;
+      window.open(url, '_blank');
+  };
+
+  // Color Coding
+  let borderColor = isAdmin ? '#EF4444' : '#333';
+  if (isCancelled) borderColor = '#EF4444';
+  else if (isHappening && isZoom) borderColor = '#3B82F6'; // Blue-ish for Zoom happening
+  else if (isHappening) borderColor = '#A3E635';
+  else if (isZoom) borderColor = '#3B82F6';
+
+  const statusBg = isCancelled ? 'bg-red-500' : (isHappening ? 'bg-brand-primary' : (isZoom ? 'bg-blue-500' : 'bg-gray-700'));
+  const statusLabel = isCancelled ? 'בוטל' : (isHappening ? (isZoom ? 'מתקיים + זום' : 'מתקיים') : (isZoom ? 'אימון זום' : 'מתוכנן'));
 
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
-      className={`relative rounded-[40px] p-6 border transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-2xl ${isCancelled ? 'bg-red-900/10 border-red-900/20 grayscale opacity-40' : 'bg-gray-800/70 border-gray-700/40'}`}
-      style={{ borderColor: isRegistered && !isCancelled && !isAdmin ? cardColor : undefined, boxShadow: isRegistered && !isCancelled ? `0 10px 40px ${cardColor}20` : undefined }}
+      className={`relative rounded-[40px] p-8 border-2 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-2xl ${isCancelled ? 'opacity-40 grayscale' : 'bg-gray-800/80 backdrop-blur-sm'}`}
+      style={{ borderColor: borderColor }}
     >
       <div className="absolute -top-3 -left-1 flex gap-1 z-10">
-         {isHappening && !isCancelled && (
-             <div className={`${isAdmin ? 'bg-red-600' : 'bg-brand-primary'} text-black text-[9px] font-black px-4 py-1.5 rounded-full animate-pulse shadow-xl flex items-center gap-1.5 uppercase italic tracking-tighter`}>
-                <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span> כעת
-             </div>
-         )}
-         {session.isTrial && !isCancelled && !isHappening && (
-             <div className="bg-amber-500 text-black text-[9px] font-black px-4 py-1.5 rounded-full shadow-xl uppercase italic tracking-tighter">ניסיון</div>
-         )}
+         <div className={`${statusBg} text-black text-[8px] font-black px-4 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 uppercase italic tracking-tighter`}>
+            {isHappening && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
+            {statusLabel}
+         </div>
       </div>
 
       <div>
-        <div className="flex justify-between items-start mb-4">
-           <span className={`text-3xl font-black font-mono italic leading-none ${isCancelled ? 'text-gray-600 line-through' : 'text-white'}`}>{session.time}</span>
-           {weather && <span className="text-lg opacity-40 grayscale">{getWeatherIcon(weather.weatherCode)}</span>}
+        <div className="flex justify-between items-start mb-6">
+           <span className={`text-4xl font-black font-mono italic leading-none ${isCancelled ? 'text-gray-600 line-through' : 'text-white'}`}>{session.time}</span>
+           {weather && (
+               <div className="flex flex-col items-end opacity-40">
+                  <span className="text-xl">{getWeatherIcon(weather.weatherCode)}</span>
+                  <span className="text-[10px] font-black">{Math.round(weather.maxTemp)}°</span>
+               </div>
+           )}
         </div>
-        <h3 className={`font-black text-xs leading-tight uppercase italic mb-1 tracking-tight ${isCancelled ? 'text-gray-600' : (isAdmin ? 'text-red-500' : 'text-brand-primary')}`}>{session.type}</h3>
+        <h3 className={`font-black text-sm leading-tight uppercase italic mb-1 tracking-tight ${isCancelled ? 'text-gray-600' : (isZoom ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white'))}`}>{session.type}</h3>
         <p className={`text-[10px] font-black truncate mb-6 uppercase tracking-tighter ${isCancelled ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location}</p>
       </div>
 
       <div className="space-y-4">
-        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
-           <span className={isFull && !isRegistered ? 'text-red-500' : 'text-gray-500'}>{registeredCount}/{session.maxCapacity}</span>
-           {isRegistered && !isCancelled && !isAdmin && <span className="text-brand-primary flex items-center gap-1"><span className="text-[8px]">✓</span> מאושר</span>}
+        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest border-b border-gray-800/50 pb-2">
+           <span className={isFull && !isRegistered ? 'text-red-500' : 'text-gray-500'}>{registeredCount}/{session.maxCapacity} מתאמנים</span>
+           {isRegistered && !isCancelled && !isAdmin && <span className="text-brand-primary">רשום✓</span>}
         </div>
-        <Button 
-           size="sm" 
-           variant={isAdmin ? 'danger' : (isRegistered ? 'outline' : 'primary')} 
-           className={`w-full text-[10px] py-3 font-black italic uppercase rounded-[30px] shadow-xl ${isCancelled ? 'bg-gray-700 border-transparent text-gray-500' : (isAdmin ? 'bg-red-600 hover:bg-red-500 border-transparent text-white' : '')}`}
-           onClick={(e) => { e.stopPropagation(); if(!isAdmin) onRegisterClick(session.id); else onViewDetails(session.id); }}
-           disabled={isCancelled && !isAdmin}
-        >
-           {buttonText}
-        </Button>
+        
+        <div className="grid grid-cols-2 gap-2">
+            {!isAdmin ? (
+                <>
+                  <button onClick={handleNavigate} className="bg-gray-800/50 text-gray-400 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest border border-gray-700/50 hover:text-white transition-all">Waze</button>
+                  <button onClick={handleCalendar} className="bg-gray-800/50 text-gray-400 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest border border-gray-700/50 hover:text-white transition-all">יומן</button>
+                </>
+            ) : (
+                <>
+                  <button onClick={(e)=>{e.stopPropagation(); onViewDetails(session.id);}} className="bg-red-500 text-white py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-red-500/20">עריכה</button>
+                  <button onClick={(e)=>{e.stopPropagation(); onDuplicate && onDuplicate(session);}} className="bg-gray-700 text-gray-300 py-2.5 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-600">שכפל</button>
+                </>
+            )}
+        </div>
+
+        {!isAdmin && (
+            <Button 
+               size="sm" 
+               variant={isRegistered ? 'outline' : 'primary'} 
+               className={`w-full text-[10px] py-4 font-black italic uppercase rounded-[30px] shadow-xl ${isCancelled ? 'bg-gray-700 border-transparent text-gray-500' : ''}`}
+               onClick={(e) => { e.stopPropagation(); onRegisterClick(session.id); }}
+               disabled={isCancelled || (isFull && !isRegistered)}
+            >
+               {isRegistered ? 'רשום ✅' : (isFull ? 'מלא ⏳' : 'הרשם +')}
+            </Button>
+        )}
+        
+        {isAdmin && (
+            <Button onClick={(e)=>{e.stopPropagation(); onViewDetails(session.id);}} className="w-full py-3 bg-white text-black text-[10px] uppercase font-black italic rounded-[30px]">נוכחות</Button>
+        )}
       </div>
     </div>
   );
