@@ -15,6 +15,12 @@ const normalizePhone = (phone: string): string => {
     return cleaned;
 };
 
+const normalizePhoneForWhatsapp = (phone: string): string => {
+    let p = normalizePhone(phone);
+    if (p.startsWith('0')) p = '972' + p.substring(1);
+    return p;
+};
+
 function safeJsonParse<T>(key: string, fallback: T): T {
     try {
         const item = localStorage.getItem(key);
@@ -276,6 +282,8 @@ const App: React.FC = () => {
 
   const handleInstallClick = () => {
     if (deferredPrompt) { deferredPrompt.prompt(); setDeferredPrompt(null); setShowInstallPrompt(false); }
+    else if (isIos) { setShowInstallPrompt(true); }
+    else { alert('התקנה נתמכת דרך תפריט הדפדפן: "הוסף למסך הבית"'); }
   };
 
   const getMonthlyWorkoutsCount = (phone: string) => {
@@ -627,10 +635,13 @@ const App: React.FC = () => {
                           <div className="grid grid-cols-2 gap-2">
                               {viewingSession.registeredPhoneNumbers.map((p,i) => {
                                   const u = users.find(user => normalizePhone(user.phone) === p);
+                                  const displayName = u?.displayName || u?.fullName || 'אורח';
+                                  const color = u?.userColor || '#A3E635';
+                                  
                                   return (
                                     <div key={i} className="bg-gray-700/50 text-gray-200 text-xs px-3 py-2 rounded flex items-center gap-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-brand-primary"></div>
-                                        {u?.fullName || 'אורח'}
+                                        <div className="w-2 h-2 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
+                                        <span style={{ color: color }} className="font-bold">{displayName}</span>
                                     </div>
                                   );
                               })}
@@ -639,7 +650,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="p-4 border-t border-gray-700 bg-gray-900/50">
                       <Button onClick={()=>handleRegisterClick(viewingSession.id)} className="w-full py-3 text-lg font-bold shadow-xl">
-                          {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'בטל הרשמה ✕' : 'אשר הגעה ✓'}
+                          {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'בטל הרשמה ✕' : 'הירשם לאימון +'}
                       </Button>
                   </div>
               </div>
@@ -721,7 +732,11 @@ const App: React.FC = () => {
                 <div className={`w-2 h-2 rounded-full ${isCloudConnected?'bg-green-500':'bg-red-500 animate-pulse'}`}/>
                 <span className="text-xs text-gray-500">{isCloudConnected?'מחובר':'מקומי'}</span>
             </div>
-            <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2">⚙️</button>
+            <div className="flex items-center gap-3">
+                <a href={`https://wa.me/${normalizePhoneForWhatsapp(appConfig.coachPhone)}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400 p-2 text-xl" title="צור קשר בוואטסאפ">📞</a>
+                <button onClick={handleInstallClick} className="text-brand-primary hover:text-white p-2 text-xl" title="התקן אפליקציה">📲</button>
+                <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2 text-xl" title="ניהול">⚙️</button>
+            </div>
           </div>
           <div className="text-[10px] text-center text-gray-500 w-full border-t border-gray-800/50 pt-2 flex justify-center gap-4">
                <span>© {new Date().getFullYear()} כל הזכויות שמורות</span>
