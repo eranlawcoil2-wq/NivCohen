@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrainingSession, User } from '../types';
+import { TrainingSession, User, LocationDef } from '../types';
 import { Button } from './Button';
 import { getWeatherIcon } from '../services/weatherService';
 
@@ -10,6 +10,7 @@ interface SessionCardProps {
   weather?: { maxTemp: number; weatherCode: number };
   onRegisterClick: (sessionId: string) => void;
   onViewDetails: (sessionId: string) => void;
+  locations?: LocationDef[];
 }
 
 const stringToColor = (str: string) => {
@@ -36,14 +37,22 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   isRegistered, 
   weather,
   onRegisterClick,
-  onViewDetails
+  onViewDetails,
+  locations = []
 }) => {
   const spotsLeft = session.maxCapacity - session.registeredPhoneNumbers.length;
   const isFull = spotsLeft <= 0;
   const registeredCount = session.registeredPhoneNumbers.length;
   const cardColor = session.color || 'var(--brand-primary)'; 
 
-  const locationBadgeClass = stringToColor(session.location);
+  // Try to find specific location color
+  const locationObj = locations.find(l => l.name === session.location);
+  const locationBadgeStyle = locationObj && locationObj.color 
+      ? { backgroundColor: `${locationObj.color}33`, color: locationObj.color, borderColor: `${locationObj.color}4d` } // 33=20%, 4d=30% alpha
+      : null;
+      
+  const defaultLocationClass = !locationBadgeStyle ? stringToColor(session.location) : '';
+
   const showZoomBadge = session.isZoomSession || !!session.zoomLink;
 
   const handleButtonClick = (e: React.MouseEvent) => {
@@ -92,7 +101,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           </h3>
           
           <div className="flex flex-col gap-1.5 items-start w-full mb-2">
-              <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border ${locationBadgeClass} w-full`}>
+              <div 
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border w-full ${defaultLocationClass}`}
+                style={locationBadgeStyle || {}}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
                 </svg>

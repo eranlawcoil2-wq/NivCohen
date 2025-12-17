@@ -18,6 +18,7 @@ export interface LocationDef {
   id: string;
   name: string; // The display name (e.g., "Park Hayarkon")
   address: string; // The physical address for Waze
+  color?: string; // Helper color for UI distinction
 }
 
 export interface User {

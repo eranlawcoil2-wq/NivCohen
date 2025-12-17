@@ -48,8 +48,8 @@ const App: React.FC = () => {
   // Defaults - initially loaded from local storage, then updated from DB
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(() => safeJsonParse('niv_app_types', Object.values(WorkoutType)));
   const [locations, setLocations] = useState<LocationDef[]>(() => safeJsonParse('niv_app_locations', [
-        { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה' },
-        { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה' },
+        { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה', color: '#A3E635' },
+        { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה', color: '#3B82F6' },
   ]));
   
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
@@ -430,7 +430,7 @@ const App: React.FC = () => {
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             {daySessions.sort((a,b)=>a.time.localeCompare(b.time)).map(s => (
                                                 <div key={s.id} onClick={()=>setViewingSession(s)} className="h-full">
-                                                    <SessionCard session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} weather={weatherData[s.date]}/>
+                                                    <SessionCard session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} weather={weatherData[s.date]} locations={locations}/>
                                                 </div>
                                             ))}
                                         </div>

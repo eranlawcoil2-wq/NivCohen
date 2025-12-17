@@ -53,9 +53,9 @@ create table if not exists sessions (
   "zoomLink" text, "isZoomSession" boolean
 );
 
--- 2. יצירת טבלאות הגדרה (חדש!)
+-- 2. יצירת טבלאות הגדרה
 create table if not exists config_locations (
-  id text primary key, name text, address text
+  id text primary key, name text, address text, color text
 );
 
 create table if not exists config_workout_types (
@@ -68,6 +68,7 @@ alter table sessions add column if not exists "isZoomSession" boolean default fa
 alter table sessions add column if not exists "zoomLink" text;
 alter table users add column if not exists "monthlyRecord" int default 0;
 alter table users add column if not exists "userColor" text;
+alter table config_locations add column if not exists color text default '#3B82F6';
 
 -- 4. הגדרות אבטחה
 alter table users enable row level security;
@@ -138,6 +139,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [newLocationName, setNewLocationName] = useState('');
   const [newLocationAddress, setNewLocationAddress] = useState('');
+  const [newLocationColor, setNewLocationColor] = useState('#3B82F6');
   const [editingLocation, setEditingLocation] = useState<LocationDef | null>(null);
 
   const [newPaymentTitle, setNewPaymentTitle] = useState('');
@@ -156,6 +158,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isReloading, setIsReloading] = useState(false);
+  const [isProcessingTemplate, setIsProcessingTemplate] = useState(false);
 
   const newUsers = users.filter(u => u.isNew);
   const existingUsers = users.filter(u => !u.isNew);
@@ -264,11 +267,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           const newLoc: LocationDef = {
               id: Date.now().toString(),
               name: newLocationName.trim(),
-              address: newLocationAddress.trim() || newLocationName.trim()
+              address: newLocationAddress.trim() || newLocationName.trim(),
+              color: newLocationColor
           };
           onUpdateLocations([...locations, newLoc]);
           setNewLocationName('');
           setNewLocationAddress('');
+          setNewLocationColor('#3B82F6');
       }
   };
 
@@ -502,30 +507,45 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       alert(`נשמרה תבנית עם ${template.length} אימונים`);
   };
 
-  const handleLoadTemplate = () => {
+  const handleLoadTemplate = async () => {
       const templateStr = localStorage.getItem('niv_app_week_template');
       if (!templateStr) { alert('אין תבנית שמורה'); return; }
-      if (!confirm('לייצר אימונים מהתבנית?')) return;
-      const template = JSON.parse(templateStr);
-      const targetStartOfWeek = getSunday(new Date(templateTargetDate));
-      let count = 0;
-      template.forEach((t: any) => {
-          const newDate = new Date(targetStartOfWeek); newDate.setDate(newDate.getDate() + t.dayIndex);
-          const dateStr = newDate.toISOString().split('T')[0];
-          const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9) + count;
+      if (!confirm('לייצר אימונים מהתבנית בשבוע היעד?')) return;
+      
+      setIsProcessingTemplate(true);
+      try {
+          const template = JSON.parse(templateStr);
+          // Always calculate target week start based on the selection
+          const targetStartOfWeek = getSunday(new Date(templateTargetDate));
+          let count = 0;
           
-          if (!sessions.some(s => s.date === dateStr && s.time === t.time && s.location === t.location)) {
-              onAddSession({ 
-                  ...t, 
-                  id: uniqueId, 
-                  date: dateStr, 
-                  registeredPhoneNumbers: [], 
-                  attendedPhoneNumbers: [] 
-              });
-              count++;
+          for (const t of template) {
+              const newDate = new Date(targetStartOfWeek); 
+              newDate.setDate(newDate.getDate() + t.dayIndex);
+              const dateStr = newDate.toISOString().split('T')[0];
+              const uniqueId = Date.now().toString() + Math.random().toString(36).substr(2, 9) + count;
+              
+              // Only add if not duplicate
+              if (!sessions.some(s => s.date === dateStr && s.time === t.time && s.location === t.location)) {
+                  await onAddSession({ 
+                      ...t, 
+                      id: uniqueId, 
+                      date: dateStr, 
+                      registeredPhoneNumbers: [], 
+                      attendedPhoneNumbers: [] 
+                  });
+                  count++;
+              }
           }
-      });
-      alert(`נוספו ${count} אימונים`);
+          alert(`התהליך הסתיים: נוספו ${count} אימונים`);
+          // Force reload to ensure UI updates
+          window.location.reload();
+      } catch (e) {
+          console.error(e);
+          alert('שגיאה בטעינת התבנית');
+      } finally {
+          setIsProcessingTemplate(false);
+      }
   };
 
   const handleSearchCity = async () => {
@@ -617,7 +637,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                               {daySessions.sort((a,b) => a.time.localeCompare(b.time)).map(session => (
                                                   <div key={session.id} onClick={() => openAttendanceModal(session)}>
-                                                      <SessionCard session={session} allUsers={users} isRegistered={false} onRegisterClick={() => openAttendanceModal(session)} onViewDetails={() => openAttendanceModal(session)}/>
+                                                      <SessionCard session={session} allUsers={users} isRegistered={false} onRegisterClick={() => openAttendanceModal(session)} onViewDetails={() => openAttendanceModal(session)} locations={locations}/>
                                                   </div>
                                               ))}
                                           </div>
@@ -631,8 +651,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
 
-      {/* ... (Attendance Session Modal and User Tabs - Unchanged mostly) ... */}
-      
       {attendanceSession && (
          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
             <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -718,7 +736,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       {activeTab === 'users' && (
          <div className="space-y-6">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
-                <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>
+                {/* User tab content (mostly unchanged) */}
+                 <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>
                 {editingUserId && formUser.phone && (
                    <div className="bg-gray-900/50 p-3 rounded mb-3 flex justify-between text-sm border border-gray-700">
                        <div>💪 אימונים החודש: <span className="text-brand-primary font-bold">{getMonthlyWorkoutsCount(formUser.phone)}</span></div>
@@ -795,6 +814,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <label className="text-xs text-gray-400">Project API Key (Anon)</label>
                   <input type="password" className="w-full bg-gray-900 border border-gray-600 p-2 rounded text-white text-sm" value={sbKey} onChange={e => setSbKey(e.target.value)} placeholder="eyJhbG..." />
               </div>
+              
+              {!supabase && (
+                 <div className="bg-yellow-900/30 p-3 rounded border border-yellow-700/50 text-xs text-yellow-200">
+                    ⚠️ שים לב: כדי שהנתונים יופיעו גם בנייד, עליך להעתיק את אותם פרטי חיבור גם במכשיר הנייד.
+                 </div>
+              )}
 
               <div className="flex gap-2 pt-2">
                   <Button onClick={handleSaveCloudConfig} className="flex-1">שמור והתחבר</Button>
@@ -803,7 +828,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
               <div className="mt-6 pt-6 border-t border-gray-700">
                  <h4 className="text-sm font-bold mb-2">הוראות התקנה (חובה לעדכון):</h4>
-                 <p className="text-xs text-gray-400 mb-2">לחץ להעתקת סקריפט ליצירת טבלאות המיקומים וסוגי האימונים החדשים:</p>
+                 <p className="text-xs text-gray-400 mb-2">הוספנו תמיכה בצבעים למיקומים! אנא העתק את הסקריפט והרץ אותו מחדש ב-Supabase.</p>
                  <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">העתק סקריפט SQL</Button>
               </div>
           </div>
@@ -848,17 +873,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <h3 className="text-white mb-3 font-bold">מיקומים</h3>
                   <div className="flex flex-col gap-2 mb-4">
                       <div className="flex gap-2">
-                         <input type="text" placeholder="שם המקום (למשל: סטודיו)" className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600" value={newLocationName} onChange={e=>setNewLocationName(e.target.value)}/>
+                         <input type="text" placeholder="שם המקום" className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600" value={newLocationName} onChange={e=>setNewLocationName(e.target.value)}/>
                          <input type="text" placeholder="כתובת (לווייז)" className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600" value={newLocationAddress} onChange={e=>setNewLocationAddress(e.target.value)}/>
                       </div>
-                      <Button onClick={handleAddLocation}>הוסף מיקום</Button>
+                      <div className="flex gap-2 items-center">
+                          <input type="color" className="w-10 h-10 rounded cursor-pointer bg-transparent border-none p-0" value={newLocationColor} onChange={e=>setNewLocationColor(e.target.value)} />
+                          <span className="text-gray-400 text-xs">בחר צבע למיקום</span>
+                          <Button onClick={handleAddLocation} className="flex-1 mr-auto">הוסף מיקום</Button>
+                      </div>
                   </div>
 
                   {editingLocation ? (
                        <div className="flex flex-col gap-2 mb-4 bg-gray-900 p-2 rounded border border-brand-primary">
                           <input type="text" placeholder="שם" className="bg-gray-800 text-white p-2 rounded" value={editingLocation.name} onChange={e=>setEditingLocation({...editingLocation, name: e.target.value})}/>
                           <input type="text" placeholder="כתובת" className="bg-gray-800 text-white p-2 rounded" value={editingLocation.address} onChange={e=>setEditingLocation({...editingLocation, address: e.target.value})}/>
-                          <div className="flex gap-2">
+                          <div className="flex items-center gap-2">
+                              <input type="color" className="w-8 h-8 rounded cursor-pointer bg-transparent border-none p-0" value={editingLocation.color || '#3B82F6'} onChange={e=>setEditingLocation({...editingLocation, color: e.target.value})} />
                               <Button size="sm" onClick={handleSaveLocation} className="flex-1">שמור</Button>
                               <Button size="sm" variant="secondary" onClick={()=>setEditingLocation(null)} className="flex-1">ביטול</Button>
                           </div>
@@ -866,7 +896,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ) : (
                       <div className="space-y-2 max-h-40 overflow-y-auto">
                           {locations.map((loc) => (
-                              <div key={loc.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700">
+                              <div key={loc.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700" style={{borderRight: `4px solid ${loc.color || '#3B82F6'}`}}>
                                   <div>
                                       <div className="text-white text-sm font-bold">{loc.name}</div>
                                       <div className="text-gray-500 text-xs">{loc.address}</div>
@@ -892,7 +922,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <div className="flex gap-2 items-center">
                           <label className="text-xs text-gray-400 w-12">יעד:</label>
                           <input type="date" className="bg-gray-900 text-white p-2 rounded flex-1" value={templateTargetDate} onChange={e=>setTemplateTargetDate(e.target.value)}/>
-                          <Button size="sm" onClick={handleLoadTemplate}>טען תבנית</Button>
+                          <Button size="sm" onClick={handleLoadTemplate} isLoading={isProcessingTemplate}>טען תבנית</Button>
                       </div>
                   </div>
               </div>
