@@ -63,8 +63,17 @@ const InstallPrompt: React.FC<{ onClose: () => void, onInstall: () => void, canI
             ) : canInstall ? (
                 <Button onClick={onInstall} className="w-full py-3 text-lg shadow-xl shadow-brand-primary/20">התקן עכשיו</Button>
             ) : (
-                <div className="text-center bg-gray-900 p-3 rounded text-sm text-gray-400">
-                    לחץ על תפריט הדפדפן (3 נקודות) ובחר <b>"התקן אפליקציה"</b> או <b>"הוסף למסך הבית"</b>
+                <div className="bg-gray-900/80 rounded-xl p-4 text-sm text-gray-300 space-y-3 relative">
+                    <div className="absolute -bottom-8 right-8 text-brand-primary animate-bounce text-2xl">⬇</div>
+                    <p className="font-bold text-white text-center mb-2">איך מתקינים בדפדפן?</p>
+                    <div className="flex items-center gap-3">
+                        <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">1</span>
+                        <span>לחץ על תפריט הדפדפן (3 נקודות)</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <span className="bg-gray-700 w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs shrink-0">2</span>
+                        <span>בחר באפשרות <b>"התקן אפליקציה"</b> או <b>"הוסף למסך הבית"</b></span>
+                    </div>
                 </div>
             )}
         </div>
