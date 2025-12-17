@@ -32,6 +32,7 @@ export interface User {
   isNew?: boolean; // Flag for self-registered users pending coach review
   userColor?: string; // Custom color for the user name in lists
   monthlyRecord?: number; // Personal best: max workouts in a month
+  isRestricted?: boolean; // If true, user cannot register for workouts
 }
 
 export interface TrainingSession {
@@ -48,6 +49,7 @@ export interface TrainingSession {
   isTrial?: boolean; // Is this a trial session for new users?
   zoomLink?: string; // Optional link for Zoom sessions
   isZoomSession?: boolean; // Flag to mark as Zoom even without link
+  isHidden?: boolean; // If true, only visible to admin
 }
 
 export interface WeatherLocation {

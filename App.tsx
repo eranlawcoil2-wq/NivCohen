@@ -244,6 +244,13 @@ const App: React.FC = () => {
 
   const handleRegisterClick = async (sid: string) => {
       if (!currentUserPhone) { setShowLoginModal(true); return; }
+      
+      const currentUserObj = users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone));
+      if (currentUserObj && currentUserObj.isRestricted) {
+          alert('🚫 המנוי שלך מוגבל כרגע ואינו יכול להירשם לאימונים.\nאנא פנה למאמן להסדרת הסטטוס.');
+          return;
+      }
+
       const session = sessions.find(s => s.id === sid);
       if (!session) return;
       const phone = normalizePhone(currentUserPhone);
@@ -351,7 +358,12 @@ const App: React.FC = () => {
 
       <main className="max-w-4xl mx-auto p-4">
         {currentUser && (
-            <div className="mb-6 bg-gray-900 p-4 rounded-xl border border-gray-800 relative">
+            <div className={`mb-6 p-4 rounded-xl border relative ${currentUser.isRestricted ? 'bg-red-900/20 border-red-500/50' : 'bg-gray-900 border-gray-800'}`}>
+                {currentUser.isRestricted && (
+                    <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+                        חשבון מוגבל
+                    </div>
+                )}
                 <div className="flex justify-between items-start mb-2">
                      <div className="flex flex-col gap-1">
                          <div className="text-gray-400 text-xs">אימונים החודש</div>
@@ -413,7 +425,8 @@ const App: React.FC = () => {
                 
                 <div className="flex flex-col gap-6"> 
                     {weekDates.map(date => {
-                        const daySessions = groupedSessions[date] || [];
+                        // Filter hidden sessions for trainees
+                        const daySessions = (groupedSessions[date] || []).filter(s => !s.isHidden);
                         const isToday = new Date().toISOString().split('T')[0] === date;
                         return (
                             <div key={date} className={`rounded-xl border overflow-hidden flex flex-col md:flex-row shadow-lg ${isToday ? 'border-brand-primary bg-gray-800/50' : 'border-gray-800 bg-gray-900/40'}`}>

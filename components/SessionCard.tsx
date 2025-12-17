@@ -63,7 +63,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
-      className={`relative bg-brand-dark rounded-xl p-3 border shadow-lg cursor-pointer transition-all hover:-translate-y-1 group flex flex-col gap-2 ${isRegistered ? 'shadow-lg' : 'border-gray-800 hover:border-gray-600'} h-full justify-between`}
+      className={`relative bg-brand-dark rounded-xl p-3 border shadow-lg cursor-pointer transition-all hover:-translate-y-1 group flex flex-col gap-2 ${isRegistered ? 'shadow-lg' : 'border-gray-800 hover:border-gray-600'} h-full justify-between ${session.isHidden ? 'opacity-70 border-dashed border-gray-600' : ''}`}
       style={{ 
           borderColor: isRegistered ? cardColor : undefined,
           boxShadow: isRegistered ? `0 4px 14px 0 ${cardColor}20` : undefined
@@ -81,6 +81,11 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                    <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
                </svg>
                ZOOM
+           </div>
+        )}
+        {session.isHidden && (
+            <div className="bg-gray-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+               <span>👻 נסתר</span>
            </div>
         )}
       </div>
