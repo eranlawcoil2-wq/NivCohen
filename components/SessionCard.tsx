@@ -12,6 +12,7 @@ interface SessionCardProps {
   onRegisterClick: (sessionId: string) => void;
   onViewDetails: (sessionId: string) => void;
   onDuplicate?: (session: TrainingSession) => void;
+  onAddToCalendar?: (session: TrainingSession) => void;
   locations?: LocationDef[];
   isAdmin?: boolean; 
 }
@@ -24,6 +25,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   onRegisterClick,
   onViewDetails,
   onDuplicate,
+  onAddToCalendar,
   locations = [],
   isAdmin = false
 }) => {
@@ -35,6 +37,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const sessionHour = session.time.split(':')[0];
   const hourlyWeather = weather?.hourly?.[sessionHour];
   
+  // Automated "Happening" logic: 3 hours before start
   let isHappening = false;
   if (!isCancelled) {
       if (session.manualHasStarted) {
@@ -44,7 +47,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           const sessionStart = new Date(`${session.date}T${session.time}`);
           const diffMs = sessionStart.getTime() - now.getTime();
           const diffHours = diffMs / (1000 * 60 * 60);
-          if (diffHours <= 3 && diffHours > -1) {
+          // If within 3 hours before and hasn't ended (assuming 1.5h duration)
+          if (diffHours <= 3 && diffHours > -1.5) {
               isHappening = true;
           }
       }
@@ -110,7 +114,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                {isRegistered ? 'ביטול' : (isFull ? 'מלא' : 'הרשם')}
             </Button>
         ) : (
-            <Button onClick={(e)=>{e.stopPropagation(); onViewDetails(session.id);}} className="w-full py-2 sm:py-4 bg-white text-black text-[9px] sm:text-[12px] uppercase font-black italic rounded-2xl sm:rounded-[30px]">ניהול</Button>
+            <div className="space-y-2">
+                <Button onClick={(e)=>{e.stopPropagation(); onViewDetails(session.id);}} className="w-full py-2 sm:py-4 bg-white text-brand-black text-[9px] sm:text-[12px] uppercase font-black italic rounded-2xl sm:rounded-[30px] shadow-lg">ניהול ⚙️</Button>
+                <div className="grid grid-cols-2 gap-2">
+                    <Button onClick={(e)=>{e.stopPropagation(); onDuplicate?.(session);}} className="py-1 sm:py-2 bg-gray-700 text-white text-[7px] sm:text-[9px] uppercase font-black rounded-xl">שכפל 📑</Button>
+                    <Button onClick={(e)=>{e.stopPropagation(); onAddToCalendar?.(session);}} className="py-1 sm:py-2 bg-gray-700 text-white text-[7px] sm:text-[9px] uppercase font-black rounded-xl">ליומן 📅</Button>
+                </div>
+            </div>
         )}
       </div>
     </div>

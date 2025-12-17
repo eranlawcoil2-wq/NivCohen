@@ -37,8 +37,6 @@ interface InstallButtonProps {
 }
 
 const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, onInstalled }) => {
-    // If the browser already installed or prompt not available, we can still show a fallback or nothing.
-    // For now, only show if PWA install prompt is ready.
     if (!deferredPrompt) return null;
 
     const handleInstall = async () => {
@@ -224,6 +222,12 @@ const App: React.FC = () => {
       window.open(`https://waze.com/ul?q=${encodeURIComponent(addr)}`, '_blank');
   };
 
+  const handleDuplicateSession = async (session: TrainingSession) => {
+      const newSession = { ...session, id: Date.now().toString(), registeredPhoneNumbers: [], attendedPhoneNumbers: [] };
+      setSessions(prev => [...prev, newSession]);
+      await dataService.addSession(newSession);
+  };
+
   if (currentView === 'landing') {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
@@ -289,6 +293,8 @@ const App: React.FC = () => {
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
+                onDuplicateSession={handleDuplicateSession}
+                onAddToCalendar={addToCalendar}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
