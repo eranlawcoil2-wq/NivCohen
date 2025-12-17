@@ -43,8 +43,8 @@ const SESSION_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- סקריפט SQL מעודכן עבור Supabase
--- הרץ את זה ב-SQL Editor של Supabase
+-- סקריפט SQL סופי ומעודכן עבור Supabase
+-- הרץ את זה ב-SQL Editor כדי לסנכרן את בסיס הנתונים
 
 -- 1. טבלת משתתפים
 CREATE TABLE IF NOT EXISTS users (
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS users (
     "healthDeclarationId" TEXT
 );
 
--- 2. טבלת אימונים (כולל waitingList ו-attendedPhoneNumbers)
+-- 2. טבלת אימונים - כולל עמודות רשימת המתנה ונוכחות בפועל
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
@@ -75,7 +75,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     description TEXT,
     "registeredPhoneNumbers" TEXT[] DEFAULT '{}',
     "waitingList" TEXT[] DEFAULT '{}',
-    "attendedPhoneNumbers" TEXT[],
+    "attendedPhoneNumbers" TEXT[], -- עמודה זו תהיה NULL כל עוד לא דווחה נוכחות
     color TEXT,
     "isTrial" BOOLEAN DEFAULT false,
     "zoomLink" TEXT,
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     "manualHasStarted" BOOLEAN DEFAULT false
 );
 
--- 3. טבלאות קונפיגורציה
+-- 3. טבלאות הגדרות
 CREATE TABLE IF NOT EXISTS config_locations (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -114,19 +114,19 @@ CREATE TABLE IF NOT EXISTS config_quotes (
     text TEXT NOT NULL
 );
 
--- אפשור גישה ציבורית (לצרכי הפרויקט הנוכחי)
+-- אפשור גישה (RLS)
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access User" ON users FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON users FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE sessions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access Session" ON sessions FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON sessions FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE config_locations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access Loc" ON config_locations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON config_locations FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE config_workout_types ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access Type" ON config_workout_types FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON config_workout_types FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE config_general ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access Gen" ON config_general FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON config_general FOR ALL USING (true) WITH CHECK (true);
 ALTER TABLE config_quotes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Access Quote" ON config_quotes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Access" ON config_quotes FOR ALL USING (true) WITH CHECK (true);
 `;
 
 const getSunday = (d: Date) => {
@@ -148,8 +148,6 @@ const getCurrentWeekDates = (weekOffset: number) => {
   return dates;
 };
 
-const formatDateForInput = (date: Date) => date.toISOString().split('T')[0];
-
 const normalizePhone = (phone: string): string => {
     if (!phone) return '';
     let cleaned = phone.replace(/\D/g, '');
@@ -163,24 +161,6 @@ const normalizePhoneForWhatsapp = (phone: string): string => {
     return p;
 };
 
-const getPaymentStatusText = (status: PaymentStatus) => {
-    switch (status) {
-        case PaymentStatus.PAID: return 'שולם';
-        case PaymentStatus.PENDING: return 'בהמתנה';
-        case PaymentStatus.OVERDUE: return 'חוב';
-        default: return status;
-    }
-};
-
-const getPaymentStatusColor = (status: PaymentStatus) => {
-    switch (status) {
-        case PaymentStatus.PAID: return 'bg-green-500/20 text-green-400';
-        case PaymentStatus.PENDING: return 'bg-yellow-500/20 text-yellow-400';
-        case PaymentStatus.OVERDUE: return 'bg-red-500/20 text-red-400';
-        default: return 'text-gray-400';
-    }
-};
-
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
     users, sessions, primaryColor, workoutTypes, locations, weatherLocation, weatherData,
     paymentLinks, streakGoal, appConfig, quotes = [], onAddUser, onUpdateUser, onDeleteUser, 
@@ -189,18 +169,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     onAddPaymentLink, onDeletePaymentLink, onUpdateStreakGoal, onUpdateAppConfig, 
     onAddQuote, onDeleteQuote, onExitAdmin
 }) => {
-  const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'new_users' | 'connections'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'connections'>('attendance');
   const [filterText, setFilterText] = useState('');
-  const [sortKey, setSortKey] = useState<'fullName' | 'streak' | 'monthCount' | 'record' | 'payment' | 'health'>('fullName');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [messageText, setMessageText] = useState('');
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [attendanceSavedSuccess, setAttendanceSavedSuccess] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
   const [markedAttendees, setMarkedAttendees] = useState<Set<string>>(new Set());
-
-  const existingUsers = users.filter(u => !u.isNew);
 
   const weekDates = getCurrentWeekDates(weekOffset);
   const groupedSessions = sessions.reduce((acc, session) => {
@@ -211,14 +187,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const openAttendanceModal = (session: TrainingSession) => {
       setAttendanceSession(session);
-      setMessageText(`היי! תזכורת לאימון ${session.type} היום ב-${session.time} ב${session.location}. מחכה לכם! 💪`);
+      setMessageText(`היי! תזכורת לאימון ${session.type} היום ב-${session.time}. מחכה לכם! 💪`);
       
       let initialSet: Set<string>;
-      // If attendance list is undefined or null, it means it hasn't been taken yet.
-      // Default to ALL registered users being present.
+      // לוגיקה: אם attendedPhoneNumbers הוא null/undefined, סימן שמעולם לא נשמרה נוכחות.
+      // במצב זה, כברירת מחדל נסמן את כולם (Check All).
       if (session.attendedPhoneNumbers === undefined || session.attendedPhoneNumbers === null) {
           initialSet = new Set(session.registeredPhoneNumbers);
       } else {
+          // אם הוא קיים (אפילו אם הוא רשימה ריקה []), נשתמש בו כי זה מה שהמאמן שמר.
           initialSet = new Set(session.attendedPhoneNumbers);
       }
       setMarkedAttendees(initialSet);
@@ -234,13 +211,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const saveAttendance = async () => {
       if (!attendanceSession) return;
       setIsSavingAttendance(true);
-      const updatedSession: TrainingSession = { ...attendanceSession, attendedPhoneNumbers: Array.from(markedAttendees) };
+      const updatedSession: TrainingSession = { 
+          ...attendanceSession, 
+          attendedPhoneNumbers: Array.from(markedAttendees) 
+      };
       try {
           await onUpdateSession(updatedSession);
           setAttendanceSavedSuccess(true);
-          setTimeout(() => { setAttendanceSavedSuccess(false); setAttendanceSession(null); }, 1500);
-      } catch (error) { alert('שגיאה בשמירה'); } 
-      finally { setIsSavingAttendance(false); }
+          setTimeout(() => { 
+              setAttendanceSavedSuccess(false); 
+              setAttendanceSession(null); 
+          }, 1500);
+      } catch (error) { 
+          alert('שגיאה בשמירה'); 
+      } finally { 
+          setIsSavingAttendance(false); 
+      }
   };
 
   const handleSendSingleMessage = (phone: string) => {
@@ -251,15 +237,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCopyNumbers = () => {
       if (!attendanceSession || attendanceSession.registeredPhoneNumbers.length === 0) return;
       const numbers = attendanceSession.registeredPhoneNumbers.map(normalizePhoneForWhatsapp).join(',');
-      navigator.clipboard.writeText(numbers).then(() => alert('הועתק ללוח! 📋'));
+      navigator.clipboard.writeText(numbers).then(() => alert('רשימת המספרים הועתקה! 📋'));
   };
 
-  const handleCopySql = () => { navigator.clipboard.writeText(SQL_SCRIPT).then(() => alert('הועתק ללוח')); };
+  const handleCopySql = () => { 
+      navigator.clipboard.writeText(SQL_SCRIPT).then(() => alert('סקריפט SQL הועתק! הרץ אותו ב-Supabase.')); 
+  };
 
   return (
     <div className="p-4 bg-gray-900 rounded-lg pb-24">
       <div className="flex justify-between items-center mb-4 sticky top-0 bg-gray-900 z-10 py-2 border-b border-gray-800">
-        <h2 className="text-2xl font-bold text-white font-sans uppercase italic tracking-tighter">NIV <span className="text-brand-primary">COHEN</span></h2>
+        <h2 className="text-2xl font-bold text-white uppercase italic tracking-tighter">NIV <span className="text-brand-primary">COHEN</span></h2>
         <button onClick={onExitAdmin} className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-lg transition-all">חזרה לאתר 🏠</button>
       </div>
       
@@ -309,44 +297,74 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <button onClick={() => setAttendanceSession(null)} className="text-gray-500 hover:text-white text-2xl">✕</button>
                  </div>
 
+                 {/* שליחת הודעות מהירה */}
                  <div className="mb-6 bg-brand-dark/50 p-4 rounded-xl border border-gray-800">
                     <div className="flex justify-between items-center mb-2">
-                        <span className="text-xs font-bold text-white">💬 שליחת הודעה מהירה</span>
+                        <span className="text-xs font-bold text-white">💬 הודעה מהירה לנרשמים</span>
                         <button onClick={handleCopyNumbers} className="text-[10px] text-gray-500 underline">העתק מספרים</button>
                     </div>
                     <textarea className="w-full bg-gray-800 text-white text-xs p-2 rounded border border-gray-700 mb-3 h-16" value={messageText} onChange={e=>setMessageText(e.target.value)} placeholder="כתוב הודעה..."/>
                     <div className="max-h-32 overflow-y-auto space-y-1">
-                        {attendanceSession.registeredPhoneNumbers.map(p => (
-                            <div key={p} className="flex justify-between items-center bg-gray-800/50 p-2 rounded text-xs">
-                                <span className="text-white truncate">{users.find(x => normalizePhone(x.phone) === normalizePhone(p))?.fullName || p}</span>
-                                <button onClick={()=>handleSendSingleMessage(p)} className="bg-green-600 text-white px-2 py-1 rounded text-[10px]">שלח 📤</button>
-                            </div>
-                        ))}
+                        {attendanceSession.registeredPhoneNumbers.map(p => {
+                             const u = users.find(x => normalizePhone(x.phone) === normalizePhone(p));
+                             return (
+                                <div key={p} className="flex justify-between items-center bg-gray-800/50 p-2 rounded text-xs">
+                                    <span className="text-white truncate max-w-[150px]">{u?.fullName || p}</span>
+                                    <button onClick={()=>handleSendSingleMessage(p)} className="bg-green-600 hover:bg-green-700 text-white px-2 py-1 rounded text-[10px] font-bold">שלח 📤</button>
+                                </div>
+                             );
+                        })}
                     </div>
                  </div>
 
+                 {/* רשימת נוכחות עם באנר חיווי */}
                  <div className="flex-1 space-y-2">
+                    {/* באנר חיווי למאמן */}
                     {attendanceSession.attendedPhoneNumbers !== undefined && attendanceSession.attendedPhoneNumbers !== null ? (
-                        <div className="bg-green-900/20 border border-green-500/30 p-2 rounded text-center mb-2">
-                            <span className="text-green-400 font-bold text-[10px]">✅ נוכחות שמורה</span>
+                        <div className="bg-green-900/30 border border-green-500/50 p-3 rounded-lg text-center mb-4">
+                            <span className="text-green-400 font-bold text-xs flex items-center justify-center gap-2">
+                                ✅ נוכחות דווחה ושמורה
+                            </span>
+                            <p className="text-[10px] text-green-300/70 mt-1">המידע שאתה רואה הוא הדיווח האחרון שלך.</p>
                         </div>
                     ) : (
-                        <div className="bg-yellow-900/20 border border-yellow-500/30 p-2 rounded text-center mb-2">
-                            <span className="text-yellow-400 font-bold text-[10px]">⚠️ טרם דווחה נוכחות - ברירת מחדל</span>
+                        <div className="bg-yellow-900/30 border border-yellow-500/50 p-3 rounded-lg text-center mb-4">
+                            <span className="text-yellow-400 font-bold text-xs flex items-center justify-center gap-2">
+                                ⚠️ טרם דווחה נוכחות
+                            </span>
+                            <p className="text-[10px] text-yellow-300/70 mt-1">ברירת מחדל: כולם מסומנים. הורד "וי" ממי שלא הגיע.</p>
                         </div>
                     )}
                     
-                    {attendanceSession.registeredPhoneNumbers.map(p => {
-                        const isMarked = markedAttendees.has(p);
-                        return (
-                            <div key={p} onClick={() => toggleAttendance(p)} className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer ${isMarked ? 'bg-green-900/10 border-green-500/50' : 'bg-gray-800 border-gray-700'}`}>
-                                <span className="text-white font-bold text-sm">{users.find(x => normalizePhone(x.phone) === normalizePhone(p))?.fullName || p}</span>
-                                <div className={`w-6 h-6 rounded-full border flex items-center justify-center ${isMarked ? 'bg-green-500 border-green-500 text-black' : 'border-gray-600'}`}>
-                                    {isMarked && '✓'}
+                    <div className="text-[10px] text-gray-500 mb-2">סמן מי שהגיע ({markedAttendees.size}/{attendanceSession.registeredPhoneNumbers.length}):</div>
+                    
+                    {attendanceSession.registeredPhoneNumbers.length === 0 ? <div className="text-center text-gray-600 text-xs py-10 italic">אין נרשמים לאימון</div> :
+                        attendanceSession.registeredPhoneNumbers.map(p => {
+                            const u = users.find(x => normalizePhone(x.phone) === normalizePhone(p));
+                            const isMarked = markedAttendees.has(p);
+                            return (
+                                <div key={p} onClick={() => toggleAttendance(p)} className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${isMarked ? 'bg-green-900/10 border-green-500/50 shadow-[0_0_10px_rgba(74,222,128,0.1)]' : 'bg-gray-800 border-gray-700 opacity-60'}`}>
+                                    <span className={`font-bold text-sm ${isMarked ? 'text-green-400' : 'text-gray-400'}`}>{u?.fullName || p}</span>
+                                    <div className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all ${isMarked ? 'bg-green-500 border-green-500 text-black' : 'border-gray-600'}`}>
+                                        {isMarked && '✓'}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
+                            );
+                        })
+                    }
+
+                    {/* רשימת המתנה */}
+                    {attendanceSession.waitingList && attendanceSession.waitingList.length > 0 && (
+                        <div className="mt-6 pt-4 border-t border-gray-800">
+                             <div className="text-orange-400 text-xs font-bold mb-2">רשימת המתנה ({attendanceSession.waitingList.length})</div>
+                             {attendanceSession.waitingList.map(p => (
+                                 <div key={p} className="text-gray-500 text-xs bg-gray-800/30 p-2 rounded mb-1 flex justify-between">
+                                     <span>{users.find(x => normalizePhone(x.phone) === normalizePhone(p))?.fullName || p}</span>
+                                     <span className="text-[10px]">ממתין/ה</span>
+                                 </div>
+                             ))}
+                        </div>
+                    )}
                  </div>
 
                  <Button 
@@ -354,7 +372,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     className={`mt-6 py-4 text-lg transition-all ${attendanceSavedSuccess ? 'bg-green-600' : ''}`}
                     isLoading={isSavingAttendance}
                  >
-                    {attendanceSavedSuccess ? 'נשמר בהצלחה! ✅' : 'אישור נוכחות'}
+                    {attendanceSavedSuccess ? 'נשמר בהצלחה! ✅' : 'אישור ושמירת נוכחות'}
                  </Button>
             </div>
          </div>
@@ -362,10 +380,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       {activeTab === 'connections' && (
           <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 space-y-6">
-              <h3 className="text-white font-bold">חיבור למסד נתונים</h3>
+              <h3 className="text-white font-bold">הגדרות בסיס נתונים</h3>
               <div className="p-4 bg-red-900/10 border border-red-500/20 rounded-xl">
-                  <p className="text-red-400 text-xs font-bold mb-2">עדכון סכימה נדרש!</p>
-                  <p className="text-gray-400 text-[10px] mb-4">מכיוון שהוספנו רשימת המתנה ודיווח נוכחות, עליך להריץ את סקריפט ה-SQL המעודכן ב-Supabase.</p>
+                  <p className="text-red-400 text-xs font-bold mb-2">עדכון סכימה נדרש! 🛠️</p>
+                  <p className="text-gray-400 text-[10px] mb-4 leading-relaxed">כדי שרשימת המתנה ודיווח הנוכחות יעבדו, עליך לעדכן את הטבלאות בסופבייס. העתק את הסקריפט להלן והרץ אותו ב-SQL Editor של Supabase.</p>
                   <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">העתק סקריפט SQL מעודכן 📋</Button>
               </div>
           </div>
