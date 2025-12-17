@@ -1,9 +1,11 @@
+
 import React, { useState, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WeatherLocation, LocationDef, AppConfig, Quote } from '../types';
+import { User, TrainingSession, LocationDef, AppConfig, WeatherLocation } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { SessionCard } from './SessionCard';
 import { dataService } from '../services/dataService';
+import { getCityCoordinates } from '../services/weatherService';
 
 interface AdminPanelProps {
   users: User[];
@@ -34,29 +36,24 @@ const normalizePhone = (phone: string): string => {
     return cleaned;
 };
 
-const normalizePhoneForWhatsapp = (phone: string): string => {
-    let p = normalizePhone(phone);
-    if (p.startsWith('0')) p = '972' + p.substring(1);
-    return p;
-};
-
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
     users, sessions, workoutTypes, locations, weatherLocation,
     appConfig, onAddUser, onUpdateUser, onDeleteUser, 
     onAddSession, onUpdateSession, onDeleteSession,
     onUpdateWorkoutTypes, onUpdateLocations, onUpdateWeatherLocation, onUpdateAppConfig, onExitAdmin
 }) => {
-  const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'cloud'>('attendance');
+  const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings' | 'cloud' | 'sql'>('attendance');
   const [weekOffset, setWeekOffset] = useState(0);
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
   const [editSession, setEditSession] = useState<TrainingSession | null>(null);
+  const [editUser, setEditUser] = useState<User | null>(null);
   const [markedAttendees, setMarkedAttendees] = useState<Set<string>>(new Set());
   const [messageText, setMessageText] = useState('היי! מחכה לך באימון היום 💪');
   const [userSearch, setUserSearch] = useState('');
   const [userSort, setUserSort] = useState<'name' | 'workouts'>('name');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [weatherCityInput, setWeatherCityInput] = useState(appConfig.defaultCity);
 
-  // Week Dates calculation
   const weekDates = useMemo(() => {
     const curr = new Date();
     const diff = curr.getDate() - curr.getDay() + (weekOffset * 7);
@@ -69,36 +66,97 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const groupedSessions = sessions.reduce((acc, s) => ({...acc, [s.date]: [...(acc[s.date]||[]), s]}), {} as Record<string, TrainingSession[]>);
 
-  // Filter and Sort Users
   const filteredUsers = useMemo(() => {
       return [...users]
         .filter(u => u.fullName.includes(userSearch) || u.phone.includes(userSearch))
         .sort((a, b) => {
             if (userSort === 'name') return a.fullName.localeCompare(b.fullName);
-            return (b.monthlyRecord || 0) - (a.monthlyRecord || 0);
+            return (b.monthlyCount || 0) - (a.monthlyCount || 0);
         });
   }, [users, userSearch, userSort]);
 
-  const newUsers = filteredUsers.filter(u => u.isNew);
-  const regularUsers = filteredUsers.filter(u => !u.isNew);
-
-  const handleOpenAttendance = (session: TrainingSession) => {
-      setAttendanceSession(session);
-      // Auto-check everyone who is registered
-      setMarkedAttendees(new Set(session.attendedPhoneNumbers?.length ? session.attendedPhoneNumbers : session.registeredPhoneNumbers));
+  const handleDuplicateSession = (s: TrainingSession) => {
+      const [hour, minute] = s.time.split(':');
+      let newH = parseInt(hour) + 1;
+      if (newH >= 24) newH = 0;
+      const nextTime = `${newH.toString().padStart(2, '0')}:${minute}`;
+      const duplicated = { ...s, id: Date.now().toString(), time: nextTime, registeredPhoneNumbers: [], attendedPhoneNumbers: [], waitingList: [] };
+      onAddSession(duplicated);
   };
 
+  const handleWeatherCityUpdate = async () => {
+      const coords = await getCityCoordinates(weatherCityInput);
+      if (coords) {
+          onUpdateWeatherLocation(coords);
+          onUpdateAppConfig({ ...appConfig, defaultCity: weatherCityInput });
+          alert(`מזג האוויר עודכן ל-${coords.name}`);
+      } else alert('לא נמצאה העיר');
+  };
+
+  const sqlCode = `
+-- 1. טבלת מתאמנים
+CREATE TABLE users (
+  id TEXT PRIMARY KEY,
+  fullName TEXT NOT NULL,
+  displayName TEXT,
+  phone TEXT UNIQUE NOT NULL,
+  email TEXT,
+  startDate TEXT,
+  paymentStatus TEXT,
+  isNew BOOLEAN DEFAULT true,
+  userColor TEXT,
+  monthlyRecord INTEGER DEFAULT 0,
+  monthlyCount INTEGER DEFAULT 0,
+  currentStreak INTEGER DEFAULT 0,
+  isRestricted BOOLEAN DEFAULT false,
+  healthDeclarationFile TEXT,
+  healthDeclarationDate TEXT,
+  healthDeclarationId TEXT
+);
+
+-- 2. טבלת אימונים
+CREATE TABLE sessions (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  date TEXT NOT NULL,
+  time TEXT NOT NULL,
+  location TEXT NOT NULL,
+  maxCapacity INTEGER NOT NULL,
+  description TEXT,
+  registeredPhoneNumbers TEXT[],
+  waitingList TEXT[],
+  attendedPhoneNumbers TEXT[],
+  isZoomSession BOOLEAN DEFAULT false,
+  isHybrid BOOLEAN DEFAULT false,
+  isHidden BOOLEAN DEFAULT false,
+  isCancelled BOOLEAN DEFAULT false
+);
+
+-- 3. טבלת הגדרות כלליות
+CREATE TABLE config_general (
+  id TEXT PRIMARY KEY,
+  coachNameHeb TEXT,
+  coachNameEng TEXT,
+  coachPhone TEXT,
+  coachAdditionalPhone TEXT,
+  coachEmail TEXT,
+  defaultCity TEXT,
+  urgentMessage TEXT,
+  healthDeclarationTemplate TEXT
+);
+  `;
+
   return (
-    <div className="bg-gray-900 min-h-screen pb-20 text-right">
-      {/* Navigation Tabs */}
+    <div className="bg-gray-900 min-h-screen pb-24 text-right">
       <div className="flex gap-2 p-4 bg-gray-800 sticky top-0 z-30 overflow-x-auto no-scrollbar shadow-xl border-b border-gray-700">
          {[
-             {id:'attendance', label:'יומן ונוכחות', icon:'📅'},
+             {id:'attendance', label:'יומן', icon:'📅'},
              {id:'users', label:'מתאמנים', icon:'👥'},
-             {id:'settings', label:'הגדרות אימון', icon:'⚙️'},
-             {id:'cloud', label:'חיבורים', icon:'☁️'}
+             {id:'settings', label:'הגדרות', icon:'⚙️'},
+             {id:'cloud', label:'חיבורים', icon:'☁️'},
+             {id:'sql', label:'מדריך SQL', icon:'📜'}
          ].map(tab => (
-             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-4 py-2 rounded-xl whitespace-nowrap font-bold transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-700 text-gray-300'}`}>
+             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-4 py-2 rounded-xl whitespace-nowrap font-bold transition-all flex items-center gap-2 ${activeTab === tab.id ? 'bg-brand-primary text-black' : 'bg-gray-700 text-gray-300'}`}>
                  <span>{tab.icon}</span>
                  <span>{tab.label}</span>
              </button>
@@ -106,7 +164,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       </div>
 
       <div className="p-4">
-        {/* TAB: ATTENDANCE */}
         {activeTab === 'attendance' && (
             <div className="space-y-6">
                 <div className="flex justify-between items-center bg-gray-800 p-4 rounded-2xl border border-gray-700">
@@ -120,91 +177,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                 {weekDates.map(date => (
                     <div key={date} className="bg-gray-800/40 p-4 rounded-3xl border border-gray-800">
-                        <div className="flex justify-between items-end mb-4">
-                            <h4 className="text-brand-primary font-black text-lg">{new Date(date).toLocaleDateString('he-IL',{weekday:'long'})} <span className="text-xs opacity-50">{date.split('-').reverse().join('/')}</span></h4>
-                        </div>
+                        <h4 className="text-brand-primary font-black mb-4">{new Date(date).toLocaleDateString('he-IL',{weekday:'long'})} <span className="text-xs opacity-50">{date.split('-').reverse().join('/')}</span></h4>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             {(groupedSessions[date] || []).map(s => (
                                 <div key={s.id} className="relative group">
-                                    <div onClick={() => handleOpenAttendance(s)} className="h-full">
-                                        <SessionCard session={s} allUsers={users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={()=>{}} isAdmin={true} locations={locations}/>
-                                    </div>
-                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1">
-                                        <button onClick={(e)=>{e.stopPropagation(); setEditSession(s);}} className="bg-white text-black p-1.5 rounded-full text-[10px] font-bold">ערוך ✏️</button>
-                                        <button onClick={(e)=>{e.stopPropagation(); onAddSession({...s, id: Date.now().toString(), registeredPhoneNumbers:[], attendedPhoneNumbers:[], date: new Date(new Date(s.date).setDate(new Date(s.date).getDate()+7)).toISOString().split('T')[0]}); alert('שוכפל לשבוע הבא');}} className="bg-brand-primary text-black p-1.5 rounded-full text-[10px] font-bold">שכפל 📑</button>
+                                    <div onClick={() => setAttendanceSession(s)} className="h-full"><SessionCard session={s} allUsers={users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={()=>{}} isAdmin={true} locations={locations}/></div>
+                                    <div className="absolute bottom-2 left-2 flex gap-1 z-10">
+                                        <button onClick={(e)=>{e.stopPropagation(); setEditSession(s);}} className="bg-white text-black w-8 h-8 rounded-full flex items-center justify-center shadow-xl">✏️</button>
+                                        <button onClick={(e)=>{e.stopPropagation(); handleDuplicateSession(s);}} className="bg-brand-primary text-black w-8 h-8 rounded-full flex items-center justify-center shadow-xl">📑</button>
                                     </div>
                                 </div>
                             ))}
-                            <button onClick={() => setEditSession({ id: Date.now().toString(), type: workoutTypes[0], date, time: '18:00', location: locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], description: '' })} className="border-2 border-dashed border-gray-700 rounded-2xl flex items-center justify-center text-gray-500 hover:border-brand-primary hover:text-brand-primary transition-all p-4">
-                                + הוסף אימון
-                            </button>
                         </div>
                     </div>
                 ))}
             </div>
         )}
 
-        {/* TAB: USERS */}
         {activeTab === 'users' && (
             <div className="space-y-4">
-                <div className="flex gap-2">
-                    <input type="text" placeholder="חפש לפי שם או טלפון..." className="flex-1 p-3 bg-gray-800 text-white rounded-2xl border border-gray-700 focus:border-brand-primary outline-none" value={userSearch} onChange={e=>setUserSearch(e.target.value)}/>
-                    <select className="bg-gray-800 text-white p-3 rounded-2xl border border-gray-700" value={userSort} onChange={e=>setUserSort(e.target.value as any)}>
-                        <option value="name">לפי שם</option>
-                        <option value="workouts">לפי אימונים</option>
-                    </select>
-                </div>
-
-                {newUsers.length > 0 && (
-                    <div className="bg-yellow-900/20 border border-yellow-700/50 p-4 rounded-3xl space-y-3">
-                        <h4 className="text-yellow-500 font-black">מתאמנים חדשים (ממתינים לאישור) 🆕</h4>
-                        {newUsers.map(u => (
-                            <div key={u.id} className="bg-gray-800 p-4 rounded-2xl flex justify-between items-center border border-gray-700">
-                                <div>
-                                    <p className="text-white font-bold">{u.fullName}</p>
-                                    <p className="text-xs text-gray-500">{u.phone}</p>
-                                </div>
-                                <Button size="sm" onClick={() => onUpdateUser({...u, isNew: false})}>אשר מתאמן ✅</Button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                <div className="bg-gray-800 rounded-3xl overflow-hidden border border-gray-700">
-                    <table className="w-full text-right">
-                        <thead className="bg-gray-900 text-gray-400 text-xs">
+                <input type="text" placeholder="חפש מתאמן..." className="w-full p-3 bg-gray-800 text-white rounded-2xl border border-gray-700" value={userSearch} onChange={e=>setUserSearch(e.target.value)}/>
+                <div className="bg-gray-800 rounded-3xl overflow-hidden border border-gray-700 overflow-x-auto">
+                    <table className="w-full text-right text-xs">
+                        <thead className="bg-gray-900 text-gray-400">
                             <tr>
                                 <th className="p-4">מתאמן</th>
-                                <th className="p-4">הצהרת בריאות</th>
+                                <th className="p-4">אימונים החודש</th>
+                                <th className="p-4">רצף</th>
                                 <th className="p-4">סטטוס</th>
                                 <th className="p-4">פעולות</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-700">
-                            {regularUsers.map(u => (
-                                <tr key={u.id} className="hover:bg-gray-700/30 transition-colors">
+                            {filteredUsers.map(u => (
+                                <tr key={u.id} className="hover:bg-gray-700/30 cursor-pointer" onClick={() => setEditUser(u)}>
                                     <td className="p-4">
-                                        <p className="text-white font-bold">{u.fullName}</p>
-                                        <p className="text-[10px] text-gray-500">{u.phone} | {u.email || 'ללא מייל'}</p>
+                                        <p className="text-white font-bold">{u.fullName} {u.isNew && <span className="text-yellow-500">🆕</span>}</p>
+                                        <p className="text-[9px] text-gray-500">{u.phone}</p>
+                                    </td>
+                                    <td className="p-4 text-white">{u.monthlyCount || 0}</td>
+                                    <td className="p-4 text-orange-500">🔥 {u.currentStreak || 0}</td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-0.5 rounded-full ${u.isRestricted ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>{u.isRestricted ? 'חסום' : 'פעיל'}</span>
                                     </td>
                                     <td className="p-4">
-                                        {u.healthDeclarationDate ? (
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-green-500 text-xs font-bold">✓ חתום</span>
-                                                {u.healthDeclarationFile && <button onClick={()=>window.open(u.healthDeclarationFile)} className="text-[10px] text-brand-primary underline">צפה בקובץ</button>}
-                                            </div>
-                                        ) : <span className="text-red-500 text-xs font-bold">✕ לא חתום</span>}
-                                    </td>
-                                    <td className="p-4">
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${u.isRestricted ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'}`}>
-                                            {u.isRestricted ? 'חסום' : 'פעיל'}
-                                        </span>
-                                    </td>
-                                    <td className="p-4">
-                                        <div className="flex gap-2">
-                                            <button onClick={()=>onUpdateUser({...u, isRestricted: !u.isRestricted})} className="text-gray-400 hover:text-white">🚫</button>
-                                            <button onClick={()=>{if(confirm('למחוק מתאמן?')) onDeleteUser(u.id);}} className="text-gray-400 hover:text-red-500">🗑️</button>
-                                        </div>
+                                        <button onClick={(e)=>{e.stopPropagation(); if(confirm('למחוק?')) onDeleteUser(u.id);}} className="text-gray-500 hover:text-red-500">🗑️</button>
                                     </td>
                                 </tr>
                             ))}
@@ -214,7 +231,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
         )}
 
-        {/* TAB: SETTINGS (WORKOUTS, LOCATIONS, QUOTES) */}
         {activeTab === 'settings' && (
             <div className="space-y-8">
                 <section>
@@ -222,133 +238,85 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="grid gap-2">
                         {locations.map(loc => (
                             <div key={loc.id} className="bg-gray-800 p-3 rounded-2xl flex justify-between items-center border border-gray-700">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-3 h-3 rounded-full" style={{backgroundColor: loc.color}}/>
-                                    <div>
-                                        <p className="text-white text-sm font-bold">{loc.name}</p>
-                                        <p className="text-[10px] text-gray-500">{loc.address}</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => dataService.deleteLocation(loc.id).then(()=>onUpdateLocations(locations.filter(l=>l.id!==loc.id)))} className="text-red-500">✕</button>
+                                <div><p className="text-white text-sm font-bold">{loc.name}</p><p className="text-[10px] text-gray-500">{loc.address}</p></div>
+                                <button onClick={() => { if(confirm('למחוק מיקום?')) { onUpdateLocations(locations.filter(l=>l.id!==loc.id)); dataService.deleteLocation(loc.id); }}} className="text-red-500">✕</button>
                             </div>
                         ))}
                         <Button variant="secondary" size="sm" onClick={()=>{
-                            const name = prompt('שם המיקום:');
-                            const address = prompt('כתובת לוויז:');
-                            if(name && address) {
-                                const newLoc = { id: Date.now().toString(), name, address, color: '#'+Math.floor(Math.random()*16777215).toString(16) };
-                                onUpdateLocations([...locations, newLoc]);
-                                dataService.saveLocations([...locations, newLoc]);
-                            }
+                            const name = prompt('שם:'); const address = prompt('כתובת:');
+                            if(name && address) onUpdateLocations([...locations, { id: Date.now().toString(), name, address, color: '#A3E635' }]);
                         }}>+ הוסף מיקום</Button>
                     </div>
                 </section>
 
                 <section>
-                    <h4 className="text-white font-black mb-4">סוגי אימונים 🏋️</h4>
-                    <div className="flex flex-wrap gap-2">
-                        {workoutTypes.map(type => (
-                            <div key={type} className="bg-gray-800 px-3 py-1 rounded-full border border-gray-700 flex items-center gap-2">
-                                <span className="text-sm text-white">{type}</span>
-                                <button onClick={() => {
-                                    const next = workoutTypes.filter(t=>t!==type);
-                                    onUpdateWorkoutTypes(next);
-                                    dataService.saveWorkoutTypes(next);
-                                }} className="text-red-500">✕</button>
-                            </div>
-                        ))}
-                        <button onClick={()=>{
-                            const t = prompt('סוג אימון חדש:');
-                            if(t) {
-                                const next = [...workoutTypes, t];
-                                onUpdateWorkoutTypes(next);
-                                dataService.saveWorkoutTypes(next);
-                            }
-                        }} className="bg-brand-primary text-black px-3 py-1 rounded-full text-sm font-bold">+ הוסף</button>
-                    </div>
+                    <h4 className="text-white font-black mb-4">הצהרת בריאות 📜</h4>
+                    <p className="text-[10px] text-gray-500 mb-2">ערוך את הטקסט עליו יחתום המתאמן:</p>
+                    <textarea className="w-full p-4 bg-gray-800 text-white rounded-2xl border border-gray-700 h-32 text-sm" value={appConfig.healthDeclarationTemplate || ''} onChange={e=>onUpdateAppConfig({...appConfig, healthDeclarationTemplate: e.target.value})}/>
                 </section>
             </div>
         )}
 
-        {/* TAB: CLOUD / CONNECTIONS */}
         {activeTab === 'cloud' && (
             <div className="space-y-6 max-w-md">
                 <div className="bg-gray-800 p-6 rounded-3xl border border-gray-700">
-                    <h4 className="text-white font-black mb-4">הגדרות חיבור ענן ☁️</h4>
-                    <p className="text-xs text-gray-500 mb-4">כאן מגדירים את החיבור למסד הנתונים Supabase כדי שהמידע יישמר בענן ולא רק במכשיר.</p>
+                    <h4 className="text-white font-black mb-4">פרטי מאמן 👤</h4>
                     <div className="space-y-4">
-                        <div>
-                            <label className="text-xs text-gray-400 mr-1">Project URL</label>
-                            <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" placeholder="https://xyz.supabase.co" onChange={e=>localStorage.setItem('niv_app_supabase_url', e.target.value)} defaultValue={localStorage.getItem('niv_app_supabase_url') || ''}/>
-                        </div>
-                        <div>
-                            <label className="text-xs text-gray-400 mr-1">Anon Key</label>
-                            <input type="password" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" placeholder="eyJhbG..." onChange={e=>localStorage.setItem('niv_app_supabase_key', e.target.value)} defaultValue={localStorage.getItem('niv_app_supabase_key') || ''}/>
-                        </div>
-                        <Button className="w-full" onClick={()=>window.location.reload()}>שמור ורענן חיבור</Button>
-                    </div>
-                </div>
-
-                <div className="bg-gray-800 p-6 rounded-3xl border border-gray-700">
-                    <h4 className="text-white font-black mb-4">הגדרות מאמן 👤</h4>
-                    <div className="space-y-3">
-                        <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" placeholder="שם המאמן" defaultValue={appConfig.coachNameHeb} onBlur={e=>onUpdateAppConfig({...appConfig, coachNameHeb: e.target.value})}/>
-                        <input type="password" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" placeholder="סיסמת ניהול" defaultValue={appConfig.coachAdditionalPhone} onBlur={e=>onUpdateAppConfig({...appConfig, coachAdditionalPhone: e.target.value})}/>
+                        <input type="text" placeholder="שם בעברית" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" defaultValue={appConfig.coachNameHeb} onBlur={e=>onUpdateAppConfig({...appConfig, coachNameHeb: e.target.value})}/>
+                        <input type="text" placeholder="שם באנגלית" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" defaultValue={appConfig.coachNameEng} onBlur={e=>onUpdateAppConfig({...appConfig, coachNameEng: e.target.value})}/>
+                        <input type="tel" placeholder="וואטסאפ" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" defaultValue={appConfig.coachPhone} onBlur={e=>onUpdateAppConfig({...appConfig, coachPhone: e.target.value})}/>
+                        <input type="text" placeholder="סיסמת ניהול" className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" defaultValue={appConfig.coachAdditionalPhone} onBlur={e=>onUpdateAppConfig({...appConfig, coachAdditionalPhone: e.target.value})}/>
                     </div>
                 </div>
             </div>
         )}
+
+        {activeTab === 'sql' && (
+            <div className="bg-gray-800 p-6 rounded-3xl border border-gray-700">
+                <h4 className="text-white font-black mb-4">הוראות Supabase ☁️</h4>
+                <p className="text-xs text-gray-400 mb-4">העתק את הקוד הבא והדבק אותו ב-SQL Editor בלוח הבקרה של Supabase:</p>
+                <pre className="bg-black p-4 rounded-xl text-[10px] text-brand-primary overflow-x-auto" dir="ltr">{sqlCode}</pre>
+            </div>
+        )}
       </div>
 
-      {/* MODAL: EDIT SESSION */}
-      {editSession && (
+      {/* Trainee Edit Modal */}
+      {editUser && (
           <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 overflow-y-auto">
-              <div className="bg-gray-800 p-6 rounded-3xl w-full max-w-lg border border-gray-700 shadow-2xl my-auto">
-                  <h3 className="text-2xl font-black text-white mb-6">עריכת אימון ✏️</h3>
+              <div className="bg-gray-800 p-6 rounded-3xl w-full max-w-sm border border-gray-700 shadow-2xl">
+                  <h3 className="text-xl font-black text-white mb-6">עריכת מתאמן 👤</h3>
                   <div className="space-y-4">
+                      <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-xl" defaultValue={editUser.fullName} onBlur={e=>setEditUser({...editUser, fullName: e.target.value})}/>
+                      <input type="tel" className="w-full p-3 bg-gray-900 text-white rounded-xl" defaultValue={editUser.phone} onBlur={e=>setEditUser({...editUser, phone: e.target.value})}/>
+                      <div className="flex items-center justify-between bg-gray-900 p-3 rounded-xl">
+                          <span className="text-xs text-white">חסום?</span>
+                          <input type="checkbox" checked={editUser.isRestricted} onChange={e=>setEditUser({...editUser, isRestricted: e.target.checked})}/>
+                      </div>
+                      <div className="flex gap-2">
+                          <Button className="flex-1" onClick={()=>{ onUpdateUser(editUser); setEditUser(null); }}>שמור</Button>
+                          <Button variant="secondary" onClick={()=>setEditUser(null)}>סגור</Button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Edit Session Modal */}
+      {editSession && (
+          <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4">
+              <div className="bg-gray-800 p-6 rounded-3xl w-full max-w-lg border border-gray-700 shadow-2xl overflow-y-auto max-h-[90vh]">
+                  <h3 className="text-2xl font-black text-white mb-6">פרטי אימון 🏋️</h3>
+                  <div className="space-y-4">
+                      <select className="w-full p-3 bg-gray-900 text-white rounded-xl" value={editSession.type} onChange={e=>setEditSession({...editSession, type: e.target.value})}>{workoutTypes.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                      <select className="w-full p-3 bg-gray-900 text-white rounded-xl" value={editSession.location} onChange={e=>setEditSession({...editSession, location: e.target.value})}>{locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}</select>
                       <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                              <label className="text-[10px] text-gray-500 mr-1">סוג</label>
-                              <select className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" value={editSession.type} onChange={e=>setEditSession({...editSession, type: e.target.value})}>{workoutTypes.map(t=><option key={t} value={t}>{t}</option>)}</select>
-                          </div>
-                          <div className="space-y-1">
-                              <label className="text-[10px] text-gray-500 mr-1">מיקום</label>
-                              <select className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700" value={editSession.location} onChange={e=>setEditSession({...editSession, location: e.target.value})}>{locations.map(l=><option key={l.id} value={l.name}>{l.name}</option>)}</select>
-                          </div>
+                        <input type="date" className="p-3 bg-gray-900 text-white rounded-xl" value={editSession.date} onChange={e=>setEditSession({...editSession, date: e.target.value})}/>
+                        <input type="time" className="p-3 bg-gray-900 text-white rounded-xl" value={editSession.time} onChange={e=>setEditSession({...editSession, time: e.target.value})}/>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                          <input type="date" className="p-3 bg-gray-900 text-white rounded-xl border border-gray-700" value={editSession.date} onChange={e=>setEditSession({...editSession, date: e.target.value})}/>
-                          <input type="time" className="p-3 bg-gray-900 text-white rounded-xl border border-gray-700" value={editSession.time} onChange={e=>setEditSession({...editSession, time: e.target.value})}/>
-                      </div>
-
-                      <div className="bg-gray-900 p-4 rounded-2xl border border-gray-700">
-                          <p className="text-[10px] text-gray-500 mb-2">פורמט:</p>
-                          <div className="flex gap-2">
-                              <button onClick={()=>setEditSession({...editSession, isZoomSession: false, isHybrid: false})} className={`flex-1 p-2 rounded-lg text-xs font-bold ${!editSession.isZoomSession && !editSession.isHybrid ? 'bg-brand-primary text-black' : 'bg-gray-800 text-gray-400'}`}>🌲 שטח</button>
-                              <button onClick={()=>setEditSession({...editSession, isZoomSession: true, isHybrid: false})} className={`flex-1 p-2 rounded-lg text-xs font-bold ${editSession.isZoomSession && !editSession.isHybrid ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400'}`}>🎥 זום</button>
-                              <button onClick={()=>setEditSession({...editSession, isZoomSession: true, isHybrid: true})} className={`flex-1 p-2 rounded-lg text-xs font-bold ${editSession.isHybrid ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400'}`}>🏠+🎥 היברידי</button>
-                          </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                          <div className="flex items-center gap-2 bg-gray-900 p-3 rounded-xl border border-gray-700">
-                              <input type="checkbox" id="hidden" className="w-4 h-4 accent-purple-600" checked={editSession.isHidden} onChange={e=>setEditSession({...editSession, isHidden: e.target.checked})}/>
-                              <label htmlFor="hidden" className="text-xs text-white">נסתר 👻</label>
-                          </div>
-                          <div className="flex items-center gap-2 bg-red-900/10 p-3 rounded-xl border border-red-900/30">
-                              <input type="checkbox" id="cancel" className="w-4 h-4 accent-red-600" checked={editSession.isCancelled} onChange={e=>setEditSession({...editSession, isCancelled: e.target.checked})}/>
-                              <label htmlFor="cancel" className="text-xs text-red-500 font-bold">מבוטל 🚫</label>
-                          </div>
-                      </div>
-
-                      <div className="relative">
-                          <textarea placeholder="תיאור..." className="w-full p-3 bg-gray-900 text-white rounded-xl border border-gray-700 h-24 text-sm" value={editSession.description} onChange={e=>setEditSession({...editSession, description: e.target.value})}/>
-                          <button onClick={async ()=>{setIsGeneratingAi(true); const d=await generateWorkoutDescription(editSession.type as any, editSession.location); setEditSession({...editSession, description: d}); setIsGeneratingAi(false);}} className="absolute bottom-3 left-3 bg-brand-primary text-black px-2 py-1 rounded text-[10px] font-black">{isGeneratingAi?'מייצר...':'AI ✨'}</button>
-                      </div>
-
+                      <textarea className="w-full p-3 bg-gray-900 text-white rounded-xl h-24" placeholder="תיאור..." value={editSession.description} onChange={e=>setEditSession({...editSession, description: e.target.value})}/>
                       <div className="flex gap-2">
                           <Button onClick={()=>{ if(sessions.find(s=>s.id===editSession.id)) onUpdateSession(editSession); else onAddSession(editSession); setEditSession(null); }} className="flex-1">שמור</Button>
-                          <Button onClick={()=>onDeleteSession(editSession.id)} variant="danger">מחק</Button>
+                          <Button onClick={()=>{ if(confirm('למחוק אימון?')) { onDeleteSession(editSession.id); setEditSession(null); } }} variant="danger">מחק</Button>
                           <Button onClick={()=>setEditSession(null)} variant="secondary">ביטול</Button>
                       </div>
                   </div>
@@ -356,54 +324,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
 
-      {/* MODAL: ATTENDANCE & PUSH */}
+      {/* Attendance Modal */}
       {attendanceSession && (
           <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4">
               <div className="bg-gray-800 p-6 rounded-3xl w-full max-w-lg border border-gray-700 max-h-[90vh] overflow-y-auto">
-                  <h3 className="text-xl font-black text-white mb-4">ניהול נוכחות והודעות 📱</h3>
-                  
-                  <div className="bg-gray-900 p-4 rounded-2xl border border-gray-700 mb-6">
-                      <label className="text-[10px] text-gray-500 block mb-1">טקסט להודעת וואטסאפ ("הפוש"):</label>
-                      <textarea className="w-full p-3 bg-gray-800 text-white rounded-xl border border-gray-700 text-sm h-20 outline-none focus:border-brand-primary" value={messageText} onChange={e=>setMessageText(e.target.value)}/>
-                  </div>
-
+                  <h3 className="text-xl font-black text-white mb-4">נוכחות והודעות 📱</h3>
+                  <textarea className="w-full p-3 bg-gray-900 text-white rounded-xl mb-4 text-sm" placeholder="טקסט פוש..." value={messageText} onChange={e=>setMessageText(e.target.value)}/>
                   <div className="space-y-2 mb-6">
-                      {attendanceSession.registeredPhoneNumbers.map(phone => {
-                          const user = users.find(u => normalizePhone(u.phone) === phone);
-                          const isMarked = markedAttendees.has(phone);
-                          return (
-                              <div key={phone} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${isMarked ? 'bg-green-900/20 border-green-500/50' : 'bg-gray-900 border-gray-800 opacity-60'}`}>
-                                  <div className="flex items-center gap-3">
-                                      <button onClick={() => {
-                                          const next = new Set(markedAttendees);
-                                          if (next.has(phone)) next.delete(phone);
-                                          else next.add(phone);
-                                          setMarkedAttendees(next);
-                                      }} className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${isMarked ? 'bg-green-500 border-green-500 text-white shadow-lg' : 'border-gray-600'}`}>
-                                          {isMarked ? '✓' : ''}
-                                      </button>
-                                      <div>
-                                          <p className="text-white font-bold text-sm">{user?.fullName || phone}</p>
-                                          <p className="text-[10px] text-gray-500">{phone}</p>
-                                      </div>
-                                  </div>
-                                  <button onClick={() => window.open(`https://wa.me/${normalizePhoneForWhatsapp(phone)}?text=${encodeURIComponent(messageText)}`, '_blank')} className="bg-[#25D366] text-white p-2 rounded-xl px-4 text-[10px] font-black shadow-lg active:scale-95 transition-transform">WhatsApp 💬</button>
-                              </div>
-                          );
-                      })}
+                      {attendanceSession.registeredPhoneNumbers.map(phone => (
+                          <div key={phone} className="flex items-center justify-between p-3 bg-gray-900 rounded-2xl border border-gray-800">
+                              <span className="text-white text-sm">{users.find(u=>normalizePhone(u.phone)===phone)?.fullName || phone}</span>
+                              <button onClick={()=>window.open(`https://wa.me/${phone}?text=${encodeURIComponent(messageText)}`)} className="bg-green-600 text-white px-3 py-1 rounded-full text-xs">WhatsApp</button>
+                          </div>
+                      ))}
                   </div>
-
-                  <div className="flex gap-2 sticky bottom-0 bg-gray-800 pt-3 border-t border-gray-700">
-                      <Button onClick={async ()=>{ await onUpdateSession({...attendanceSession, attendedPhoneNumbers: Array.from(markedAttendees)}); setAttendanceSession(null); }} className="flex-1">שמור נוכחות</Button>
-                      <Button onClick={() => setAttendanceSession(null)} variant="secondary" className="flex-1">סגור</Button>
-                  </div>
+                  <Button onClick={()=>setAttendanceSession(null)} className="w-full">סגור</Button>
               </div>
           </div>
       )}
 
-      {/* FOOTER ACTION */}
-      <footer className="fixed bottom-0 left-0 right-0 p-4 flex justify-center z-40 bg-gradient-to-t from-black to-transparent pointer-events-none">
-          <Button onClick={onExitAdmin} variant="secondary" className="pointer-events-auto rounded-full shadow-2xl border border-gray-600">יציאה מהניהול 🔓</Button>
+      <footer className="fixed bottom-0 left-0 right-0 p-4 flex justify-center z-40">
+          <Button onClick={onExitAdmin} variant="secondary" className="rounded-full shadow-2xl">יציאה מהניהול 🔓</Button>
       </footer>
     </div>
   );

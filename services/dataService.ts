@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 import { User, TrainingSession, LocationDef, WorkoutType, AppConfig, Quote } from '../types';
 import { INITIAL_USERS, INITIAL_SESSIONS } from '../constants';
@@ -16,7 +17,10 @@ function safeJsonParse<T>(key: string, fallback: T): T {
     }
 }
 
-const DEFAULT_TYPES = Object.values(WorkoutType);
+/**
+ * Explicitly cast DEFAULT_TYPES to string[] to satisfy safeJsonParse<string[]> and fix unknown[] assignment errors.
+ */
+const DEFAULT_TYPES: string[] = Object.values(WorkoutType) as string[];
 
 // UPDATED DEFAULTS to match user preference (Ness Ziona)
 const DEFAULT_LOCATIONS: LocationDef[] = [
@@ -165,6 +169,9 @@ export const dataService = {
           const { data, error } = await supabase.from('config_workout_types').select('*');
           if (!error && data && data.length > 0) return data.map((t:any) => t.name);
       }
+      /**
+       * Fixing potential unknown[] inference by ensuring safeJsonParse uses string[] and DEFAULT_TYPES is string[].
+       */
       return safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
   },
 
@@ -180,6 +187,9 @@ export const dataService = {
       if (supabase) {
           await supabase.from('config_workout_types').delete().eq('id', type);
       }
+      /**
+       * Fixing potential unknown[] inference by ensuring safeJsonParse uses string[] and DEFAULT_TYPES is string[].
+       */
       const current = safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
       localStorage.setItem('niv_app_types', JSON.stringify(current.filter(t => t !== type)));
   },

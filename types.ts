@@ -5,13 +5,17 @@ export enum PaymentStatus {
   OVERDUE = 'OVERDUE'
 }
 
+/**
+ * Added WorkoutType enum to fix missing export errors across the application.
+ */
 export enum WorkoutType {
-  FUNCTIONAL = 'פונקציונלי',
+  FUNCTIONAL = 'FUNCTIONAL',
+  STRENGTH = 'STRENGTH',
   HIIT = 'HIIT',
-  STRENGTH = 'כוח',
-  PILATES = 'פילאטיס',
-  RUNNING = 'ריצה',
-  HYBRID = 'היברידי'
+  PILATES = 'PILATES',
+  YOGA = 'YOGA',
+  TABATA = 'TABATA',
+  CARDIO = 'CARDIO'
 }
 
 export interface Quote {
@@ -21,47 +25,48 @@ export interface Quote {
 
 export interface LocationDef {
   id: string;
-  name: string; // The display name (e.g., "Park Hayarkon")
-  address: string; // The physical address for Waze
-  color?: string; // Helper color for UI distinction
+  name: string;
+  address: string;
+  color?: string;
 }
 
 export interface User {
   id: string;
   fullName: string;
-  displayName?: string; // Nickname/Display name
+  displayName?: string;
   phone: string;
-  email: string; // Now required for registration
+  email: string; 
   startDate: string;
   paymentStatus: PaymentStatus;
-  isNew?: boolean; // Flag for self-registered users pending coach review
-  userColor?: string; // Custom color for the user name in lists
-  monthlyRecord?: number; // Personal best: max workouts in a month
-  isRestricted?: boolean; // If true, user cannot register for workouts
-  healthDeclarationFile?: string; // Base64 string or URL of the uploaded file
-  healthDeclarationDate?: string; // ISO Date string of when they signed
-  healthDeclarationId?: string; // ID number provided during signature
+  isNew?: boolean; 
+  userColor?: string; 
+  monthlyRecord?: number; 
+  monthlyCount?: number;
+  currentStreak?: number;
+  isRestricted?: boolean; 
+  healthDeclarationFile?: string; 
+  healthDeclarationDate?: string; 
+  healthDeclarationId?: string; 
 }
 
 export interface TrainingSession {
   id: string;
   type: string; 
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
-  location: string; // Stores the Location Name
+  date: string;
+  time: string;
+  location: string; 
   maxCapacity: number;
   description?: string;
   registeredPhoneNumbers: string[];
-  waitingList?: string[]; // New: List of phone numbers waiting for a spot
-  attendedPhoneNumbers?: string[]; // List of users who actually attended (Checked by coach)
-  color?: string; // Hex color code for the session theme
-  isTrial?: boolean; // Is this a trial session for new users?
-  zoomLink?: string; // Optional link for Zoom sessions
-  isZoomSession?: boolean; // Flag to mark as Zoom even without link
-  isHybrid?: boolean; // New flag: Both In-Person and Zoom
-  isHidden?: boolean; // If true, only visible to admin
-  isCancelled?: boolean; // New flag for cancelled sessions
-  manualHasStarted?: boolean; // New flag: Coach manually marked session as started/happening
+  waitingList?: string[]; 
+  attendedPhoneNumbers?: string[]; 
+  color?: string; 
+  isTrial?: boolean; 
+  zoomLink?: string; 
+  isZoomSession?: boolean; 
+  isHybrid?: boolean; 
+  isHidden?: boolean; 
+  isCancelled?: boolean; 
 }
 
 export interface WeatherLocation {
@@ -73,21 +78,16 @@ export interface WeatherLocation {
 export interface WeatherInfo {
   maxTemp: number;
   weatherCode: number;
-  hourly?: Record<string, { temp: number; weatherCode: number }>; // Key is "HH" (00-23)
-}
-
-export interface PaymentLink {
-  id: string;
-  title: string;
-  url: string;
+  hourly?: Record<string, { temp: number; weatherCode: number }>; 
 }
 
 export interface AppConfig {
   coachNameHeb: string;
   coachNameEng: string;
   coachPhone: string;
-  coachAdditionalPhone?: string; // New field for additional number/password
+  coachAdditionalPhone?: string; 
   coachEmail: string;
   defaultCity: string;
-  urgentMessage?: string; // New field for urgent announcements
+  urgentMessage?: string; 
+  healthDeclarationTemplate?: string;
 }
