@@ -1,4 +1,3 @@
-
 import { User, TrainingSession, PaymentStatus, WorkoutType } from './types';
 
 export const COACH_PHONE_NUMBER = '972500000000'; // החלף במספר שלך
@@ -85,7 +84,7 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     type: WorkoutType.FUNCTIONAL,
     date: getNextDate(0), // Today
     time: '18:00',
-    location: 'פארק הירקון, תל אביב',
+    location: 'כיכר הפרפר, נס ציונה',
     maxCapacity: 15,
     description: 'אימון בדופק גבוה המשלב כוח וסיבולת.',
     registeredPhoneNumbers: [...DEMO_ATTENDEES],
@@ -96,7 +95,7 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     type: WorkoutType.STRENGTH,
     date: getNextDate(1), // Tomorrow
     time: '07:00',
-    location: 'סטודיו פיטנס, רמת גן',
+    location: 'סטודיו נס ציונה',
     maxCapacity: 10,
     description: 'עבודה על כוח מתפרץ ומשקולות.',
     registeredPhoneNumbers: [...DEMO_ATTENDEES],
@@ -107,9 +106,9 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     type: WorkoutType.HIIT,
     date: getNextDate(2),
     time: '19:30',
-    location: 'חוף הים, הרצליה',
+    location: 'כיכר הפרפר, נס ציונה',
     maxCapacity: 20,
-    description: 'אימון אינטרוולים עצים בחול.',
+    description: 'אימון אינטרוולים עצים בכיכר.',
     registeredPhoneNumbers: ['0501234567', '0547654321', '0529998888', '0500000001', '0500000002'],
     isTrial: true
   },
@@ -118,7 +117,7 @@ export const INITIAL_SESSIONS: TrainingSession[] = [
     type: WorkoutType.PILATES,
     date: getNextDate(3),
     time: '08:00',
-    location: 'סטודיו פיטנס, רמת גן',
+    location: 'סטודיו נס ציונה',
     maxCapacity: 8,
     description: 'חיזוק שרירי ליבה וגמישות.',
     registeredPhoneNumbers: ['0501234567', '0547654321', '0529998888', '0500000001', '0500000002'],

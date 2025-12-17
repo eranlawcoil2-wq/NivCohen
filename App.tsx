@@ -45,11 +45,13 @@ const App: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isCloudConnected, setIsCloudConnected] = useState(false);
 
+  // Defaults - initially loaded from local storage, then updated from DB
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(() => safeJsonParse('niv_app_types', Object.values(WorkoutType)));
   const [locations, setLocations] = useState<LocationDef[]>(() => safeJsonParse('niv_app_locations', [
-        { id: '1', name: 'פארק הירקון, תל אביב', address: 'שדרות רוקח, תל אביב יפו' },
-        { id: '2', name: 'סטודיו פיטנס, רמת גן', address: 'ביאליק 10, רמת גן' },
+        { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה' },
+        { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה' },
   ]));
+  
   const [paymentLinks, setPaymentLinks] = useState<PaymentLink[]>(() => safeJsonParse('niv_app_payments', []));
   const [streakGoal, setStreakGoal] = useState<number>(() => parseInt(localStorage.getItem('niv_app_streak_goal') || '3'));
   const [weatherLocation, setWeatherLocation] = useState<WeatherLocation>(() => safeJsonParse('niv_app_weather_loc', { name: 'נס ציונה', lat: 31.93, lon: 34.80 }));
@@ -81,52 +83,76 @@ const App: React.FC = () => {
       const connected = !!supabase;
       setIsCloudConnected(connected);
       
-      if (connected) {
-          try {
-              const u = await dataService.getUsers();
-              const s = await dataService.getSessions();
-              setUsers(u); setSessions(s);
-          } catch (e) { console.error(e); } finally { setIsLoadingData(false); }
-      } else {
-          setIsLoadingData(false);
+      try {
+          // Always fetch from data service which handles switch between cloud/local
+          const u = await dataService.getUsers();
+          const s = await dataService.getSessions();
+          
+          setUsers(u); 
+          setSessions(s);
+
+          // Fetch Configs
+          const locs = await dataService.getLocations();
+          if (locs && locs.length > 0) setLocations(locs);
+
+          const types = await dataService.getWorkoutTypes();
+          if (types && types.length > 0) setWorkoutTypes(types);
+
+      } catch (e) { 
+          console.error(e); 
+      } finally { 
+          setIsLoadingData(false); 
       }
   }, []);
 
   useEffect(() => { refreshData(); }, [refreshData]);
+
+  // Handlers for updating config
+  const handleUpdateLocations = async (newLocations: LocationDef[]) => {
+      // Determine what was deleted by comparing IDs
+      const currentIds = newLocations.map(l => l.id);
+      const deleted = locations.filter(l => !currentIds.includes(l.id));
+      
+      // Delete removed ones
+      for (const d of deleted) {
+          await dataService.deleteLocation(d.id);
+      }
+      // Save new list (Upsert)
+      await dataService.saveLocations(newLocations);
+      setLocations(newLocations);
+  };
+
+  const handleUpdateWorkoutTypes = async (newTypes: string[]) => {
+      const deleted = workoutTypes.filter(t => !newTypes.includes(t));
+      for (const d of deleted) {
+          await dataService.deleteWorkoutType(d);
+      }
+      await dataService.saveWorkoutTypes(newTypes);
+      setWorkoutTypes(newTypes);
+  };
   
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const isParamAdmin = params.get('mode') === 'admin';
-      
-      if (isParamAdmin) {
-          setIsAdminMode(true);
-      }
+      if (isParamAdmin) setIsAdminMode(true);
 
       const updateIcon = (isAdmin: boolean) => {
           const color = isAdmin ? '%23EF4444' : '%23A3E635'; 
           const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${color}%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>`;
-          
           const linkIcon = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
           const linkApple = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
-          
           if (linkIcon) linkIcon.href = svgIcon;
           if (linkApple) linkApple.href = svgIcon;
       };
-
       updateIcon(isParamAdmin || isAdminMode);
-
   }, [isAdminMode]);
 
   const toggleAdminMode = () => {
       const newMode = !isAdminMode;
       setIsAdminMode(newMode);
-      
       const url = new URL(window.location.href);
-      if (newMode) {
-          url.searchParams.set('mode', 'admin');
-      } else {
-          url.searchParams.delete('mode');
-      }
+      if (newMode) url.searchParams.set('mode', 'admin');
+      else url.searchParams.delete('mode');
       window.history.pushState({}, '', url);
   };
 
@@ -148,30 +174,25 @@ const App: React.FC = () => {
       const now = new Date();
       return sessions.filter(s => {
           const d = new Date(s.date);
-          // Count if registered OR attended
           const isRegistered = s.registeredPhoneNumbers?.includes(normalized);
           const isAttended = s.attendedPhoneNumbers?.includes(normalized);
           return d.getMonth() === now.getMonth() && (isRegistered || isAttended);
       }).length;
   };
 
-  // Strict Streak Calculation: 3+ workouts in the same week
   const calculateStreak = (phone: string) => {
       if (!sessions || sessions.length === 0) return 0;
       const normalized = normalizePhone(phone);
-      
-      // Get all relevant sessions (registered OR attended)
       const userSessions = sessions.filter(s => 
          s.attendedPhoneNumbers?.includes(normalized) || s.registeredPhoneNumbers?.includes(normalized)
       ).map(s => new Date(s.date));
 
       if (userSessions.length === 0) return 0;
 
-      // Group counts by week (ISO string of start of week)
       const weeks: Record<string, number> = {};
       userSessions.forEach(d => {
           const day = d.getDay();
-          const diff = d.getDate() - day; // Sunday start
+          const diff = d.getDate() - day; 
           const startOfWeek = new Date(d);
           startOfWeek.setDate(diff);
           startOfWeek.setHours(0,0,0,0);
@@ -181,32 +202,23 @@ const App: React.FC = () => {
 
       let currentStreak = 0;
       const today = new Date();
-      const day = today.getDay();
-      const diff = today.getDate() - day;
+      const diff = today.getDate() - today.getDay();
       let checkDate = new Date(today.setDate(diff));
       checkDate.setHours(0,0,0,0);
 
-      // Check backwards from this week
       while(true) {
           const key = checkDate.toISOString().split('T')[0];
           const count = weeks[key] || 0;
-          
           if (count >= 3) { 
               currentStreak++;
           } else {
-              // If this week is not finished (less than 7 days passed relative to check),
-              // and we have > 0 streak, we assume the streak is still "active" from last week
-              // but we don't count the current incomplete week if it's < 3.
-              // However, if we hit a past week with < 3, streak breaks.
-              
               const isCurrentWeek = checkDate.getTime() >= new Date().setHours(0,0,0,0) - 7 * 24 * 60 * 60 * 1000;
               if (!isCurrentWeek) {
-                  break; // Broken streak in the past
+                  break; 
               }
           }
-          
           checkDate.setDate(checkDate.getDate() - 7);
-          if (checkDate.getFullYear() < 2023) break; // Safety break
+          if (checkDate.getFullYear() < 2023) break; 
       }
       return currentStreak;
   };
@@ -251,17 +263,13 @@ const App: React.FC = () => {
       if (!viewingSession) return;
       
       const startTime = new Date(`${viewingSession.date}T${viewingSession.time}`);
-      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1 Hour duration
+      const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); 
 
-      // Format for Google Calendar: YYYYMMDDThhmmssZ
       const formatTime = (date: Date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
-      
       const title = encodeURIComponent(`אימון ${viewingSession.type} עם ניב כהן`);
       const details = encodeURIComponent(viewingSession.description || 'אימון כושר');
       const location = encodeURIComponent(viewingSession.location);
-      
       const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${formatTime(startTime)}/${formatTime(endTime)}&details=${details}&location=${location}&sf=true&output=xml`;
-      
       window.open(googleUrl, '_blank');
   };
 
@@ -308,12 +316,10 @@ const App: React.FC = () => {
       try {
           await dataService.updateUser(updatedUser);
           setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
-          
           if (newPhone !== normalizePhone(currentUserPhone || '')) {
               localStorage.setItem('niv_app_current_phone', newPhone);
               setCurrentUserPhone(newPhone);
           }
-          
           setShowProfileModal(false);
           alert('פרופיל עודכן!');
       } catch (error) {
@@ -352,17 +358,13 @@ const App: React.FC = () => {
                          <div className="text-3xl font-bold text-white">{userStats.currentMonthCount}</div>
                          <div className="text-xs text-gray-500">שיא אישי: <span className="text-brand-primary font-bold">{Math.max(userStats.monthlyRecord, userStats.currentMonthCount)}</span></div>
                      </div>
-                     
                      <div className="flex flex-col items-center" onClick={() => setShowStreakTooltip(!showStreakTooltip)}>
-                        <div className="text-4xl mb-1 cursor-help filter drop-shadow-lg">
-                           🏆
-                        </div>
+                        <div className="text-4xl mb-1 cursor-help filter drop-shadow-lg">🏆</div>
                         <div className="bg-brand-primary/20 text-brand-primary text-xs px-2 py-0.5 rounded-full font-bold">
                            רצפים: {streakCount}
                         </div>
                      </div>
                 </div>
-
                 {showStreakTooltip && (
                     <div className="absolute top-20 left-4 bg-gray-800 border border-gray-600 p-3 rounded shadow-xl text-xs z-10 max-w-[200px] animate-in fade-in">
                         <p className="text-white font-bold mb-1">איך שומרים על הרצף? 🔥</p>
@@ -370,7 +372,6 @@ const App: React.FC = () => {
                         <button className="text-brand-primary mt-2 text-[10px] underline" onClick={()=>setShowStreakTooltip(false)}>סגור</button>
                     </div>
                 )}
-                
                 <div className="text-right text-gray-500 italic text-sm mt-2 border-t border-gray-800 pt-2">"{quote}"</div>
             </div>
         )}
@@ -386,10 +387,7 @@ const App: React.FC = () => {
                     try {
                         await dataService.addSession(s); 
                         setSessions(prev => [...prev, s]); 
-                    } catch(e) {
-                        // Alert handled in AdminPanel usually, but this is a fallback if called from somewhere else
-                         throw e; 
-                    }
+                    } catch(e) { throw e; }
                 }}
                 onUpdateSession={async s => { 
                     try {
@@ -398,7 +396,9 @@ const App: React.FC = () => {
                     } catch(e) { throw e; }
                 }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(sessions.filter(x=>x.id!==id)); }}
-                onColorChange={setPrimaryColor} onUpdateWorkoutTypes={setWorkoutTypes} onUpdateLocations={setLocations}
+                onColorChange={setPrimaryColor} 
+                onUpdateWorkoutTypes={handleUpdateWorkoutTypes} 
+                onUpdateLocations={handleUpdateLocations}
                 onUpdateWeatherLocation={setWeatherLocation} onAddPaymentLink={l=>setPaymentLinks([...paymentLinks,l])}
                 onDeletePaymentLink={id=>setPaymentLinks(paymentLinks.filter(l=>l.id!==id))} onUpdateStreakGoal={setStreakGoal}
                 onExitAdmin={()=>{toggleAdminMode(); refreshData();}}
@@ -446,10 +446,10 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* ... (Viewing Session, Login, Profile Modals - Unchanged) ... */}
       {viewingSession && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-end md:items-center justify-center backdrop-blur-sm" onClick={()=>setViewingSession(null)}>
               <div className="bg-gray-800 w-full md:max-w-md rounded-t-2xl md:rounded-2xl border-t border-brand-primary shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
-                  
                   <div className="p-6 bg-gradient-to-b from-gray-700/50 to-gray-800 border-b border-gray-700 relative overflow-hidden">
                       <div className="relative z-10 flex justify-between items-start mb-2">
                            <div>
@@ -468,44 +468,21 @@ const App: React.FC = () => {
                                </div>
                            )}
                       </div>
-                      
                       <div className="relative z-10 flex justify-between items-center text-gray-300 text-sm mb-3">
                         <div className="flex items-center gap-1.5">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                               <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                            </svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /></svg>
                             <span>{viewingSession.location}</span>
                         </div>
-                        <a 
-                            href={`https://waze.com/ul?q=${encodeURIComponent(viewingSession.location)}&navigate=yes`}
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors border border-gray-600"
-                        >
-                            <span>נווט</span>
-                            <span>🚗</span>
-                        </a>
+                        <a href={`https://waze.com/ul?q=${encodeURIComponent(viewingSession.location)}&navigate=yes`} target="_blank" rel="noopener noreferrer" className="bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-1 transition-colors border border-gray-600"><span>נווט</span><span>🚗</span></a>
                       </div>
-
-                      <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">
-                        {viewingSession.description || 'ללא תיאור'}
-                      </p>
-
-                      <div className="relative z-10 mt-3 flex">
-                         <Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">
-                             📅 הוסף ליומן
-                         </Button>
-                      </div>
+                      <p className="relative z-10 text-gray-300 text-sm leading-relaxed bg-black/20 p-3 rounded-lg border border-white/5">{viewingSession.description || 'ללא תיאור'}</p>
+                      <div className="relative z-10 mt-3 flex"><Button onClick={handleAddToCalendar} size="sm" variant="secondary" className="w-full text-xs gap-2">📅 הוסף ליומן</Button></div>
                   </div>
-
                   <div className="flex-1 overflow-y-auto p-4 bg-gray-800">
                       <div className="flex justify-between items-center mb-3">
                           <div className="text-sm font-bold text-white">רשימת משתתפים</div>
-                          <div className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">
-                              {viewingSession.registeredPhoneNumbers.length} / {viewingSession.maxCapacity}
-                          </div>
+                          <div className="text-xs bg-gray-700 text-gray-300 px-2 py-0.5 rounded-full">{viewingSession.registeredPhoneNumbers.length} / {viewingSession.maxCapacity}</div>
                       </div>
-                      
                       {viewingSession.registeredPhoneNumbers.length > 0 ? (
                           <div className="grid grid-cols-2 gap-2">
                               {viewingSession.registeredPhoneNumbers.map((p,i) => {
@@ -518,11 +495,8 @@ const App: React.FC = () => {
                                   );
                               })}
                           </div>
-                      ) : (
-                          <div className="text-center text-gray-600 text-sm py-8">טרם נרשמו מתאמנים</div>
-                      )}
+                      ) : <div className="text-center text-gray-600 text-sm py-8">טרם נרשמו מתאמנים</div>}
                   </div>
-
                   <div className="p-4 border-t border-gray-700 bg-gray-900/50">
                       <Button onClick={()=>handleRegisterClick(viewingSession.id)} className="w-full py-3 text-lg font-bold shadow-xl">
                           {currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)) ? 'בטל הרשמה ✕' : 'אשר הגעה ✓'}
@@ -537,11 +511,9 @@ const App: React.FC = () => {
               <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
                   <h3 className="text-white font-bold mb-4 text-xl">התחברות / הרשמה</h3>
                   <input type="tel" placeholder="מספר טלפון" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-2 text-lg border border-gray-700 focus:border-brand-primary outline-none" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)}/>
-                  
                   {(!users.find(u => normalizePhone(u.phone) === normalizePhone(loginPhone)) && loginPhone.length >= 9) && (
                       <input type="text" placeholder="שם מלא (לנרשמים חדשים)" className="w-full p-4 bg-gray-900 text-white rounded-lg mb-4 border border-gray-700 focus:border-brand-primary outline-none" value={newUserName} onChange={e=>setNewUserName(e.target.value)}/>
                   )}
-                  
                   <div className="flex gap-2">
                       <Button onClick={handleLogin} className="flex-1 py-3">אישור</Button>
                       <Button onClick={()=>setShowLoginModal(false)} variant="secondary" className="flex-1 py-3">ביטול</Button>
@@ -555,29 +527,11 @@ const App: React.FC = () => {
               <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
                   <h3 className="text-white font-bold mb-4 text-xl">עריכת פרופיל</h3>
                   <div className="space-y-4 mb-6">
-                      <div>
-                          <label className="text-xs text-gray-400 mb-1 block">שם מלא</label>
-                          <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.fullName} onChange={e=>setEditProfileData({...editProfileData, fullName: e.target.value})}/>
-                      </div>
-                      <div>
-                          <label className="text-xs text-gray-400 mb-1 block">טלפון</label>
-                          <input type="tel" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.phone} onChange={e=>setEditProfileData({...editProfileData, phone: e.target.value})}/>
-                      </div>
-                      <div>
-                          <label className="text-xs text-gray-400 mb-1 block">כינוי באפליקציה</label>
-                          <input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.displayName} onChange={e=>setEditProfileData({...editProfileData, displayName: e.target.value})}/>
-                      </div>
-                      <div>
-                          <label className="text-xs text-gray-400 mb-1 block">אימייל</label>
-                          <input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/>
-                      </div>
-                      <div>
-                          <label className="text-xs text-gray-400 mb-1 block">צבע משתמש</label>
-                          <div className="flex items-center gap-2">
-                             <input type="color" className="w-12 h-12 rounded cursor-pointer bg-transparent border-none" value={editProfileData.userColor} onChange={e=>setEditProfileData({...editProfileData, userColor: e.target.value})}/>
-                             <span className="text-gray-400 text-sm">{editProfileData.userColor}</span>
-                          </div>
-                      </div>
+                      <div><label className="text-xs text-gray-400 mb-1 block">שם מלא</label><input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.fullName} onChange={e=>setEditProfileData({...editProfileData, fullName: e.target.value})}/></div>
+                      <div><label className="text-xs text-gray-400 mb-1 block">טלפון</label><input type="tel" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.phone} onChange={e=>setEditProfileData({...editProfileData, phone: e.target.value})}/></div>
+                      <div><label className="text-xs text-gray-400 mb-1 block">כינוי באפליקציה</label><input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.displayName} onChange={e=>setEditProfileData({...editProfileData, displayName: e.target.value})}/></div>
+                      <div><label className="text-xs text-gray-400 mb-1 block">אימייל</label><input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/></div>
+                      <div><label className="text-xs text-gray-400 mb-1 block">צבע משתמש</label><div className="flex items-center gap-2"><input type="color" className="w-12 h-12 rounded cursor-pointer bg-transparent border-none" value={editProfileData.userColor} onChange={e=>setEditProfileData({...editProfileData, userColor: e.target.value})}/><span className="text-gray-400 text-sm">{editProfileData.userColor}</span></div></div>
                   </div>
                   <div className="flex gap-2">
                       <Button onClick={handleUpdateProfile} className="flex-1 py-3">שמור</Button>
