@@ -729,8 +729,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                       <span className="text-white text-sm">אימון זום</span>
                                   </div>
                                   <div className="flex items-center bg-gray-900 p-2 rounded border border-gray-700">
-                                      <input type="checkbox" checked={editSessionForm.isHidden || false} onChange={e=>setEditSessionForm({...editSessionForm, isHidden: e.target.checked})} className="w-5 h-5 mr-2 accent-red-500"/>
-                                      <span className="text-white text-sm font-bold text-red-400">אימון נסתר (רואה רק מאמן)</span>
+                                      <input type="checkbox" checked={editSessionForm.isHidden || false} onChange={e=>setEditSessionForm({...editSessionForm, isHidden: e.target.checked})} className="w-5 h-5 mr-2 accent-purple-500"/>
+                                      <span className="text-white text-sm font-bold text-purple-400">אימון נסתר (רואה רק מאמן)</span>
                                   </div>
                               </div>
                               <input type="number" placeholder="מקסימום משתתפים" className="bg-gray-900 text-white p-3 rounded border border-gray-700 h-full" value={editSessionForm.maxCapacity} onChange={e=>setEditSessionForm({...editSessionForm, maxCapacity: parseInt(e.target.value)})}/>
@@ -754,7 +754,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                              <div>
                                 <h3 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
                                     {attendanceSession.type}
-                                    {attendanceSession.isHidden && <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
+                                    {attendanceSession.isHidden && <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
                                 </h3>
                                 <p className="text-brand-primary font-mono">{attendanceSession.time} | {attendanceSession.location}</p>
                                 <p className="text-xs text-gray-500 mt-1">{attendanceSession.date}</p>

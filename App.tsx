@@ -120,6 +120,21 @@ const App: React.FC = () => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
+  // Handle visibility change to refresh data when app comes to foreground
+  useEffect(() => {
+      const handleVisibilityChange = () => {
+          if (document.visibilityState === 'visible') {
+              console.log('App is visible, refreshing data...');
+              refreshData();
+          }
+      };
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+          document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+  }, [refreshData]);
+
   // Handlers for updating config
   const handleUpdateLocations = async (newLocations: LocationDef[]) => {
       const currentIds = newLocations.map(l => l.id);

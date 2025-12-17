@@ -60,9 +60,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       onRegisterClick(session.id);
   };
 
-  // Distinct background for hidden sessions
+  // Distinct background for hidden sessions - NOW PURPLE
   const hiddenStyleClass = session.isHidden 
-    ? 'bg-[#3f1010] border-red-800/60 shadow-none' // Dark Red background for hidden
+    ? 'bg-[#2e1065] border-purple-500/60 shadow-none' // Dark Purple background for hidden
     : 'bg-brand-dark border-gray-800 hover:border-gray-600';
 
   return (
@@ -89,7 +89,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
            </div>
         )}
         {session.isHidden && (
-            <div className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+            <div className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
                <span>👻 נסתר</span>
            </div>
         )}
