@@ -43,8 +43,72 @@ const SESSION_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- (SQL Script Content Omitted for brevity, assuming database is set up or user copies from previous context if needed)
--- Standard tables creation for users, sessions, config_locations, config_general, etc.
+-- טבלת משתמשים
+create table if not exists users (
+  id text primary key,
+  "fullName" text,
+  "displayName" text,
+  phone text,
+  email text,
+  "startDate" text,
+  "paymentStatus" text,
+  "userColor" text,
+  "monthlyRecord" int default 0,
+  "isRestricted" boolean default false,
+  "healthDeclarationFile" text,
+  "healthDeclarationDate" text,
+  "healthDeclarationId" text,
+  "isNew" boolean default false
+);
+
+-- טבלת אימונים
+create table if not exists sessions (
+  id text primary key,
+  type text,
+  date text,
+  time text,
+  location text,
+  "maxCapacity" int,
+  description text,
+  "registeredPhoneNumbers" jsonb default '[]',
+  "waitingList" jsonb default '[]',
+  "attendedPhoneNumbers" jsonb,
+  "isZoomSession" boolean default false,
+  "zoomLink" text,
+  "isHidden" boolean default false,
+  "isCancelled" boolean default false,
+  "manualHasStarted" boolean default false,
+  color text
+);
+
+-- הגדרות
+create table if not exists config_locations (
+  id text primary key,
+  name text,
+  address text,
+  color text
+);
+
+create table if not exists config_workout_types (
+  id text primary key,
+  name text
+);
+
+create table if not exists config_general (
+  id text primary key,
+  "coachNameHeb" text,
+  "coachNameEng" text,
+  "coachPhone" text,
+  "coachAdditionalPhone" text,
+  "coachEmail" text,
+  "defaultCity" text,
+  "urgentMessage" text
+);
+
+create table if not exists config_quotes (
+  id text primary key,
+  text text
+);
 `;
 
 const getSunday = (d: Date) => {
@@ -921,8 +985,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   </div>
                               ) : (
                                   <div className="bg-yellow-900/40 border border-yellow-500/50 p-2 rounded mb-3 text-center">
-                                      <span className="text-yellow-400 font-bold text-xs">⚠️ טרם דווחה נוכחות</span>
-                                      <div className="text-[10px] text-yellow-300/70 mt-0.5">ברירת מחדל: כולם מסומנים כהגיעו</div>
+                                      <span className="text-yellow-400 font-bold text-xs">⚠️ טרם דווחה נוכחות (כולם מסומנים)</span>
+                                      <div className="text-[10px] text-yellow-300/70 mt-0.5">ברירת מחדל: יש להוריד וי ממי שלא הגיע</div>
                                   </div>
                               )}
 
@@ -979,6 +1043,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
       {/* ... Other Tabs (Users, Settings, etc. - Unchanged) ... */}
       {activeTab === 'users' && (
+         // ... existing code ...
          <div className="space-y-6">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                  <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>

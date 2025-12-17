@@ -505,7 +505,7 @@ const App: React.FC = () => {
       if (!session) return;
       const phone = normalizePhone(currentUserPhone);
       
-      const isRegistered = session.registeredPhoneNumbers.includes(phone);
+      const isRegistered = session.registeredPhoneNumbers?.includes(phone);
       const isWaiting = session.waitingList?.includes(phone);
       
       let updatedSession = { ...session };
@@ -513,7 +513,7 @@ const App: React.FC = () => {
       if (isRegistered) {
           // CANCEL REGISTRATION Logic
           // 1. Remove from registered
-          updatedSession.registeredPhoneNumbers = session.registeredPhoneNumbers.filter(p => p !== phone);
+          updatedSession.registeredPhoneNumbers = (session.registeredPhoneNumbers || []).filter(p => p !== phone);
           
           // 2. Check if waiting list has people, if so, promote the first one
           // Add safety check for waitingList being undefined
@@ -532,9 +532,10 @@ const App: React.FC = () => {
           alert('יצאת מרשימת ההמתנה.');
       } else {
           // NEW REGISTRATION Logic
-          if (session.registeredPhoneNumbers.length < session.maxCapacity) {
+          const currentRegistered = session.registeredPhoneNumbers || [];
+          if (currentRegistered.length < session.maxCapacity) {
               // Regular registration
-              updatedSession.registeredPhoneNumbers = [...session.registeredPhoneNumbers, phone];
+              updatedSession.registeredPhoneNumbers = [...currentRegistered, phone];
           } else {
               // Join Waiting List
               if (!confirm('האימון מלא. האם להיכנס לרשימת המתנה? \n(אם יתפנה מקום, תכנס אוטומטית)')) return;
@@ -552,9 +553,9 @@ const App: React.FC = () => {
 
       try {
           await dataService.updateSession(updatedSession);
-      } catch (e) {
+      } catch (e: any) {
           console.error(e);
-          alert('שגיאה בעדכון ההרשמה, נסה שנית');
+          alert('שגיאה בעדכון ההרשמה: ' + (e.message || 'נסה שנית מאוחר יותר'));
           refreshData(); // Revert on error
       }
   };
@@ -800,7 +801,7 @@ const App: React.FC = () => {
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                             {daySessions.sort((a,b)=>a.time.localeCompare(b.time)).map(s => (
                                                 <div key={s.id} onClick={()=>setViewingSession(s)} className="h-full">
-                                                    <SessionCard session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} weather={weatherData[s.date]} locations={locations}/>
+                                                    <SessionCard session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers?.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={()=>setViewingSession(s)} weather={weatherData[s.date]} locations={locations}/>
                                                 </div>
                                             ))}
                                         </div>
@@ -915,9 +916,9 @@ const App: React.FC = () => {
                   </div>
                   <div className="p-4 border-t border-gray-700 bg-gray-900/50">
                        {(() => {
-                            const isRegistered = currentUserPhone && viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone));
+                            const isRegistered = currentUserPhone && viewingSession.registeredPhoneNumbers?.includes(normalizePhone(currentUserPhone));
                             const isWaiting = currentUserPhone && viewingSession.waitingList?.includes(normalizePhone(currentUserPhone));
-                            const isFull = viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity;
+                            const isFull = (viewingSession.registeredPhoneNumbers || []).length >= viewingSession.maxCapacity;
 
                             let btnText = 'הירשם לאימון +';
                             let btnVariant: 'primary' | 'secondary' | 'danger' = 'primary';

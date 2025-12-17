@@ -98,7 +98,7 @@ export const dataService = {
       const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is
+          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is (should be null/undefined initially)
           waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').insert([safeSession]);
@@ -111,12 +111,17 @@ export const dataService = {
 
   updateSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
+       // Ensure arrays are never undefined to avoid SQL errors on array columns
        const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is
           waitingList: session.waitingList || []
+          // attendedPhoneNumbers is purposely left to spread from session. 
+          // If undefined in session, it won't update the column (good). 
+          // If null, it sets to NULL (good for reset).
+          // If array, it updates (good).
       };
+      
       const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);
       if (error) throw error;
     } else {
