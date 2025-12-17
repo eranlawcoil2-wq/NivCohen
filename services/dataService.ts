@@ -17,6 +17,8 @@ function safeJsonParse<T>(key: string, fallback: T): T {
 }
 
 const DEFAULT_TYPES = Object.values(WorkoutType);
+
+// UPDATED DEFAULTS to match user preference (Ness Ziona)
 const DEFAULT_LOCATIONS: LocationDef[] = [
     { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה', color: '#A3E635' },
     { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה', color: '#3B82F6' }

@@ -75,7 +75,8 @@ create table if not exists sessions (
   "zoomLink" text,
   "isZoomSession" boolean default false,
   "isHidden" boolean default false,
-  "isCancelled" boolean default false
+  "isCancelled" boolean default false,
+  "manualHasStarted" boolean default false
 );
 
 -- 2. Create Configuration Tables
@@ -146,6 +147,9 @@ begin
   end if;
   if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='isCancelled') then
     alter table sessions add column "isCancelled" boolean default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='manualHasStarted') then
+    alter table sessions add column "manualHasStarted" boolean default false;
   end if;
 
   -- Config columns
@@ -635,7 +639,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           registeredPhoneNumbers: [], 
           attendedPhoneNumbers: [],
           isHidden: attendanceSession.isHidden,
-          isCancelled: false // reset cancel on duplicate
+          isCancelled: false // reset cancel on duplicate,
       };
       
       try {
@@ -923,6 +927,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                   </div>
                               </div>
                           </div>
+                          
+                          {/* Manual "Happening Now" Override */}
+                          <div className="flex items-center bg-green-900/30 p-2 rounded border border-green-800">
+                              <input type="checkbox" checked={editSessionForm.manualHasStarted || false} onChange={e=>setEditSessionForm({...editSessionForm, manualHasStarted: e.target.checked})} className="w-5 h-5 mr-2 accent-green-500"/>
+                              <span className="text-green-300 text-sm font-bold">סמן כמתקיים כעת (ידני)</span>
+                          </div>
+
                           {editSessionForm.isZoomSession && (
                              <input type="text" placeholder="לינק לזום" className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 dir-ltr" value={editSessionForm.zoomLink || ''} onChange={e=>setEditSessionForm({...editSessionForm, zoomLink: e.target.value})}/>
                           )}
@@ -944,6 +955,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                     {attendanceSession.type}
                                     {attendanceSession.isHidden && <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
                                     {attendanceSession.isCancelled && <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">🚫 מבוטל</span>}
+                                    {attendanceSession.manualHasStarted && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">🟢 מתקיים (ידני)</span>}
                                 </h3>
                                 <p className="text-brand-primary font-mono">{attendanceSession.time} | {attendanceSession.location}</p>
                                 <p className="text-xs text-gray-500 mt-1">{attendanceSession.date}</p>

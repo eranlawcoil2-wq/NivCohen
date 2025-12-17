@@ -59,6 +59,7 @@ export interface TrainingSession {
   isZoomSession?: boolean; // Flag to mark as Zoom even without link
   isHidden?: boolean; // If true, only visible to admin
   isCancelled?: boolean; // New flag for cancelled sessions
+  manualHasStarted?: boolean; // New flag: Coach manually marked session as started/happening
 }
 
 export interface WeatherLocation {

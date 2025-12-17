@@ -58,17 +58,23 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // --- Logic for Status Badges ---
   const isCancelled = session.isCancelled || false;
   
-  // Calculate if session is happening within 3 hours
-  let isHappeningSoon = false;
+  // Logic: Happening if Manual Override IS TRUE, OR if within 3 hours automatically
+  let isHappening = false;
+  
   if (!isCancelled) {
-      const now = new Date();
-      const sessionStart = new Date(`${session.date}T${session.time}`);
-      const diffMs = sessionStart.getTime() - now.getTime();
-      const diffHours = diffMs / (1000 * 60 * 60);
-      
-      // If time difference is between -1 (1 hour passed) and 3 (3 hours before)
-      if (diffHours <= 3 && diffHours > -1.5) {
-          isHappeningSoon = true;
+      if (session.manualHasStarted) {
+          isHappening = true;
+      } else {
+          // Automatic time check
+          const now = new Date();
+          const sessionStart = new Date(`${session.date}T${session.time}`);
+          const diffMs = sessionStart.getTime() - now.getTime();
+          const diffHours = diffMs / (1000 * 60 * 60);
+          
+          // If time difference is between -1.5 (1.5 hour passed) and 3 (3 hours before)
+          if (diffHours <= 3 && diffHours > -1.5) {
+              isHappening = true;
+          }
       }
   }
 
@@ -100,10 +106,29 @@ export const SessionCard: React.FC<SessionCardProps> = ({
            </div>
         )}
         
-        {isHappeningSoon && !isCancelled && (
+        {/* COMBINED BADGE: If Happening AND Zoom */}
+        {!isCancelled && isHappening && showZoomBadge && (
+            <div className="bg-gradient-to-r from-green-600 to-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
+                מתקיים + ZOOM
+            </div>
+        )}
+
+        {/* HAPPENING ONLY BADGE */}
+        {!isCancelled && isHappening && !showZoomBadge && (
            <div className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
                האימון מתקיים
+           </div>
+        )}
+
+        {/* ZOOM ONLY BADGE (If active it would be combined above, so this is for inactive zoom) */}
+        {!isCancelled && showZoomBadge && !isHappening && (
+           <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
+               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                   <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+               </svg>
+               אימון ZOOM
            </div>
         )}
 
@@ -112,14 +137,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                אימון ניסיון
            </div>
         )}
-        {showZoomBadge && !isCancelled && (
-           <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1 animate-pulse">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                   <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-               </svg>
-               ZOOM
-           </div>
-        )}
+        
         {session.isHidden && (
             <div className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
                <span>👻 נסתר</span>
