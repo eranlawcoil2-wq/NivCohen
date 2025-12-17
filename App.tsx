@@ -20,7 +20,6 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   
-  // Path-based routing logic
   const getInitialView = () => {
     const path = window.location.pathname.toUpperCase();
     if (path.includes('/ADMIN')) return 'admin';
@@ -51,7 +50,6 @@ const App: React.FC = () => {
       setCurrentView(view);
       const path = view === 'landing' ? '/' : `/${view.toUpperCase()}`;
       window.history.pushState({}, '', path);
-      // Reload is sometimes needed for the dynamic manifest script to catch up if we care about the icon color during session
   };
 
   useEffect(() => {
@@ -81,11 +79,10 @@ const App: React.FC = () => {
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
     
-    // Sunday Logic
     const weekMap: Record<string, number> = {};
     attendedSessions.forEach(s => {
         const d = new Date(s.date);
-        const sun = new Date(d); sun.setDate(d.getDate() - d.getDay());
+        const sun = new Date(d); sun.setDate(d.getDate() - d.getDay()); // Sunday-start
         const key = sun.toISOString().split('T')[0];
         weekMap[key] = (weekMap[key] || 0) + 1;
     });
@@ -173,24 +170,23 @@ const App: React.FC = () => {
   if (currentView === 'landing') {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
-        {/* Background TRX Silhouette (Shadow Style) */}
-        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-10 pointer-events-none">
-            <svg viewBox="0 0 100 100" className="w-[85vw] h-[85vw] text-white">
-                <path fill="currentColor" d="M48 0 L52 0 L52 12 L48 12 Z" /> {/* Anchor */}
-                <path fill="currentColor" d="M48 12 L15 85 L22 85 L50 20 Z" /> {/* Strap Left */}
-                <path fill="currentColor" d="M52 12 L85 85 L78 85 L50 20 Z" /> {/* Strap Right */}
-                <rect x="18" y="85" width="8" height="2" fill="currentColor" /> {/* Handle Left */}
-                <rect x="74" y="85" width="8" height="2" fill="currentColor" /> {/* Handle Right */}
-                {/* Person silhouette in shadow leaning back */}
-                <path fill="currentColor" d="M50 30 Q54 30 54 35 L54 55 L46 55 L46 35 Q46 30 50 30" /> 
-                <path fill="currentColor" d="M42 55 L58 55 L65 95 L35 95 Z" /> 
+        {/* Abstract Black TRX Silhouette */}
+        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-20 pointer-events-none">
+            <svg viewBox="0 0 100 100" className="w-[85vw] h-[85vw] text-black">
+                <path fill="currentColor" d="M48 0 L52 0 L52 10 L48 10 Z" />
+                <path fill="currentColor" d="M48 10 L15 90 L20 90 L50 15 Z" />
+                <path fill="currentColor" d="M52 10 L85 90 L80 90 L50 15 Z" />
+                <rect x="15" y="90" width="10" height="2" fill="currentColor" />
+                <rect x="75" y="90" width="10" height="2" fill="currentColor" />
+                <path fill="currentColor" d="M48 30 Q50 28 52 30 L53 50 L47 50 Z" />
+                <path fill="currentColor" d="M44 50 L56 50 L60 95 L40 95 Z" />
             </svg>
         </div>
 
         <div className="z-10 max-w-2xl space-y-12">
             <div>
                 <h1 className="text-8xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter shadow-brand-primary/10">NIV COHEN</h1>
-                <p className="text-3xl sm:text-4xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSIST TRAINING</p>
+                <p className="text-2xl sm:text-4xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSIST TRAINING</p>
             </div>
 
             <div className="space-y-6">
@@ -203,23 +199,12 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-gray-900/40 backdrop-blur-xl p-10 rounded-[55px] border border-white/5 shadow-3xl">
-                <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+            <div className="bg-gray-900/60 backdrop-blur-2xl p-10 rounded-[60px] border border-white/5 shadow-3xl">
+                <p className="text-2xl font-black text-white italic leading-snug">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
 
             <div className="flex flex-col gap-5 pt-8">
                 <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
-                
-                {/* Hidden admin trigger area: Clicking logo in header of WORK view will also prompt for admin */}
-                <button 
-                  onClick={() => {
-                      const pass = prompt('קוד גישה למאמן:');
-                      if(pass === (appConfig.coachAdditionalPhone || 'admin')) navigateTo('admin');
-                  }} 
-                  className="text-gray-800 font-black text-[10px] uppercase tracking-[0.5em] hover:text-white transition-colors mt-4"
-                >
-                  Coach Portal Access
-                </button>
             </div>
         </div>
       </div>
@@ -312,17 +297,16 @@ const App: React.FC = () => {
                 {quote && <div className="text-center bg-gray-900/40 p-8 rounded-[40px] border border-gray-800/30"><p className="text-xl font-black text-white italic leading-tight">"{quote}"</p></div>}
                 
                 {deferredPrompt && (
-                   <div className="p-4 bg-blue-600/10 border border-blue-600/20 rounded-[35px] flex flex-col items-center gap-3">
-                      <p className="text-blue-400 font-black text-xs uppercase tracking-widest text-center">NIV WORK - זמין להורדה למסך הבית</p>
-                      <Button onClick={handleInstallClick} className="w-full py-4 rounded-[30px] bg-blue-600 text-white font-black uppercase text-[10px] shadow-2xl shadow-blue-600/20">📲 הורד עכשיו</Button>
+                   <div className="p-6 bg-blue-600/10 border border-blue-600/20 rounded-[45px] flex flex-col items-center gap-4">
+                      <p className="text-blue-400 font-black text-sm uppercase tracking-widest text-center italic">NIV WORK - זמין להורדה למסך הבית</p>
+                      <Button onClick={handleInstallClick} className="w-full py-5 rounded-[35px] bg-blue-600 text-white font-black uppercase text-xs shadow-2xl shadow-blue-600/20">📲 הורד עכשיו</Button>
                    </div>
                 )}
 
                 <div className="space-y-16 pb-20">
                   {Array.from({length:7}, (_,i) => {
-                      // START WEEK FROM SUNDAY
                       const d = new Date();
-                      const dayOfWeek = d.getDay(); // 0 is Sunday
+                      const dayOfWeek = d.getDay(); // Sunday-start
                       d.setDate(d.getDate() - dayOfWeek + i);
                       
                       const dateStr = d.toISOString().split('T')[0];
@@ -368,7 +352,7 @@ const App: React.FC = () => {
                            <p className="text-green-500/60 text-[9px] uppercase font-bold tracking-widest">שיחה ישירה עם ניב</p>
                         </div>
                     </button>
-                    <button onClick={()=>window.open('https://instagram.com/', '_blank')} className="w-full p-6 bg-pink-500/10 border border-pink-500/20 rounded-[35px] flex items-center gap-5 hover:bg-pink-500/20 transition-all">
+                    <button onClick={()=>window.open('https://instagram.com/niv.cohen_fitness', '_blank')} className="w-full p-6 bg-pink-500/10 border border-pink-500/20 rounded-[35px] flex items-center gap-5 hover:bg-pink-500/20 transition-all">
                         <span className="text-4xl">📸</span>
                         <div className="text-right">
                            <p className="text-pink-500 font-black text-xl italic uppercase">Instagram</p>
@@ -413,7 +397,7 @@ const App: React.FC = () => {
 
                     <div className="bg-brand-primary/5 p-6 rounded-[35px] border border-brand-primary/20 space-y-4">
                         <h4 className="text-brand-primary font-black uppercase italic text-xs tracking-widest border-b border-brand-primary/10 pb-2">📜 הצהרת בריאות דיגיטלית</h4>
-                        <p className="text-gray-400 text-[11px] leading-relaxed">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה בשיטת CONSIST TRAINING.</p>
+                        <p className="text-gray-400 text-[11px] leading-relaxed italic">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה בשיטת CONSIST TRAINING.</p>
                         
                         <div className="grid grid-cols-1 gap-4">
                             <div>
@@ -422,7 +406,7 @@ const App: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-4 bg-gray-900/50 p-5 rounded-2xl">
                                 <input type="checkbox" id="health-check" className="w-8 h-8 rounded-xl bg-gray-800 border-white/10" checked={!!currentUser.healthDeclarationDate} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationDate: e.target.checked ? new Date().toISOString() : ''})} />
-                                <label htmlFor="health-check" className="text-white text-xs font-black uppercase tracking-tighter">אני מאשר את נכונות ההצהרה {currentUser.healthDeclarationDate && <span className="text-[8px] opacity-50 block mt-1">נחתם ב: {new Date(currentUser.healthDeclarationDate).toLocaleString('he-IL')}</span>}</label>
+                                <label htmlFor="health-check" className="text-white text-xs font-black uppercase tracking-tighter">אני מאשר את נכונות ההצהרה {currentUser.healthDeclarationDate && <span className="text-[8px] opacity-50 block mt-1 italic">נחתם ב: {new Date(currentUser.healthDeclarationDate).toLocaleString('he-IL')}</span>}</label>
                             </div>
                         </div>
                     </div>

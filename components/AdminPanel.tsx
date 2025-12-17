@@ -29,7 +29,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   
   const weekDates = useMemo(() => {
     const sun = new Date();
-    const dayOfWeek = sun.getDay(); // 0 is Sunday
+    const dayOfWeek = sun.getDay(); // 0 = Sunday
     sun.setDate(sun.getDate() - dayOfWeek + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { const d = new Date(sun); d.setDate(sun.getDate() + i); return d.toISOString().split('T')[0]; });
   }, [weekOffset]);
@@ -195,9 +195,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
 
                     {props.deferredPrompt && (
-                       <div className="p-4 bg-red-600/10 border border-red-500/20 rounded-[35px] flex flex-col items-center gap-3">
-                          <p className="text-red-400 font-black text-xs uppercase tracking-widest text-center">NIV ADMIN - זמין להורדה למסך הבית</p>
-                          <Button onClick={props.onInstall} className="w-full py-4 rounded-[30px] bg-red-600 text-white font-black uppercase text-[10px] shadow-2xl shadow-red-600/20">📲 הורד עכשיו</Button>
+                       <div className="p-6 bg-red-600/10 border border-red-500/20 rounded-[45px] flex flex-col items-center gap-4">
+                          <p className="text-red-400 font-black text-sm uppercase tracking-widest text-center italic">NIV ADMIN - זמין להורדה למסך הבית</p>
+                          <Button onClick={props.onInstall} className="w-full py-5 rounded-[35px] bg-red-600 text-white font-black uppercase text-xs shadow-2xl shadow-red-600/20">📲 הורד עכשיו</Button>
                        </div>
                     )}
 
@@ -244,7 +244,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
               </div>
               
               <div className="space-y-8 overflow-y-auto pr-2 no-scrollbar max-h-[75vh]">
-                  {/* MIRRORS THE USER'S PROFILE MODAL EXACTLY */}
+                  {/* Mirrors User Profile EXACTLY */}
                   <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         <div>
@@ -267,7 +267,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                     </div>
 
-                    {/* Added Admin-Only Payment status */}
+                    {/* Admin-Only Payment status */}
                     <div className="bg-red-900/10 border border-red-500/20 p-6 rounded-[35px] space-y-3">
                         <label className="text-[10px] text-red-500 font-black uppercase block">סטטוס תשלום (מאמן בלבד)</label>
                         <select className="w-full bg-gray-900 border border-white/10 p-5 rounded-3xl text-white font-black" value={editingUser.paymentStatus} onChange={e=>setEditingUser({...editingUser, paymentStatus: e.target.value as any})}>
@@ -280,7 +280,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     {/* Mirrors Trainee Health Declaration Exactly */}
                     <div className="bg-brand-primary/5 p-6 rounded-[35px] border border-brand-primary/20 space-y-4">
                         <h4 className="text-brand-primary font-black uppercase italic text-xs tracking-widest border-b border-brand-primary/10 pb-2">📜 הצהרת בריאות דיגיטלית</h4>
-                        <p className="text-gray-400 text-[11px] leading-relaxed">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה בשיטת CONSIST TRAINING.</p>
+                        <p className="text-gray-400 text-[11px] leading-relaxed italic">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה בשיטת CONSIST TRAINING.</p>
                         
                         <div className="grid grid-cols-1 gap-4">
                             <div>
@@ -292,7 +292,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     {editingUser.healthDeclarationDate ? '✓' : ''}
                                 </div>
                                 <div className="text-white text-xs font-black uppercase tracking-tighter">
-                                    {editingUser.healthDeclarationDate ? `הצהרה אושרה ב: ${new Date(editingUser.healthDeclarationDate).toLocaleString('he-IL')}` : 'הצהרה טרם נחתמה'}
+                                    {editingUser.healthDeclarationDate ? `נחתם ב: ${new Date(editingUser.healthDeclarationDate).toLocaleString('he-IL')}` : 'טרם נחתם'}
                                 </div>
                             </div>
                         </div>

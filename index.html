@@ -5,20 +5,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
-    <!-- Dynamic Setup Script for PWA Branding -->
     <script>
       (function() {
         const path = window.location.pathname.toUpperCase();
         const isAdmin = path.includes('/ADMIN');
         const isWork = path.includes('/WORK');
 
-        // --- Configuration ---
         const themeColor = isAdmin ? '#EF4444' : '#A3E635'; 
-        const appName = isAdmin ? 'ADMIN' : (isWork ? 'WORK' : 'NIV COHEN');
+        const appLabel = isAdmin ? 'ADMIN' : (isWork ? 'WORK' : 'NIV');
         const startUrl = isAdmin ? '/ADMIN' : (isWork ? '/WORK' : '/');
         
-        // Icon logic: Just the text "NIV" with the respective color background
-        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2245%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>`;
+        // Dynamic SVG Icon for PWA
+        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2255%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
 
         function addLink(rel, href) {
           const link = document.createElement('link');
@@ -31,8 +29,8 @@
         addLink('apple-touch-icon', svgIcon);
 
         const manifest = {
-          "name": `Niv Cohen - ${appName}`,
-          "short_name": `NIV ${appName}`,
+          "name": isAdmin ? "Niv Cohen - Admin" : "Niv Cohen - Work",
+          "short_name": `NIV ${appLabel}`,
           "start_url": startUrl,
           "display": "standalone",
           "background_color": "#121212",
@@ -48,7 +46,7 @@
         const manifestURL = URL.createObjectURL(blob);
         addLink('manifest', manifestURL);
 
-        document.title = `NIV COHEN | ${appName}`;
+        document.title = `NIV COHEN | ${appLabel}`;
 
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
@@ -59,14 +57,13 @@
 
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Niv Fitness">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&display=swap" rel="stylesheet">
     
     <style>
       :root { --brand-primary: #A3E635; }
-      body { background-color: #121212; color: #E5E7EB; -webkit-tap-highlight-color: transparent; }
+      body { background-color: #121212; color: #E5E7EB; -webkit-tap-highlight-color: transparent; font-family: 'Heebo', sans-serif; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
@@ -80,7 +77,6 @@
                 black: '#121212',
                 dark: '#1E1E1E',
                 primary: 'var(--brand-primary)', 
-                secondary: '#3B82F6', 
                 danger: '#EF4444',
                 text: '#E5E7EB'
               }
