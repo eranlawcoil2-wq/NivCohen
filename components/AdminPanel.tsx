@@ -28,7 +28,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const normalizePhone = (p: string) => p.replace(/\D/g, '').replace(/^972/, '0');
   
   const weekDates = useMemo(() => {
-    const sun = new Date(); sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
+    const sun = new Date();
+    const currentDay = sun.getDay();
+    sun.setDate(sun.getDate() - currentDay + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { const d = new Date(sun); d.setDate(sun.getDate() + i); return d.toISOString().split('T')[0]; });
   }, [weekOffset]);
 
@@ -243,116 +245,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             ))}
                         </div>
                     </div>
-
-                    <div className="space-y-4 pt-6">
-                        <div className="flex justify-between items-center border-r-4 border-brand-primary pr-4">
-                            <h4 className="text-white font-black text-sm uppercase tracking-widest">משפטי מוטיבציה</h4>
-                            <Button onClick={async ()=>{
-                                const t=prompt('הכנס משפט מוטיבציה:'); 
-                                if(t) {
-                                    const { dataService } = await import('../services/dataService');
-                                    await dataService.addQuote({id: Date.now().toString(), text: t});
-                                    window.location.reload();
-                                }
-                            }} variant="outline" className="px-5 py-2 text-[10px] rounded-2xl">+ הוסף</Button>
-                        </div>
-                        <div className="grid gap-3">
-                            {props.quotes.map(q => (
-                                <div key={q.id} className="bg-gray-900/40 p-5 rounded-[30px] border border-white/5 flex items-center justify-between">
-                                    <p className="text-white font-bold italic text-sm">"{q.text}"</p>
-                                    <div className="flex gap-2">
-                                        <button onClick={async ()=>{
-                                            const n = prompt('ערוך משפט:', q.text);
-                                            if(n) {
-                                                const { dataService } = await import('../services/dataService');
-                                                // Assuming a simple way to update since we re-fetch everything
-                                                await dataService.deleteQuote(q.id);
-                                                await dataService.addQuote({id: q.id, text: n});
-                                                window.location.reload();
-                                            }
-                                        }} className="text-blue-500">✏️</button>
-                                        <button onClick={async ()=>{
-                                            if(confirm('למחוק את המשפט?')){
-                                                const { dataService } = await import('../services/dataService');
-                                                await dataService.deleteQuote(q.id);
-                                                window.location.reload();
-                                            }
-                                        }} className="text-red-500/50">🗑️</button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                 </div>
                 <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-6 rounded-[40px] font-black italic uppercase">יציאה מהניהול</Button>
             </div>
         )}
       </div>
 
-      {attendanceSession && (
-        <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-6 backdrop-blur-xl">
-           <div className="bg-gray-900 p-8 rounded-[55px] w-full max-w-md border border-white/10 flex flex-col max-h-[90vh] shadow-3xl text-right" dir="rtl">
-              <div className="flex justify-between items-start mb-8 border-b border-white/5 pb-5">
-                 <div className="flex-1">
-                    <select className="w-full bg-transparent text-3xl font-black text-white italic uppercase outline-none mb-2" value={attendanceSession.type} onChange={e=>setAttendanceSession({...attendanceSession, type: e.target.value})}>
-                       {props.workoutTypes.map(t=><option key={t} value={t} className="bg-gray-900">{t}</option>)}
-                    </select>
-                    <div className="flex gap-3">
-                        <input type="time" className="bg-transparent text-red-500 font-black font-mono text-lg" value={attendanceSession.time} onChange={e=>setAttendanceSession({...attendanceSession, time: e.target.value})} />
-                        <span className="text-gray-700">|</span>
-                        <input type="date" className="bg-transparent text-red-500 font-black font-mono text-lg" value={attendanceSession.date} onChange={e=>setAttendanceSession({...attendanceSession, date: e.target.value})} />
-                    </div>
-                 </div>
-                 <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-8">
-                  <button onClick={()=>setAttendanceSession(prev => ({ ...prev!, isCancelled: !prev!.isCancelled }))} className={`py-5 rounded-[30px] text-[10px] sm:text-[11px] font-black uppercase border-2 transition-all italic tracking-widest ${attendanceSession.isCancelled ? 'bg-red-500 border-red-500 text-black' : 'border-white/10 text-red-500'}`}>
-                    {attendanceSession.isCancelled ? 'שחזר אימון' : 'בטל אימון'}
-                  </button>
-                  <button onClick={()=>setAttendanceSession(prev => ({ ...prev!, isZoomSession: !prev!.isZoomSession }))} className={`py-5 rounded-[30px] text-[10px] sm:text-[11px] font-black uppercase border-2 transition-all italic tracking-widest ${attendanceSession.isZoomSession ? 'bg-blue-600 border-blue-600 text-black' : 'border-white/10 text-blue-500'}`}>
-                    {attendanceSession.isZoomSession ? 'בטל זום' : 'אימון זום'}
-                  </button>
-                  <button onClick={()=>setAttendanceSession(prev => ({ ...prev!, manualHasStarted: !prev!.manualHasStarted }))} className={`py-5 rounded-[30px] text-[10px] sm:text-[11px] font-black uppercase border-2 col-span-2 transition-all italic tracking-widest ${attendanceSession.manualHasStarted ? 'bg-brand-primary border-brand-primary text-black' : 'border-white/10 text-brand-primary'}`}>
-                    {attendanceSession.manualHasStarted ? 'סמן כמתוכנן' : 'סמן כמתקיים עכשיו'}
-                  </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-4 no-scrollbar border-t border-white/5 mt-2 pt-4">
-                {attendanceSession.registeredPhoneNumbers.map(p => {
-                    const u = props.users.find(x => normalizePhone(x.phone) === normalizePhone(p));
-                    const isAttended = (attendanceSession.attendedPhoneNumbers || attendanceSession.registeredPhoneNumbers).includes(p);
-                    return (
-                       <div key={p} className="flex gap-2">
-                           <div onClick={() => {
-                               const current = attendanceSession.attendedPhoneNumbers || attendanceSession.registeredPhoneNumbers;
-                               const next = current.includes(p) ? current.filter(x=>x!==p) : [...current, p];
-                               setAttendanceSession(prev => ({ ...prev!, attendedPhoneNumbers: next }));
-                           }} className={`flex-1 p-5 rounded-[30px] border flex justify-between items-center cursor-pointer transition-all ${isAttended ? 'bg-red-600/10 border-red-500/40' : 'bg-gray-800/30 border-white/5 opacity-40'}`}>
-                              <span className="font-black text-white text-lg italic" style={{color: u?.userColor}}>{u?.fullName || p}</span>
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black ${isAttended ? 'bg-red-500 text-white' : 'border border-white/10'}`}>{isAttended ? '✓' : ''}</div>
-                           </div>
-                       </div>
-                    );
-                })}
-              </div>
-              <div className="pt-6 flex gap-3">
-                  <Button onClick={()=>{props.onUpdateSession(attendanceSession); setAttendanceSession(null);}} className="flex-1 py-6 rounded-[40px] bg-red-600 shadow-2xl text-xl font-black italic uppercase">שמור שינויים</Button>
-                  <Button onClick={()=>{if(confirm('מחק אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-8 rounded-[40px]">🗑️</Button>
-              </div>
-           </div>
-        </div>
-      )}
-
       {editingUser && (
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-6 backdrop-blur-xl overflow-y-auto no-scrollbar">
            <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 flex flex-col shadow-3xl text-right my-auto" dir="rtl">
               <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
-                <h3 className="text-3xl font-black text-white italic uppercase">ניהול מתאמן מפורט 👤</h3>
+                <h3 className="text-3xl font-black text-white italic uppercase">פרופיל מתאמן (תצוגת מאמן) 👤</h3>
                 <button onClick={()=>setEditingUser(null)} className="text-gray-500 text-4xl">✕</button>
               </div>
               
               <div className="space-y-8 overflow-y-auto pr-2 no-scrollbar max-h-[75vh]">
+                  {/* Mirrors User's Profile View exactly */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[10px] text-gray-500 uppercase font-black block">שם מלא</label>
@@ -377,11 +285,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] text-gray-500 uppercase font-black block">תשלום</label>
-                        <select className="w-full bg-gray-900 border border-white/10 p-5 rounded-[30px] text-white font-black" value={editingUser.paymentStatus} onChange={e=>setEditingUser({...editingUser, paymentStatus: e.target.value as any})}>
-                            <option value={PaymentStatus.PAID}>שולם ✓</option>
-                            <option value={PaymentStatus.PENDING}>ממתין ⏳</option>
-                            <option value={PaymentStatus.OVERDUE}>חוב ⚠</option>
+                        <label className="text-[10px] text-gray-500 uppercase font-black block">תשלום (מאמן בלבד)</label>
+                        <select className="w-full bg-red-900/10 border border-red-500/30 p-5 rounded-[30px] text-white font-black" value={editingUser.paymentStatus} onChange={e=>setEditingUser({...editingUser, paymentStatus: e.target.value as any})}>
+                            <option value={PaymentStatus.PAID} className="bg-gray-900">שולם ✓</option>
+                            <option value={PaymentStatus.PENDING} className="bg-gray-900">ממתין ⏳</option>
+                            <option value={PaymentStatus.OVERDUE} className="bg-gray-900">חוב ⚠</option>
                         </select>
                       </div>
                       <div className="space-y-2">
@@ -394,8 +302,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       </div>
                   </div>
 
-                  <div className="bg-blue-600/5 rounded-[40px] border border-blue-600/20 p-8 space-y-6 shadow-xl">
-                    <h4 className="text-blue-400 text-xs font-black uppercase tracking-[0.2em] border-b border-blue-600/10 pb-3">📜 הצהרת בריאות ופרטים אישיים</h4>
+                  {/* Health Declaration matches exactly what user sees */}
+                  <div className="bg-brand-primary/5 rounded-[40px] border border-brand-primary/20 p-8 space-y-6 shadow-xl">
+                    <h4 className="text-brand-primary text-xs font-black uppercase tracking-[0.2em] border-b border-brand-primary/10 pb-3">📜 הצהרת בריאות דיגיטלית</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                         <div>
                             <p className="text-gray-500 text-[9px] uppercase font-black mb-1">סטטוס חתימה</p>
@@ -405,16 +314,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <p className="text-gray-500 text-[9px] uppercase font-black mb-1">תעודת זהות</p>
                             <p className="text-white text-lg font-mono tracking-widest">{editingUser.healthDeclarationId || 'לא הוזנה'}</p>
                         </div>
-                        <div>
-                            <p className="text-gray-500 text-[9px] uppercase font-black mb-1">תאריך הצטרפות</p>
-                            <p className="text-white text-lg font-black italic">{editingUser.startDate ? new Date(editingUser.startDate).toLocaleDateString('he-IL') : '---'}</p>
-                        </div>
-                        {editingUser.healthDeclarationFile && (
-                            <div>
-                                <p className="text-gray-500 text-[9px] uppercase font-black mb-1">טופס מצורף</p>
-                                <a href={editingUser.healthDeclarationFile} target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-black text-sm">צפייה בקובץ שהועלה ↗</a>
-                            </div>
-                        )}
                     </div>
                   </div>
               </div>

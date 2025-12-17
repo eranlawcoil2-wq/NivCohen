@@ -19,7 +19,18 @@ const normalizePhone = (phone: string): string => {
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(new URLSearchParams(window.location.search).get('mode') === 'admin');
+  
+  // Path-based routing logic
+  const getInitialMode = () => {
+    const path = window.location.pathname.toLowerCase();
+    if (path === '/admin') return 'admin';
+    if (path === '/work') return 'work';
+    return 'landing';
+  };
+
+  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(getInitialMode());
+  const isAdminMode = currentView === 'admin';
+  
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
@@ -153,11 +164,72 @@ const App: React.FC = () => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
+  const navigateTo = (view: 'landing' | 'work' | 'admin') => {
+      setCurrentView(view);
+      const path = view === 'landing' ? '/' : `/${view.toUpperCase()}`;
+      window.history.pushState({}, '', path);
+  };
+
+  if (currentView === 'landing') {
+      return (
+          <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-6 text-center overflow-hidden relative">
+              {/* Abstract Silhouette Graphic */}
+              <div className="absolute inset-0 z-0 opacity-10 flex items-center justify-center">
+                  <svg viewBox="0 0 100 100" className="w-[80vw] h-[80vw] text-white">
+                      <path fill="currentColor" d="M50 10 L60 40 L90 45 L65 65 L75 95 L50 80 L25 95 L35 65 L10 45 L40 40 Z" />
+                      {/* Placeholder for TRX silhouette logic */}
+                      <rect x="48" y="0" width="4" height="40" fill="currentColor" transform="rotate(20 50 0)" />
+                      <rect x="48" y="0" width="4" height="40" fill="currentColor" transform="rotate(-20 50 0)" />
+                  </svg>
+              </div>
+
+              <div className="z-10 max-w-xl space-y-12">
+                  <div>
+                      <h1 className="text-7xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
+                      <p className="text-xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSIST TRAINING</p>
+                  </div>
+
+                  <div className="space-y-6">
+                      <h2 className="text-4xl font-black text-white italic leading-tight underline decoration-brand-primary/50">אימוני כוח עקביים ללא פשרות.</h2>
+                      <p className="text-gray-400 font-bold text-lg leading-relaxed">
+                          ליווי אישי ומקצועי הממוקד בתוצאות אמיתיות. <br/>
+                          מאימונים פונקציונליים ועד בניית כוח מקסימלי - אנחנו בונים גרסה חזקה יותר של עצמך.
+                      </p>
+                  </div>
+
+                  <div className="bg-gray-900/50 backdrop-blur-xl p-8 rounded-[40px] border border-white/5 shadow-2xl">
+                      <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                      <Button onClick={() => navigateTo('work')} className="py-8 rounded-[40px] text-2xl font-black italic uppercase shadow-2xl shadow-brand-primary/30">כניסה ללו"ז אימונים ⚡</Button>
+                      <button onClick={() => document.getElementById('admin-modal')?.classList.remove('hidden')} className="text-gray-600 font-black text-xs uppercase tracking-[0.3em] hover:text-white transition-colors">Coach Portal</button>
+                  </div>
+              </div>
+
+              {/* Invisible Admin Trigger Modal remains same but call navigateTo('admin') on success */}
+              <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl">
+                  <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl">
+                      <h3 className="text-white font-black text-3xl mb-10 text-center italic uppercase">כניסת מאמן 🔒</h3>
+                      <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-8 bg-gray-800 text-white rounded-[35px] mb-6 text-center border border-gray-700 outline-none focus:border-red-500 text-4xl font-mono" />
+                      <Button onClick={() => { 
+                          const pass = (document.getElementById('admin-pass') as HTMLInputElement).value;
+                          if(pass === (appConfig.coachAdditionalPhone || 'admin')) { 
+                              navigateTo('admin');
+                              document.getElementById('admin-modal')?.classList.add('hidden'); 
+                          }
+                          else alert('סיסמה שגויה');
+                      }} className="w-full py-7 rounded-[40px] bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
+                      <button onClick={()=>document.getElementById('admin-modal')?.classList.add('hidden')} className="w-full mt-4 text-gray-500 font-bold">חזרה</button>
+                  </div>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {/* Grouping header and banner for better sticky logic */}
       <div className="sticky top-0 z-50">
-        {/* Urgent Message Banner */}
         {appConfig.urgentMessage && !isAdminMode && (
             <div className="bg-red-600 text-white p-3 text-center text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg">
                🚨 {appConfig.urgentMessage}
@@ -166,11 +238,11 @@ const App: React.FC = () => {
 
         <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
             <div className="flex justify-between items-center mb-6">
-                <div onClick={() => !isAdminMode && document.getElementById('admin-modal')?.classList.remove('hidden')} className="cursor-pointer">
-                    <h1 className={`text-4xl font-black italic uppercase leading-none transition-all duration-500 ${isAdminMode ? 'text-red-500' : 'text-white'}`}>
-                        {isAdminMode ? 'ADMIN' : 'WORK'}
+                <div onClick={() => navigateTo('landing')} className="cursor-pointer">
+                    <h1 className="text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">
+                        NIV COHEN
                     </h1>
-                    <p className="text-[8px] font-black tracking-[0.4em] text-gray-500 uppercase mt-1">CONSIST TRAINING</p>
+                    <p className="text-[10px] font-black tracking-[0.5em] text-brand-primary uppercase mt-1">CONSIST TRAINING</p>
                 </div>
                 {currentUser && !isAdminMode && (
                     <div className="flex items-center gap-3">
@@ -223,7 +295,7 @@ const App: React.FC = () => {
                 onColorChange={()=>{}} onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
-                onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => { setIsAdminMode(false); window.history.pushState({}, '', '/?mode=work'); }}
+                onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('landing')}
             />
         ) : (
             <div className="space-y-6">
@@ -235,7 +307,11 @@ const App: React.FC = () => {
 
                 <div className="space-y-16 pb-20">
                   {Array.from({length:7}, (_,i) => {
-                      const d = new Date(); d.setDate(d.getDate() - d.getDay() + i);
+                      // START WEEK FROM SUNDAY (יום ראשון)
+                      const d = new Date();
+                      const currentDay = d.getDay(); // 0 is Sunday
+                      d.setDate(d.getDate() - currentDay + i);
+                      
                       const dateStr = d.toISOString().split('T')[0];
                       const isToday = dateStr === todayStr;
                       const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
@@ -263,7 +339,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Modals */}
+      {/* Modals remain essentially the same logic but shared profile UI can be extracted if needed */}
       {isLinksModalOpen && (
         <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-6 backdrop-blur-2xl">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-sm border border-white/10 flex flex-col shadow-3xl text-right" dir="rtl">
@@ -303,14 +379,14 @@ const App: React.FC = () => {
         <div className="fixed inset-0 bg-black/95 z-[70] flex items-center justify-center p-4 backdrop-blur-2xl overflow-y-auto no-scrollbar">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 flex flex-col shadow-3xl text-right my-auto" dir="rtl">
                 <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
-                    <h3 className="text-3xl font-black text-white italic uppercase">עריכת פרופיל 👤</h3>
+                    <h3 className="text-3xl font-black text-white italic uppercase">פרופיל אישי 👤</h3>
                     <button onClick={() => setIsProfileModalOpen(false)} className="text-gray-500 text-3xl">✕</button>
                 </div>
                 
                 <div className="space-y-6 overflow-y-auto max-h-[70vh] px-2 no-scrollbar">
                     <div className="space-y-4">
                         <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">שם מלא (המאמן רואה את זה)</label>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">שם מלא</label>
                             <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold text-lg outline-none focus:border-brand-primary" value={currentUser.fullName || ''} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} />
                         </div>
                         <div>
@@ -321,7 +397,7 @@ const App: React.FC = () => {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי (איך יראו אותך ברשימות)</label>
+                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי</label>
                             <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold outline-none focus:border-brand-primary" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} placeholder="כינוי..." />
                         </div>
                         <div>
@@ -341,7 +417,7 @@ const App: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-4 bg-gray-900/50 p-5 rounded-2xl">
                                 <input type="checkbox" id="health-check" className="w-8 h-8 rounded-xl bg-gray-800 border-white/10" checked={!!currentUser.healthDeclarationDate} onChange={e => handleUpdateProfile({...currentUser, healthDeclarationDate: e.target.checked ? new Date().toISOString() : ''})} />
-                                <label htmlFor="health-check" className="text-white text-xs font-black uppercase tracking-tighter">אני מאשר את נכונות ההצהרה</label>
+                                <label htmlFor="health-check" className="text-white text-xs font-black uppercase tracking-tighter">אני מאשר את נכונות ההצהרה {currentUser.healthDeclarationDate && <span className="text-[8px] opacity-50 block">נחתם ב: {new Date(currentUser.healthDeclarationDate).toLocaleString('he-IL')}</span>}</label>
                             </div>
                         </div>
                     </div>
@@ -370,22 +446,7 @@ const App: React.FC = () => {
         </div>
       )}
       
-      <div id="admin-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl">
-          <div className="bg-gray-900 p-12 rounded-[50px] w-full max-w-sm border border-gray-800 shadow-2xl">
-              <h3 className="text-white font-black text-3xl mb-10 text-center italic uppercase">כניסת מאמן 🔒</h3>
-              <input type="password" id="admin-pass" placeholder='סיסמה' className="w-full p-8 bg-gray-800 text-white rounded-[35px] mb-6 text-center border border-gray-700 outline-none focus:border-red-500 text-4xl font-mono" />
-              <Button onClick={() => { 
-                  const pass = (document.getElementById('admin-pass') as HTMLInputElement).value;
-                  if(pass === (appConfig.coachAdditionalPhone || 'admin')) { 
-                      setIsAdminMode(true); 
-                      window.history.pushState({}, '', '/?mode=admin');
-                      document.getElementById('admin-modal')?.classList.add('hidden'); 
-                  }
-                  else alert('סיסמה שגויה');
-              }} className="w-full py-7 rounded-[40px] bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20">כניסה למערכת</Button>
-          </div>
-      </div>
-
+      {/* Login Modal remains same */}
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-50 hidden flex items-center justify-center p-6 backdrop-blur-xl text-center">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 shadow-2xl">
               <h3 className="text-white font-black text-4xl mb-3 italic uppercase">מי המתאמן? 🤔</h3>
