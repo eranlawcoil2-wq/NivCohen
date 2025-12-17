@@ -28,7 +28,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   
   const weekDates = useMemo(() => {
     const sun = new Date();
-    // Sunday is 0. This correctly sets the start of the week to the most recent Sunday.
+    // 0 is Sunday. This ensures we start counting from the most recent Sunday.
     sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { 
         const d = new Date(sun); 
@@ -92,7 +92,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           </div>
         )}
 
-        {activeTab === 'users' && (
+        {activeTab === 'users' && (activeTab === 'users') && (
             <div className="space-y-6">
                 <input type="text" placeholder="חיפוש מתאמן (שם או טלפון)..." className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                 <div className="grid gap-4">
@@ -206,6 +206,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   </div>
               </div>
           </div>
+      )}
+
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/95 z-[210] flex items-center justify-center p-6 backdrop-blur-xl">
+           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-2xl border border-white/10 text-right shadow-3xl overflow-y-auto no-scrollbar max-h-[90vh]" dir="rtl">
+              <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
+                <h3 className="text-3xl font-black text-white italic uppercase">ניהול מתאמן 👤</h3>
+                <button onClick={()=>setEditingUser(null)} className="text-gray-500 text-4xl">✕</button>
+              </div>
+              <div className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div><label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">שם מלא</label><input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold" value={editingUser.fullName} onChange={e=>setEditingUser({...editingUser, fullName: e.target.value})} /></div>
+                      <div><label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">כינוי</label><input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold" value={editingUser.displayName || ''} onChange={e=>setEditingUser({...editingUser, displayName: e.target.value})} placeholder="כינוי..." /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6">
+                      <div><label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">צבע אישי</label><input type="color" className="w-full h-16 bg-gray-800 border border-white/10 p-2 rounded-3xl cursor-pointer" value={editingUser.userColor || '#ffffff'} onChange={e=>setEditingUser({...editingUser, userColor: e.target.value})} /></div>
+                      <div>
+                        <label className="text-[10px] text-gray-500 font-black uppercase mb-1 block">סטטוס תשלום</label>
+                        <select className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-black" value={editingUser.paymentStatus} onChange={e=>setEditingUser({...editingUser, paymentStatus: e.target.value as any})}>
+                            <option value={PaymentStatus.PAID} className="bg-gray-900">שולם ✓</option>
+                            <option value={PaymentStatus.PENDING} className="bg-gray-900">ממתין ⏳</option>
+                            <option value={PaymentStatus.OVERDUE} className="bg-gray-900">חוב ⚠</option>
+                        </select>
+                      </div>
+                  </div>
+              </div>
+              <div className="mt-12 flex gap-4">
+                  <Button onClick={()=>{props.onUpdateUser(editingUser); setEditingUser(null);}} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור מתאמן ✓</Button>
+                  <Button onClick={()=>{if(confirm('למחוק מתאמן?')){props.onDeleteUser(editingUser.id); setEditingUser(null);}}} variant="danger" className="px-10 rounded-[45px]">🗑️</Button>
+              </div>
+           </div>
+        </div>
       )}
     </div>
   );

@@ -21,7 +21,7 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
         href={`https://wa.me/${phone.replace(/\D/g, '')}`} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-[100] bg-green-500 text-white p-4 rounded-full shadow-2xl whatsapp-float flex items-center justify-center transition-transform hover:scale-110 active:scale-90"
+        className="fixed bottom-6 right-6 z-[100] bg-green-500 text-white p-4 rounded-full shadow-2xl shadow-green-500/40 whatsapp-float flex items-center justify-center transition-transform hover:scale-110 active:scale-90"
         aria-label="WhatsApp"
     >
         <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
@@ -30,25 +30,31 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     </a>
 );
 
-const ShareButton: React.FC = () => {
-    const handleShare = () => {
-        const url = window.location.origin;
-        if (navigator.share) {
-            navigator.share({ title: 'ניב כהן - Consistency Training', url: url });
-        } else {
-            navigator.clipboard.writeText(url).then(() => {
-                alert('הקישור לאתר הועתק ללוח!');
-            });
+interface InstallButtonProps {
+    isAdmin: boolean;
+    deferredPrompt: any;
+    onInstalled: () => void;
+}
+
+const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, onInstalled }) => {
+    if (!deferredPrompt) return null;
+
+    const handleInstall = async () => {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            onInstalled();
         }
     };
+
     return (
         <button 
-            onClick={handleShare}
-            className="fixed bottom-24 right-6 z-[100] bg-white text-black p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border border-gray-200"
-            title="שתף קישור"
+            onClick={handleInstall}
+            className={`fixed bottom-24 right-6 z-[100] ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'} text-brand-black p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black`}
+            title="הורד אפליקציה"
         >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
         </button>
     );
@@ -69,7 +75,6 @@ const App: React.FC = () => {
   const isAdminMode = currentView === 'admin';
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(localStorage.getItem('niv_admin_auth') === 'true');
   
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationDef[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -108,14 +113,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') setDeferredPrompt(null);
-    }
-  };
-
   const stats = useMemo(() => {
     if (!currentUser) return { monthly: 0, record: 0, streak: 0 };
     const phone = normalizePhone(currentUser.phone);
@@ -126,6 +123,7 @@ const App: React.FC = () => {
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
     
+    let streak = 0;
     const weekMap: Record<string, number> = {};
     attendedSessions.forEach(s => {
         const d = new Date(s.date);
@@ -133,7 +131,6 @@ const App: React.FC = () => {
         const key = sun.toISOString().split('T')[0];
         weekMap[key] = (weekMap[key] || 0) + 1;
     });
-    let streak = 0;
     let check = new Date(); check.setDate(check.getDate() - check.getDay());
     while(true) {
         const key = check.toISOString().split('T')[0];
@@ -245,7 +242,7 @@ const App: React.FC = () => {
             </div>
             <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase">כניסה ללו"ז אימונים ⚡</Button>
         </div>
-        <ShareButton />
+        <InstallButton isAdmin={isAdminMode} deferredPrompt={deferredPrompt} onInstalled={() => setDeferredPrompt(null)} />
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
     );
@@ -260,7 +257,7 @@ const App: React.FC = () => {
                   <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
               {currentUser && !isAdminMode && (
-                  <div className="text-right cursor-pointer" onClick={() => setIsProfileModalOpen(true)}>
+                  <div className="text-right cursor-pointer" onClick={() => navigateTo('landing')}>
                       <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">פרופיל אישי</p>
                       <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                   </div>
@@ -331,9 +328,14 @@ const App: React.FC = () => {
                 </div>
                 <div className="space-y-6">
                     {viewingSession.description && (
-                        <div className="p-4 bg-brand-primary/5 border border-brand-primary/10 rounded-3xl">
-                            <p className="text-white text-sm font-bold">{viewingSession.description}</p>
+                        <div className="p-5 bg-brand-primary/10 border border-brand-primary/20 rounded-[30px]">
+                            <p className="text-white text-sm font-bold leading-relaxed">{viewingSession.description}</p>
                         </div>
+                    )}
+                    {viewingSession.zoomLink && (
+                        <a href={viewingSession.zoomLink} target="_blank" rel="noreferrer" className="block p-5 bg-blue-600/10 border border-blue-500/20 rounded-[30px] text-blue-400 text-center font-black italic">
+                             כנס לאימון זום 🎥
+                        </a>
                     )}
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
                         <p className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">נרשמו ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
@@ -343,7 +345,7 @@ const App: React.FC = () => {
                                 return (
                                     <div key={phone} className="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] border border-white/5 flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full" style={{ background: t?.userColor || '#A3E635' }}></div>
-                                        {t ? (t.displayName || t.fullName.split(' ')[0]) : 'מתאמן'}
+                                        {t ? (t.displayName || t.fullName.split(' ')[0]) : 'متאמן'}
                                     </div>
                                 );
                             }) : <p className="text-gray-600 text-xs italic">עדיין אין נרשמים...</p>}
@@ -369,7 +371,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <ShareButton />
+      <InstallButton isAdmin={isAdminMode} deferredPrompt={deferredPrompt} onInstalled={() => setDeferredPrompt(null)} />
       <WhatsAppButton phone={appConfig.coachPhone} />
       
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
