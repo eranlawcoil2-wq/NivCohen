@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { TrainingSession, User, LocationDef, WeatherInfo } from '../types';
 import { Button } from './Button';
@@ -14,24 +15,6 @@ interface SessionCardProps {
   isAdmin?: boolean; 
 }
 
-const stringToColor = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const colors = [
-    'bg-blue-500/20 text-blue-300 border-blue-500/30', 
-    'bg-purple-500/20 text-purple-300 border-purple-500/30', 
-    'bg-pink-500/20 text-pink-300 border-pink-500/30', 
-    'bg-orange-500/20 text-orange-300 border-orange-500/30', 
-    'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-    'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    'bg-rose-500/20 text-rose-300 border-rose-500/30',
-    'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
-  ];
-  return colors[Math.abs(hash) % colors.length];
-};
-
 export const SessionCard: React.FC<SessionCardProps> = ({ 
   session, 
   allUsers, 
@@ -43,25 +26,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   isAdmin = false
 }) => {
   const registeredCount = session.registeredPhoneNumbers.length;
-  const waitingCount = session.waitingList ? session.waitingList.length : 0;
   const spotsLeft = session.maxCapacity - registeredCount;
   const isFull = spotsLeft <= 0;
-  const cardColor = session.color || 'var(--brand-primary)'; 
-  
-  // Calculate if user is in waiting list
-  // Note: App.tsx handles the actual prop `isRegistered` which usually checks registeredPhoneNumbers.
-  // We need to check waiting list manually here or trust the parent. 
-  // For visual "In Waitlist", we need to know the current user's phone, but we don't have it here directly easily without modifying props.
-  // Instead, we will rely on a distinct button state if `isRegistered` is false but user is in waitlist.
-  // However, simpler for now: `isRegistered` prop should ideally only reflect active registration.
-
-  const locationObj = locations.find(l => l.name === session.location);
-  const locationBadgeStyle = locationObj && locationObj.color 
-      ? { backgroundColor: `${locationObj.color}33`, color: locationObj.color, borderColor: `${locationObj.color}4d` } 
-      : null;
-      
-  const defaultLocationClass = !locationBadgeStyle ? stringToColor(session.location) : '';
-  const showZoomBadge = session.isZoomSession || !!session.zoomLink;
   const isCancelled = session.isCancelled || false;
   
   let isHappening = false;
@@ -73,154 +39,60 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           const sessionStart = new Date(`${session.date}T${session.time}`);
           const diffMs = sessionStart.getTime() - now.getTime();
           const diffHours = diffMs / (1000 * 60 * 60);
-          if (diffHours <= 3 && diffHours > -1.5) {
+          
+          // BLINKING LOGIC: Starts 3 hours before, until 1 hour after start
+          if (diffHours <= 3 && diffHours > -1) {
               isHappening = true;
           }
       }
   }
 
-  const handleButtonClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      if (!isCancelled || isAdmin) {
-        onRegisterClick(session.id);
-      }
-  };
+  let buttonText = isRegistered ? 'רשום ✅' : (isFull ? 'המתנה ⏳' : 'הרשם +');
+  if (isCancelled) buttonText = 'בוטל ✕';
+  if (isAdmin) buttonText = 'נוכחות / עריכה';
 
-  let containerClass = 'bg-brand-dark border-gray-800 hover:border-gray-600';
-  if (session.isHidden) containerClass = 'bg-[#2e1065] border-purple-500/60 shadow-none';
-  if (isCancelled) containerClass = 'bg-red-900/10 border-red-900/40 grayscale-[0.5]';
-
-  let displayTemp = weather?.maxTemp;
-  let displayIcon = weather ? getWeatherIcon(weather.weatherCode) : null;
-  
-  if (weather && weather.hourly && session.time) {
-      const sessionHourStr = session.time.split(':')[0]; 
-      const sessionHour = parseInt(sessionHourStr, 10);
-      const hourlyData = weather.hourly[sessionHourStr];
-      const isNight = sessionHour >= 19 || sessionHour < 6;
-
-      if (hourlyData) {
-          displayTemp = hourlyData.temp;
-          displayIcon = getWeatherIcon(hourlyData.weatherCode, isNight);
-      }
-  }
-
-  // Determine Button Text & Style
-  let buttonText = 'הירשם +';
-  let buttonVariant: 'primary' | 'secondary' | 'danger' | 'outline' = 'primary';
-  let buttonDisabled = false;
-
-  if (isAdmin) {
-      buttonText = 'ניהול / אישורים';
-      buttonVariant = 'danger';
-  } else if (isCancelled) {
-      buttonText = 'מבוטל ✕';
-      buttonDisabled = true;
-      buttonVariant = 'secondary';
-  } else if (isRegistered) {
-      buttonText = 'רשום ✅';
-      buttonVariant = 'outline';
-  } else if (isFull) {
-      buttonText = 'היכנס להמתנה ⏳';
-      buttonVariant = 'secondary'; // Or a specific waitlist color
-  }
+  const cardColor = session.color || '#A3E635';
 
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
-      className={`relative rounded-xl p-3 border shadow-lg cursor-pointer transition-all hover:-translate-y-1 group flex flex-col gap-2 ${isRegistered ? 'shadow-lg' : ''} h-full justify-between ${containerClass}`}
-      style={{ 
-          borderColor: isRegistered ? cardColor : undefined,
-          boxShadow: isRegistered ? `0 4px 14px 0 ${cardColor}20` : undefined
-      }}
+      className={`relative rounded-3xl p-5 border transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-xl ${isCancelled ? 'bg-red-900/10 border-red-900/20 grayscale' : 'bg-gray-800/70 border-gray-700/40'}`}
+      style={{ borderColor: isRegistered && !isCancelled ? cardColor : undefined, boxShadow: isRegistered && !isCancelled ? `0 10px 30px ${cardColor}15` : undefined }}
     >
-      <div className="absolute top-0 left-0 flex flex-row gap-1 p-1 z-10 flex-wrap max-w-full">
-        {isCancelled && (
-           <div className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20">
-               האימון התבטל
-           </div>
-        )}
-        
-        {!isCancelled && isHappening && (
-            <div className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20 animate-pulse flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></span>
-                מתקיים {showZoomBadge ? '+ ZOOM' : ''}
-            </div>
-        )}
-
-        {!isCancelled && showZoomBadge && !isHappening && (
-           <div className="bg-blue-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
-               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                   <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-               </svg>
-               ZOOM
-           </div>
-        )}
-
-        {session.isTrial && !isCancelled && (
-           <div className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/20">
-               אימון ניסיון
-           </div>
-        )}
-        
-        {session.isHidden && (
-            <div className="bg-purple-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
-               <span>👻 נסתר</span>
-           </div>
-        )}
-        
-        {/* Waiting List Badge */}
-        {!isRegistered && isFull && !isCancelled && waitingCount > 0 && (
-            <div className="bg-orange-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg border border-white/10 flex items-center gap-1">
-                <span>⏳ {waitingCount} ממתינים</span>
-            </div>
-        )}
-      </div>
-      
-      <div className="flex justify-between items-start mt-6">
-        <span className={`text-xl font-black font-mono tracking-tight ${isCancelled ? 'text-gray-500 line-through decoration-red-500' : 'text-white'}`}>{session.time}</span>
-        {displayIcon && !isCancelled && (
-            <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded-full">
-                <span>{Math.round(displayTemp || 0)}°</span>
-                <span>{displayIcon}</span>
-            </div>
-        )}
+      <div className="absolute -top-2 -left-1 flex gap-1 z-10">
+         {isHappening && !isCancelled && (
+             <div className="bg-brand-primary text-black text-[9px] font-black px-3 py-1.5 rounded-full animate-pulse shadow-xl flex items-center gap-1.5 uppercase italic tracking-tighter">
+                <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span> כעת
+             </div>
+         )}
+         {session.isTrial && !isCancelled && !isHappening && (
+             <div className="bg-amber-500 text-black text-[9px] font-black px-3 py-1.5 rounded-full shadow-xl uppercase italic tracking-tighter">ניסיון</div>
+         )}
       </div>
 
       <div>
-          <h3 className={`font-bold text-sm leading-tight mb-2 line-clamp-1 ${isCancelled ? 'text-gray-500' : ''}`} style={{ color: isCancelled ? undefined : cardColor }}>
-              {session.type}
-          </h3>
-          
-          <div className="flex flex-col gap-1.5 items-start w-full mb-2">
-              <div 
-                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] border w-full ${defaultLocationClass} ${isCancelled ? 'opacity-50' : ''}`}
-                style={locationBadgeStyle && !isCancelled ? locationBadgeStyle : {}}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 shrink-0" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                </svg>
-                <span className="truncate">{session.location}</span>
-              </div>
-          </div>
+        <div className="flex justify-between items-start mb-3">
+           <span className={`text-2xl font-black font-mono italic ${isCancelled ? 'text-gray-600 line-through' : 'text-white'}`}>{session.time}</span>
+           {weather && <span className="text-sm opacity-60 grayscale group-hover:grayscale-0 transition-all">{getWeatherIcon(weather.weatherCode)}</span>}
+        </div>
+        <h3 className={`font-black text-[11px] leading-tight uppercase italic mb-1 tracking-tight ${isCancelled ? 'text-gray-600' : 'text-brand-primary'}`}>{session.type}</h3>
+        <p className={`text-[10px] font-bold truncate mb-5 uppercase tracking-tighter ${isCancelled ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location}</p>
       </div>
 
-      <div className="mt-auto pt-2 border-t border-gray-800/50">
-          <div className="flex justify-between items-center mb-2 text-xs">
-             <span className={`font-bold ${isFull && !isCancelled ? 'text-red-400' : 'text-gray-300'}`}>
-                {registeredCount}/{session.maxCapacity} רשומים
-             </span>
-          </div>
-          
-          <Button 
-            size="sm" 
-            variant={buttonVariant}
-            className={`w-full text-xs py-1.5 h-8 ${isRegistered && !isAdmin ? 'bg-transparent border-gray-600 text-gray-300' : ''}`}
-            onClick={handleButtonClick}
-            disabled={buttonDisabled}
-          >
-            {buttonText}
-          </Button>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+           <span className={isFull && !isRegistered ? 'text-red-500' : 'text-gray-500'}>{registeredCount}/{session.maxCapacity}</span>
+           {isRegistered && !isCancelled && <span className="text-brand-primary flex items-center gap-1"><span className="text-[8px]">✓</span> מאושר</span>}
+        </div>
+        <Button 
+           size="sm" 
+           variant={isAdmin ? 'primary' : (isRegistered ? 'outline' : 'primary')} 
+           className={`w-full text-[10px] py-2.5 font-black italic uppercase rounded-2xl shadow-lg ${isCancelled ? 'bg-gray-700 border-transparent text-gray-500' : ''}`}
+           onClick={(e) => { e.stopPropagation(); if(!isAdmin) onRegisterClick(session.id); else onViewDetails(session.id); }}
+           disabled={isCancelled && !isAdmin}
+        >
+           {buttonText}
+        </Button>
       </div>
     </div>
   );
