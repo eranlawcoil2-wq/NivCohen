@@ -131,8 +131,20 @@ export const dataService = {
     if (supabase) {
        const { data, error } = await supabase.from('config_locations').select('*');
        if (!error && data && data.length > 0) return data as LocationDef[];
+       // If DB is connected but empty, return empty list (do NOT auto seed unless explicitly asked)
+       // Fallback to defaults only if NO data at all
+       if (!error && (!data || data.length === 0)) {
+           return DEFAULT_LOCATIONS; 
+       }
     }
-    return safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
+    
+    // Local storage fallback
+    const localData = safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
+    // Extra safety: if local data has "Park Hayarkon", ignore it and return clean defaults
+    if (localData.some(l => l.name.includes('פארק הירקון'))) {
+        return DEFAULT_LOCATIONS;
+    }
+    return localData;
   },
   
   saveLocations: async (locations: LocationDef[]): Promise<void> => {
@@ -140,6 +152,7 @@ export const dataService = {
         const { error } = await supabase.from('config_locations').upsert(locations);
         if (error) {
              console.error("Error saving locations:", error);
+             // Fallback
              localStorage.setItem('niv_app_locations', JSON.stringify(locations));
         }
     } else {

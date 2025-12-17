@@ -68,6 +68,12 @@ export interface WeatherLocation {
   lon: number;
 }
 
+export interface WeatherInfo {
+  maxTemp: number;
+  weatherCode: number;
+  hourly?: Record<string, { temp: number; weatherCode: number }>; // Key is "HH" (00-23)
+}
+
 export interface PaymentLink {
   id: string;
   title: string;

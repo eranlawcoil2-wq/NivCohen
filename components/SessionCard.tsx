@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrainingSession, User, LocationDef } from '../types';
+import { TrainingSession, User, LocationDef, WeatherInfo } from '../types';
 import { Button } from './Button';
 import { getWeatherIcon } from '../services/weatherService';
 
@@ -7,7 +7,7 @@ interface SessionCardProps {
   session: TrainingSession;
   allUsers: User[];
   isRegistered: boolean;
-  weather?: { maxTemp: number; weatherCode: number };
+  weather?: WeatherInfo;
   onRegisterClick: (sessionId: string) => void;
   onViewDetails: (sessionId: string) => void;
   locations?: LocationDef[];
@@ -90,6 +90,20 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   if (session.isHidden) containerClass = 'bg-[#2e1065] border-purple-500/60 shadow-none';
   if (isCancelled) containerClass = 'bg-red-900/10 border-red-900/40 grayscale-[0.5]';
 
+  // --- Weather Logic (Hourly or Daily) ---
+  let displayTemp = weather?.maxTemp;
+  let displayIcon = weather ? getWeatherIcon(weather.weatherCode) : null;
+  
+  // Try to get hourly data if available
+  if (weather && weather.hourly && session.time) {
+      const sessionHour = session.time.split(':')[0]; // "18:30" -> "18"
+      const hourlyData = weather.hourly[sessionHour];
+      if (hourlyData) {
+          displayTemp = hourlyData.temp;
+          displayIcon = getWeatherIcon(hourlyData.weatherCode);
+      }
+  }
+
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
@@ -147,10 +161,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       
       <div className="flex justify-between items-start mt-6">
         <span className={`text-xl font-black font-mono tracking-tight ${isCancelled ? 'text-gray-500 line-through decoration-red-500' : 'text-white'}`}>{session.time}</span>
-        {weather && !isCancelled && (
+        {displayIcon && !isCancelled && (
             <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-800/50 px-2 py-1 rounded-full">
-                <span>{Math.round(weather.maxTemp)}°</span>
-                <span>{getWeatherIcon(weather.weatherCode)}</span>
+                <span>{Math.round(displayTemp || 0)}°</span>
+                <span>{displayIcon}</span>
             </div>
         )}
       </div>

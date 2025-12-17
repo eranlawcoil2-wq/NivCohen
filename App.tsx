@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote } from './types';
+import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
@@ -180,10 +180,46 @@ const App: React.FC = () => {
 
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [quote, setQuote] = useState('');
-  const [weatherData, setWeatherData] = useState<Record<string, { maxTemp: number; weatherCode: number }>>({});
+  // CHANGED: Use WeatherInfo Record
+  const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [isIos, setIsIos] = useState(false);
+
+  // --- AUTO-FIX EFFECT: Clean old cache if detected ---
+  useEffect(() => {
+      const locs = localStorage.getItem('niv_app_locations');
+      if (locs && locs.includes('פארק הירקון')) {
+          console.log('Detected old default location (Park Hayarkon). Clearing cache to fetch fresh data...');
+          localStorage.removeItem('niv_app_locations');
+          // Reload to re-fetch
+          window.location.reload();
+      }
+  }, []);
+
+  // --- URL Admin Check ---
+  useEffect(() => {
+      const checkAdmin = () => {
+          const isPathAdmin = window.location.pathname === '/admin';
+          const isParamAdmin = new URLSearchParams(window.location.search).get('mode') === 'admin';
+          if (isPathAdmin || isParamAdmin) setIsAdminMode(true);
+      };
+      checkAdmin();
+      window.addEventListener('popstate', checkAdmin);
+      return () => window.removeEventListener('popstate', checkAdmin);
+  }, []);
+
+  const toggleAdminMode = () => {
+      if (isAdminMode) {
+          // Exit admin
+          window.history.pushState({}, '', '/');
+          setIsAdminMode(false);
+      } else {
+          // Enter admin
+          window.history.pushState({}, '', '/admin');
+          setIsAdminMode(true);
+      }
+  };
 
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
@@ -282,8 +318,7 @@ const App: React.FC = () => {
   useEffect(() => {
       const params = new URLSearchParams(window.location.search);
       const isParamAdmin = params.get('mode') === 'admin';
-      if (isParamAdmin) setIsAdminMode(true);
-
+      
       const updateIcon = (isAdmin: boolean) => {
           const color = isAdmin ? '%23EF4444' : '%23A3E635'; 
           const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${color}%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>`;
@@ -294,15 +329,6 @@ const App: React.FC = () => {
       };
       updateIcon(isParamAdmin || isAdminMode);
   }, [isAdminMode]);
-
-  const toggleAdminMode = () => {
-      const newMode = !isAdminMode;
-      setIsAdminMode(newMode);
-      const url = new URL(window.location.href);
-      if (newMode) url.searchParams.set('mode', 'admin');
-      else url.searchParams.delete('mode');
-      window.history.pushState({}, '', url);
-  };
 
   useEffect(() => { localStorage.setItem('niv_app_color', primaryColor); document.documentElement.style.setProperty('--brand-primary', primaryColor); }, [primaryColor]);
   useEffect(() => { getWeatherForDates(getCurrentWeekDates(0), weatherLocation.lat, weatherLocation.lon).then(setWeatherData); }, []);
@@ -550,7 +576,11 @@ const App: React.FC = () => {
   return (
     <div className={mainBackgroundClass}>
       <header className="bg-brand-dark p-4 sticky top-0 z-20 border-b border-gray-800 flex justify-between items-center shadow-lg">
-          <div><h1 className="text-2xl font-black text-white italic uppercase">{appConfig.coachNameEng.split(' ')[0]} <span className="text-brand-primary">{appConfig.coachNameEng.split(' ').slice(1).join(' ')}</span></h1></div>
+          <div onClick={toggleAdminMode} className="cursor-pointer group select-none">
+              <h1 className="text-2xl font-black text-white italic uppercase group-hover:opacity-80 transition-opacity">
+                  {appConfig.coachNameEng.split(' ')[0]} <span className="text-brand-primary">{appConfig.coachNameEng.split(' ').slice(1).join(' ')}</span>
+              </h1>
+          </div>
           {currentUser && (
               <div className="text-right flex items-center gap-3">
                   <div>
@@ -611,6 +641,7 @@ const App: React.FC = () => {
                 locations={locations} weatherLocation={weatherLocation} paymentLinks={paymentLinks} streakGoal={streakGoal}
                 appConfig={appConfig}
                 quotes={customQuotes}
+                weatherData={weatherData} // Pass weather data to Admin
                 onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
@@ -635,7 +666,7 @@ const App: React.FC = () => {
                 onUpdateAppConfig={handleUpdateAppConfig}
                 onAddQuote={handleAddQuote}
                 onDeleteQuote={handleDeleteQuote}
-                onExitAdmin={()=>{toggleAdminMode(); refreshData();}}
+                onExitAdmin={toggleAdminMode}
             />
         ) : (
             <>
@@ -881,7 +912,6 @@ const App: React.FC = () => {
                     <span className="font-bold text-xs">שלח הודעה</span>
                 </a>
                 <button onClick={handleInstallClick} className="text-brand-primary hover:text-white p-2 text-xl" title="התקן אפליקציה">📲</button>
-                <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2 text-xl" title="ניהול">⚙️</button>
             </div>
           </div>
           <div className="text-[10px] text-center text-gray-500 w-full border-t border-gray-800/50 pt-2 flex justify-center gap-4">

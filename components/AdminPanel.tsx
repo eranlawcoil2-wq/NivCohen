@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote } from '../types';
+import { User, TrainingSession, PaymentStatus, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo } from '../types';
 import { Button } from './Button';
 import { generateWorkoutDescription } from '../services/geminiService';
 import { getCityCoordinates } from '../services/weatherService';
@@ -13,6 +13,7 @@ interface AdminPanelProps {
   workoutTypes: string[];
   locations: LocationDef[];
   weatherLocation: WeatherLocation;
+  weatherData?: Record<string, WeatherInfo>; // NEW PROP
   paymentLinks: PaymentLink[];
   streakGoal: number; 
   appConfig: AppConfig;
@@ -263,7 +264,7 @@ END:VCALENDAR`;
 };
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
-    users, sessions, primaryColor, workoutTypes, locations, weatherLocation,
+    users, sessions, primaryColor, workoutTypes, locations, weatherLocation, weatherData,
     paymentLinks, streakGoal, appConfig, quotes = [], onAddUser, onUpdateUser, onDeleteUser, 
     onAddSession, onUpdateSession, onDeleteSession, onColorChange,
     onUpdateWorkoutTypes, onUpdateLocations, onUpdateWeatherLocation,
@@ -873,7 +874,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                               {daySessions.sort((a,b) => a.time.localeCompare(b.time)).map(session => (
                                                   <div key={session.id} onClick={() => openAttendanceModal(session)}>
-                                                      <SessionCard session={session} allUsers={users} isRegistered={false} onRegisterClick={() => openAttendanceModal(session)} onViewDetails={() => openAttendanceModal(session)} locations={locations}/>
+                                                      <SessionCard 
+                                                        session={session} 
+                                                        allUsers={users} 
+                                                        isRegistered={false} 
+                                                        onRegisterClick={() => openAttendanceModal(session)} 
+                                                        onViewDetails={() => openAttendanceModal(session)} 
+                                                        locations={locations}
+                                                        weather={weatherData ? weatherData[session.date] : undefined} // Pass weather
+                                                      />
                                                   </div>
                                               ))}
                                           </div>
@@ -886,7 +895,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
           </div>
       )}
-
+      
+      {/* ... Rest of AdminPanel ... */}
       {/* Attendance Modal */}
       {attendanceSession && (
          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
@@ -1181,8 +1191,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       
       {activeTab === 'settings' && (
           <div className="space-y-6">
-              
-              <div className="bg-gray-800 p-4 rounded border border-gray-700">
+              {/* ... Settings content ... */}
+               <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-3 font-bold">פרטי מאמן והגדרות כלליות</h3>
                   
                   {/* Urgent Message Input */}
