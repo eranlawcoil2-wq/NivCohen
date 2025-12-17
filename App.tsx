@@ -62,13 +62,7 @@ const App: React.FC = () => {
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
   const [primaryColor, setPrimaryColor] = useState<string>(localStorage.getItem('niv_app_color') || '#A3E635');
   const [weekOffset, setWeekOffset] = useState(0); 
-  
-  // Fix: Added missing weatherLocation state
-  const [weatherLocation, setWeatherLocation] = useState<WeatherLocation>(() => safeJsonParse('niv_app_weather_loc', {
-      name: 'נס ציונה',
-      lat: 31.93,
-      lon: 34.80
-  }));
+  const [weatherLocation, setWeatherLocation] = useState<WeatherLocation>(() => safeJsonParse('niv_app_weather_loc', { name: 'נס ציונה', lat: 31.93, lon: 34.80 }));
 
   const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
       const fromStorage = localStorage.getItem('niv_app_is_admin') === 'true';
@@ -93,13 +87,15 @@ const App: React.FC = () => {
   const refreshData = useCallback(async () => {
       setIsLoadingData(true);
       try {
+          // Explicitly cast Promise.all result to tuple to fix unknown[] inference errors
           const [u, s, locs, types, config, quotes] = await Promise.all([
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(),
               dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
-          ]);
+          ]) as [User[], TrainingSession[], LocationDef[], string[], AppConfig, Quote[]];
+
           setUsers(u); setSessions(s);
-          if (locs?.length) setLocations(locs);
-          if (types?.length) setWorkoutTypes(types);
+          if (locs?.length > 0) setLocations(locs);
+          if (types?.length > 0) setWorkoutTypes(types);
           setAppConfig(config);
           if (quotes?.length) setQuote(quotes[Math.floor(Math.random() * quotes.length)].text);
           else getMotivationQuote().then(setQuote);
@@ -116,7 +112,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  // Fetch weather when sessions or weatherLocation changes
   useEffect(() => {
     if (sessions.length > 0) {
       const dates = Array.from(new Set(sessions.map(s => s.date)));
@@ -125,17 +120,10 @@ const App: React.FC = () => {
   }, [sessions, weatherLocation]);
 
   const handleRegisterClick = async (sid: string) => {
-      if (!currentUserPhone) { 
-          setLoginPhone(''); 
-          setNewUserName(''); 
-          setIsNewUser(false);
-          setShowLoginModal(true); 
-          return; 
-      }
+      if (!currentUserPhone) { setShowLoginModal(true); return; }
       const phone = normalizePhone(currentUserPhone);
       const user = users.find(u => normalizePhone(u.phone) === phone);
       if (user?.isRestricted) { alert('🚫 המנוי שלך מוגבל.'); return; }
-      
       const session = sessions.find(s => s.id === sid);
       if (!session) return;
       
@@ -161,16 +149,13 @@ const App: React.FC = () => {
   };
 
   const handleLogin = async () => {
-      if (!loginPhone || loginPhone.length < 9) { alert('נא להזין מספר טלפון תקין'); return; }
       const phone = normalizePhone(loginPhone);
-      const existingUser = users.find(u => normalizePhone(u.phone) === phone);
+      if (!phone || phone.length < 9) { alert('נא להזין טלפון תקין'); return; }
       
+      const existingUser = users.find(u => normalizePhone(u.phone) === phone);
       if (!existingUser) {
-          if (!isNewUser) {
-              setIsNewUser(true);
-              return; // Prompt for name
-          }
-          if (!newUserName) { alert('נא להזין שם מלא להרשמה'); return; }
+          if (!isNewUser) { setIsNewUser(true); return; }
+          if (!newUserName) { alert('נא להזין שם מלא'); return; }
           const newUser: User = { 
               id: Date.now().toString(), fullName: newUserName, phone, email: '', 
               startDate: new Date().toISOString(), paymentStatus: PaymentStatus.PAID, isNew: true 
@@ -181,16 +166,6 @@ const App: React.FC = () => {
       setCurrentUserPhone(phone);
       localStorage.setItem('niv_app_current_phone', phone);
       setShowLoginModal(false);
-  };
-
-  const handleHealthSubmit = async (data: {id: string, file?: string}) => {
-      const u = users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || ''));
-      if (!u) return;
-      const updated = { ...u, healthDeclarationId: data.id, healthDeclarationFile: data.file, healthDeclarationDate: new Date().toISOString() };
-      await dataService.updateUser(updated);
-      setUsers(users.map(x => x.id === u.id ? updated : x));
-      setShowHealthModal(false);
-      alert('הצהרת הבריאות נשמרה בהצלחה!');
   };
 
   const currentUser = users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || ''));
@@ -211,7 +186,7 @@ const App: React.FC = () => {
                   <div className="flex gap-2">
                       <button onClick={() => setShowProfileModal(true)} className="text-[10px] text-brand-primary">פרופיל</button>
                       <button onClick={() => setShowHealthModal(true)} className="text-[10px] text-yellow-500">הצהרת בריאות</button>
-                      <button onClick={() => {setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone');}} className="text-[10px] text-gray-500">התנתק</button>
+                      <button onClick={() => {setCurrentUserPhone(null); localStorage.removeItem('niv_app_current_phone'); window.location.reload();}} className="text-[10px] text-gray-500">התנתק</button>
                   </div>
               </div>
           )}
@@ -221,8 +196,8 @@ const App: React.FC = () => {
         {isAdminMode ? (
              <AdminPanel 
                 users={users} sessions={sessions} primaryColor={primaryColor} workoutTypes={workoutTypes}
-                locations={locations} weatherLocation={weatherLocation} paymentLinks={[]} streakGoal={3}
-                appConfig={appConfig} weatherData={weatherData}
+                locations={locations} weatherLocation={weatherLocation}
+                appConfig={appConfig}
                 onAddUser={async u => { await dataService.addUser(u); setUsers([...users, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(users.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(users.filter(x=>x.id!==id)); }}
@@ -231,10 +206,7 @@ const App: React.FC = () => {
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(sessions.filter(x=>x.id!==id)); }}
                 onColorChange={setPrimaryColor} onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); }}
-                onUpdateWeatherLocation={(loc) => {
-                    setWeatherLocation(loc);
-                    localStorage.setItem('niv_app_weather_loc', JSON.stringify(loc));
-                }} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
+                onUpdateWeatherLocation={(loc) => { setWeatherLocation(loc); localStorage.setItem('niv_app_weather_loc', JSON.stringify(loc)); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }}
                 onExitAdmin={() => { localStorage.removeItem('niv_app_is_admin'); window.location.reload(); }}
             />
@@ -269,10 +241,10 @@ const App: React.FC = () => {
       {/* Login Modal */}
       {showLoginModal && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700">
+              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
                   <h3 className="text-white font-bold mb-4 text-center">התחברות מתאמן 🔐</h3>
                   <div className="space-y-4">
-                    <input type="tel" placeholder="מספר טלפון (לדוגמה: 0501234567)" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)}/>
+                    <input type="tel" placeholder="מספר טלפון" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)}/>
                     {isNewUser && (
                         <input type="text" placeholder="שם מלא (להרשמה)" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700 animate-in slide-in-from-top-2" value={newUserName} onChange={e=>setNewUserName(e.target.value)}/>
                     )}
@@ -283,7 +255,7 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* Health Declaration Modal */}
+      {/* Profile & Health Modal */}
       {showHealthModal && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
               <div className="bg-gray-800 p-6 rounded-xl w-full max-w-md border border-gray-700 overflow-y-auto max-h-[90vh]">
@@ -309,13 +281,20 @@ const App: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                           <input type="checkbox" id="health-sign" className="w-5 h-5 accent-brand-primary"/>
-                          <label htmlFor="health-sign" className="text-white text-sm">אני מאשר את הצהרת הבריאות וחתימתי האלקטרונית</label>
+                          <label htmlFor="health-sign" className="text-white text-sm">אני מאשר וחתימתי האלקטרונית תקפה</label>
                       </div>
-                      <Button onClick={() => {
+                      <Button onClick={async () => {
                           const id = (document.getElementById('health-id') as HTMLInputElement).value;
                           const signed = (document.getElementById('health-sign') as HTMLInputElement).checked;
                           if (!id || !signed) { alert('נא למלא ת.ז ולסמן אישור'); return; }
-                          handleHealthSubmit({ id, file: (window as any).tempHealthFile });
+                          const u = users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || ''));
+                          if (u) {
+                             const updated = { ...u, healthDeclarationId: id, healthDeclarationFile: (window as any).tempHealthFile, healthDeclarationDate: new Date().toISOString() };
+                             await dataService.updateUser(updated);
+                             setUsers(users.map(x => x.id === u.id ? updated : x));
+                             setShowHealthModal(false);
+                             alert('הצהרה נשמרה!');
+                          }
                       }} className="w-full">שלח הצהרה</Button>
                       <button onClick={() => setShowHealthModal(false)} className="w-full text-gray-500 text-sm">סגור</button>
                   </div>
@@ -323,7 +302,38 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* Admin Login Modal */}
+      {showProfileModal && currentUser && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-md border border-gray-700">
+                  <h3 className="text-white font-bold mb-4">פרופיל מתאמן 👤</h3>
+                  <div className="space-y-3">
+                      <input type="text" placeholder="שם מלא" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" defaultValue={currentUser.fullName} id="profile-name"/>
+                      <input type="text" placeholder="אימייל" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" defaultValue={currentUser.email} id="profile-email"/>
+                      <input type="tel" placeholder="טלפון" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" defaultValue={currentUser.phone} id="profile-phone"/>
+                      <input type="text" placeholder="כינוי" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" defaultValue={currentUser.displayName} id="profile-nick"/>
+                      <div className="flex items-center gap-2">
+                          <label className="text-gray-400 text-sm">צבע שם:</label>
+                          <input type="color" className="w-10 h-10 bg-transparent" defaultValue={currentUser.userColor} id="profile-color"/>
+                      </div>
+                  </div>
+                  <div className="flex gap-2 mt-6">
+                      <Button onClick={async () => {
+                          const fullName = (document.getElementById('profile-name') as HTMLInputElement).value;
+                          const email = (document.getElementById('profile-email') as HTMLInputElement).value;
+                          const phone = (document.getElementById('profile-phone') as HTMLInputElement).value;
+                          const displayName = (document.getElementById('profile-nick') as HTMLInputElement).value;
+                          const userColor = (document.getElementById('profile-color') as HTMLInputElement).value;
+                          const updated = { ...currentUser, fullName, email, phone: normalizePhone(phone), displayName, userColor };
+                          await dataService.updateUser(updated);
+                          setUsers(users.map(u => u.id === currentUser.id ? updated : u));
+                          setShowProfileModal(false);
+                      }} className="flex-1">שמור</Button>
+                      <Button onClick={()=>setShowProfileModal(false)} variant="secondary" className="flex-1">ביטול</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {showAdminLoginModal && (
           <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
               <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700">
@@ -340,42 +350,13 @@ const App: React.FC = () => {
           </div>
       )}
 
-      {/* Profile Modal */}
-      {showProfileModal && currentUser && (
-          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
-              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-md border border-gray-700">
-                  <h3 className="text-white font-bold mb-4">פרופיל מתאמן 👤</h3>
-                  <div className="space-y-3">
-                      <input type="text" placeholder="שם מלא" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" defaultValue={currentUser.fullName} id="profile-name"/>
-                      <input type="text" placeholder="כינוי" className="w-full p-3 bg-gray-900 text-white rounded border border-gray-700" defaultValue={currentUser.displayName} id="profile-nick"/>
-                      <div className="flex items-center gap-2">
-                          <label className="text-gray-400 text-sm">צבע שם:</label>
-                          <input type="color" className="w-10 h-10 bg-transparent" defaultValue={currentUser.userColor} id="profile-color"/>
-                      </div>
-                  </div>
-                  <div className="flex gap-2 mt-6">
-                      <Button onClick={async () => {
-                          const fullName = (document.getElementById('profile-name') as HTMLInputElement).value;
-                          const displayName = (document.getElementById('profile-nick') as HTMLInputElement).value;
-                          const userColor = (document.getElementById('profile-color') as HTMLInputElement).value;
-                          const updated = { ...currentUser, fullName, displayName, userColor };
-                          await dataService.updateUser(updated);
-                          setUsers(users.map(u => u.id === currentUser.id ? updated : u));
-                          setShowProfileModal(false);
-                      }} className="flex-1">שמור</Button>
-                      <Button onClick={()=>setShowProfileModal(false)} variant="secondary" className="flex-1">ביטול</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       <footer className="fixed bottom-0 w-full bg-black/90 p-3 flex justify-between items-center border-t border-gray-800 z-50 backdrop-blur-md">
           <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${isCloudConnected?'bg-green-500':'bg-red-500 animate-pulse'}`}/>
               <span className="text-[10px] text-gray-500">{isCloudConnected?'מחובר':'מקומי'}</span>
           </div>
           <div className="flex items-center gap-2">
-              <button onClick={() => deferredPrompt ? deferredPrompt.prompt() : alert('האפליקציה כבר מותקנת או שאינה נתמכת בדפדפן זה')} className="bg-brand-primary text-brand-black px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-bold">
+              <button onClick={() => deferredPrompt ? deferredPrompt.prompt() : alert('אפליקציה זמינה')} className="bg-brand-primary text-brand-black px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-bold">
                   <DownloadIcon /><span>הורד אפליקציה</span>
               </button>
               <a href={`https://wa.me/${normalizePhoneForWhatsapp(appConfig.coachPhone)}`} target="_blank" rel="noreferrer" className="bg-[#25D366] text-white px-3 py-1.5 rounded-full flex items-center gap-2 text-xs font-bold">
