@@ -39,10 +39,8 @@ export const dataService = {
     if (supabase) {
       const { data, error } = await supabase.from('users').select('*');
       if (error) throw error;
-      // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo users.
       if (data) return data as User[];
     }
-    // Local mode fallback
     return safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
   },
 
@@ -82,10 +80,9 @@ export const dataService = {
     if (supabase) {
       const { data, error } = await supabase.from('sessions').select('*');
       if (error) throw error;
-      // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo sessions.
       if (data) return data.map((s: any) => ({
           ...s,
-          waitingList: s.waitingList || [] // Ensure waitingList exists
+          waitingList: s.waitingList || []
       })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
@@ -93,12 +90,9 @@ export const dataService = {
 
   addSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-      // NOTE: We do NOT force attendedPhoneNumbers to [] here. 
-      // We want it to be undefined/null so AdminPanel knows it hasn't been marked yet.
       const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is (should be null/undefined initially)
           waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').insert([safeSession]);
@@ -111,19 +105,19 @@ export const dataService = {
 
   updateSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-       // Ensure arrays are never undefined to avoid SQL errors on array columns
+       // Clean object for Supabase update to avoid null/undefined array issues
        const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
           waitingList: session.waitingList || []
-          // attendedPhoneNumbers is purposely left to spread from session. 
-          // If undefined in session, it won't update the column (good). 
-          // If null, it sets to NULL (good for reset).
-          // If array, it updates (good).
       };
       
       const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);
-      if (error) throw error;
+      
+      if (error) {
+          console.error("Database update failed. This often means your SQL schema is missing columns:", error);
+          throw error;
+      }
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
       const updated = sessions.map(s => s.id === session.id ? session : s);
@@ -141,44 +135,35 @@ export const dataService = {
     }
   },
 
-  // --- LOCATIONS ---
+  // --- LOCATIONS, TYPES, CONFIG ---
   getLocations: async (): Promise<LocationDef[]> => {
     if (supabase) {
        const { data, error } = await supabase.from('config_locations').select('*');
        if (!error && data) return data as LocationDef[];
     }
-    
-    // Local storage fallback
     return safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
   },
   
   saveLocations: async (locations: LocationDef[]): Promise<void> => {
     if (supabase) {
         const { error } = await supabase.from('config_locations').upsert(locations);
-        if (error) {
-             console.error("Error saving locations:", error);
-             localStorage.setItem('niv_app_locations', JSON.stringify(locations));
-        }
-    } else {
-        localStorage.setItem('niv_app_locations', JSON.stringify(locations));
+        if (error) console.error(error);
     }
+    localStorage.setItem('niv_app_locations', JSON.stringify(locations));
   },
 
   deleteLocation: async (id: string): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_locations').delete().eq('id', id);
-          if (error) throw error;
+          await supabase.from('config_locations').delete().eq('id', id);
       }
       const current = safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
       localStorage.setItem('niv_app_locations', JSON.stringify(current.filter(l => l.id !== id)));
   },
 
-  // --- WORKOUT TYPES ---
   getWorkoutTypes: async (): Promise<string[]> => {
       if (supabase) {
           const { data, error } = await supabase.from('config_workout_types').select('*');
           if (!error && data && data.length > 0) return data.map((t:any) => t.name);
-          if (!error && data && data.length === 0) return [];
       }
       return safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
   },
@@ -186,22 +171,19 @@ export const dataService = {
   saveWorkoutTypes: async (types: string[]): Promise<void> => {
       if (supabase) {
            const records = types.map(t => ({ id: t, name: t }));
-           const { error } = await supabase.from('config_workout_types').upsert(records);
-           if (error) console.error(error);
+           await supabase.from('config_workout_types').upsert(records);
       }
       localStorage.setItem('niv_app_types', JSON.stringify(types));
   },
   
   deleteWorkoutType: async (type: string): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_workout_types').delete().eq('id', type);
-          if (error) console.error(error);
+          await supabase.from('config_workout_types').delete().eq('id', type);
       }
       const current = safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
       localStorage.setItem('niv_app_types', JSON.stringify(current.filter(t => t !== type)));
   },
 
-  // --- APP CONFIG ---
   getAppConfig: async (): Promise<AppConfig> => {
       if (supabase) {
           const { data, error } = await supabase.from('config_general').select('*').single();
@@ -212,13 +194,11 @@ export const dataService = {
 
   saveAppConfig: async (config: AppConfig): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
-          if (error) console.error(error);
+          await supabase.from('config_general').upsert({ id: 'main', ...config });
       }
       localStorage.setItem('niv_app_config', JSON.stringify(config));
   },
 
-  // --- QUOTES ---
   getQuotes: async (): Promise<Quote[]> => {
       if (supabase) {
           const { data, error } = await supabase.from('config_quotes').select('*');
@@ -239,8 +219,7 @@ export const dataService = {
 
   deleteQuote: async (id: string): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_quotes').delete().eq('id', id);
-          if (error) throw error;
+          await supabase.from('config_quotes').delete().eq('id', id);
       } else {
           const quotes = safeJsonParse<Quote[]>('niv_app_quotes', []);
           localStorage.setItem('niv_app_quotes', JSON.stringify(quotes.filter(q => q.id !== id)));

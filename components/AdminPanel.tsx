@@ -43,72 +43,30 @@ const SESSION_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- טבלת משתמשים
-create table if not exists users (
-  id text primary key,
-  "fullName" text,
-  "displayName" text,
-  phone text,
-  email text,
-  "startDate" text,
-  "paymentStatus" text,
-  "userColor" text,
-  "monthlyRecord" int default 0,
-  "isRestricted" boolean default false,
-  "healthDeclarationFile" text,
-  "healthDeclarationDate" text,
-  "healthDeclarationId" text,
-  "isNew" boolean default false
-);
+-- 1. וודא שכל העמודות קיימות בטבלת האימונים (מבלי למחוק נתונים)
+alter table sessions add column if not exists "waitingList" jsonb default '[]';
+alter table sessions add column if not exists "attendedPhoneNumbers" jsonb;
+alter table sessions add column if not exists "isZoomSession" boolean default false;
+alter table sessions add column if not exists "zoomLink" text;
+alter table sessions add column if not exists "isHidden" boolean default false;
+alter table sessions add column if not exists "isCancelled" boolean default false;
+alter table sessions add column if not exists "manualHasStarted" boolean default false;
+alter table sessions add column if not exists "color" text;
 
--- טבלת אימונים
-create table if not exists sessions (
-  id text primary key,
-  type text,
-  date text,
-  time text,
-  location text,
-  "maxCapacity" int,
-  description text,
-  "registeredPhoneNumbers" jsonb default '[]',
-  "waitingList" jsonb default '[]',
-  "attendedPhoneNumbers" jsonb,
-  "isZoomSession" boolean default false,
-  "zoomLink" text,
-  "isHidden" boolean default false,
-  "isCancelled" boolean default false,
-  "manualHasStarted" boolean default false,
-  color text
-);
+-- 2. וודא שכל העמודות קיימות בטבלת המשתמשים
+alter table users add column if not exists "displayName" text;
+alter table users add column if not exists "isRestricted" boolean default false;
+alter table users add column if not exists "userColor" text;
+alter table users add column if not exists "healthDeclarationFile" text;
+alter table users add column if not exists "healthDeclarationDate" text;
+alter table users add column if not exists "healthDeclarationId" text;
+alter table users add column if not exists "isNew" boolean default false;
 
--- הגדרות
-create table if not exists config_locations (
-  id text primary key,
-  name text,
-  address text,
-  color text
-);
-
-create table if not exists config_workout_types (
-  id text primary key,
-  name text
-);
-
-create table if not exists config_general (
-  id text primary key,
-  "coachNameHeb" text,
-  "coachNameEng" text,
-  "coachPhone" text,
-  "coachAdditionalPhone" text,
-  "coachEmail" text,
-  "defaultCity" text,
-  "urgentMessage" text
-);
-
-create table if not exists config_quotes (
-  id text primary key,
-  text text
-);
+-- 3. יצירת טבלאות הגדרות אם לא קיימות
+create table if not exists config_locations (id text primary key, name text, address text, color text);
+create table if not exists config_workout_types (id text primary key, name text);
+create table if not exists config_general (id text primary key, "coachNameHeb" text, "coachNameEng" text, "coachPhone" text, "coachAdditionalPhone" text, "coachEmail" text, "defaultCity" text, "urgentMessage" text);
+create table if not exists config_quotes (id text primary key, text text);
 `;
 
 const getSunday = (d: Date) => {
@@ -231,6 +189,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   // Feedback State
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [attendanceSavedSuccess, setAttendanceSavedSuccess] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editSavedSuccess, setEditSavedSuccess] = useState(false);
 
   // App Config Form
   const [tempConfig, setTempConfig] = useState<AppConfig>(appConfig);
@@ -514,7 +474,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               setAttendanceSession(null); // Close modal after success (optional, or keep open)
           }, 1500);
       } catch (error) {
-          alert('שגיאה בשמירה');
+          alert('שגיאה בשמירה - ייתכן שיש לעדכן את בסיס הנתונים (ראה טאב חיבורים)');
       } finally {
           setIsSavingAttendance(false);
       }
@@ -552,14 +512,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleSaveEditedSession = async () => {
       if (!editSessionForm.id || !editSessionForm.type || !editSessionForm.date) return;
+      setIsSavingEdit(true);
       
       const sessionToSave = { 
           ...attendanceSession, 
           ...editSessionForm,
           registeredPhoneNumbers: attendanceSession?.registeredPhoneNumbers || [],
-          // Keep waitingList and attended as they were if in edit mode, or from form
           waitingList: attendanceSession?.waitingList || [],
-          attendedPhoneNumbers: attendanceSession?.attendedPhoneNumbers // Preserve this
+          attendedPhoneNumbers: attendanceSession?.attendedPhoneNumbers
       } as TrainingSession;
 
       if (!sessionToSave.id) {
@@ -571,15 +531,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       try {
           if (isExistingSession) {
               await onUpdateSession(sessionToSave);
-              alert('האימון עודכן בהצלחה! ✅');
           } else {
               await onAddSession(sessionToSave);
-              alert('אימון חדש נשמר בשרת בהצלחה! 🎉');
           }
-          setAttendanceSession(null);
-          setIsEditingInModal(false);
+          setEditSavedSuccess(true);
+          setTimeout(() => {
+              setEditSavedSuccess(false);
+              setAttendanceSession(null);
+              setIsEditingInModal(false);
+          }, 1500);
       } catch (error: any) {
-          alert('שגיאה בשמירה: ' + (error.message || ''));
+          alert('שגיאה בשמירה: ' + (error.message || 'ייתכן שחסרה עמודה בבסיס הנתונים. נסה להריץ שוב את פקודות ה-SQL בטאב חיבורים.'));
+      } finally {
+          setIsSavingEdit(false);
       }
   };
 
@@ -781,7 +745,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   return (
     <div className="p-4 bg-gray-900 rounded-lg pb-24">
-      {/* ... Header and Tabs ... */}
       <div className="flex justify-between items-center mb-4 sticky top-0 bg-gray-900 z-10 py-2 border-b border-gray-800">
         <div className="flex items-center gap-2">
             <h2 className="text-2xl font-bold text-white">פאנל ניהול</h2>
@@ -853,13 +816,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
       )}
       
-      {/* Attendance Modal */}
       {attendanceSession && (
          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setAttendanceSession(null)}>
             <div className="bg-gray-800 p-6 rounded-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                  {isEditingInModal ? (
                       <div className="space-y-4">
-                          {/* ... (Edit Session Form - Unchanged) ... */}
                           <h3 className="text-xl font-bold text-white mb-2">עריכת אימון</h3>
                           <div className="grid grid-cols-2 gap-2">
                               <select className="bg-gray-900 text-white p-3 rounded border border-gray-700" value={editSessionForm.type} onChange={e=>setEditSessionForm({...editSessionForm, type: e.target.value})}>
@@ -894,21 +855,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               </div>
                           </div>
                           
-                          <div className="flex items-center bg-green-900/30 p-2 rounded border border-green-800">
-                              <input type="checkbox" checked={editSessionForm.manualHasStarted || false} onChange={e=>setEditSessionForm({...editSessionForm, manualHasStarted: e.target.checked})} className="w-5 h-5 mr-2 accent-green-500"/>
-                              <span className="text-green-300 text-sm font-bold">סמן כמתקיים כעת (ידני)</span>
-                          </div>
-
                           {editSessionForm.isZoomSession && (
-                             <input type="text" placeholder="לינק לזום" className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 dir-ltr" value={editSessionForm.zoomLink || ''} onChange={e=>setEditSessionForm({...editSessionForm, zoomLink: e.target.value})}/>
+                             <input type="text" placeholder="לינק לזום (zoom.us/...)" className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 dir-ltr" value={editSessionForm.zoomLink || ''} onChange={e=>setEditSessionForm({...editSessionForm, zoomLink: e.target.value})}/>
                           )}
+
                           <div className="flex gap-2">
                               <textarea placeholder="תיאור האימון..." className="w-full bg-gray-900 text-white p-3 rounded border border-gray-700 h-24" value={editSessionForm.description || ''} onChange={e=>setEditSessionForm({...editSessionForm, description: e.target.value})}/>
                               <Button variant="secondary" onClick={handleGenerateDescription} isLoading={isGeneratingAi} className="h-24 px-2">AI ✨</Button>
                           </div>
                           
                           <div className="flex gap-2 pt-2 border-t border-gray-700 mt-4">
-                              <Button onClick={handleSaveEditedSession} className="flex-1 py-3 text-lg">עדכן פרטים ושמור 💾</Button>
+                              <Button 
+                                onClick={handleSaveEditedSession} 
+                                className={`flex-1 py-3 text-lg transition-all ${editSavedSuccess ? 'bg-green-600 scale-105' : ''}`}
+                                disabled={isSavingEdit}
+                              >
+                                  {editSavedSuccess ? 'נשמר! ✅' : (isSavingEdit ? 'שומר...' : 'עדכן פרטים ושמור 💾')}
+                              </Button>
                               <Button variant="secondary" onClick={()=>setIsEditingInModal(false)} className="px-4">ביטול</Button>
                           </div>
                       </div>
@@ -918,9 +881,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                              <div>
                                 <h3 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
                                     {attendanceSession.type}
+                                    {attendanceSession.isZoomSession && <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">🎥 זום</span>}
                                     {attendanceSession.isHidden && <span className="text-xs bg-purple-600 text-white px-2 py-0.5 rounded-full">👻 נסתר</span>}
                                     {attendanceSession.isCancelled && <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">🚫 מבוטל</span>}
-                                    {attendanceSession.manualHasStarted && <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded-full">🟢 מתקיים (ידני)</span>}
                                 </h3>
                                 <p className="text-brand-primary font-mono">{attendanceSession.time} | {attendanceSession.location}</p>
                                 <p className="text-xs text-gray-500 mt-1">{attendanceSession.date}</p>
@@ -934,7 +897,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                               <button onClick={handleDeleteFromAttendance} className="bg-red-600 hover:bg-red-700 text-white text-xs py-2 px-3 rounded flex-1 border border-red-800 transition-colors font-bold shadow-md">🗑️ מחק</button>
                           </div>
 
-                          {/* NOTIFICATIONS SECTION */}
                           <div className="mb-4 bg-gray-900 p-3 rounded-lg border border-gray-700">
                                <div className="flex justify-between items-center mb-2">
                                    <div className="text-sm font-bold text-white flex items-center gap-2">💬 שליחת הודעות למתאמנים</div>
@@ -972,12 +934,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                </div>
                           </div>
                           
-                          <div className="mb-4">
-                              <Button size="sm" variant="secondary" onClick={handleAddToCalendar} className="w-full text-xs gap-2">📅 הוסף ליומן (קובץ) {appConfig.coachNameHeb}</Button>
-                          </div>
-
                           <div className="flex-1 overflow-y-auto space-y-2 mb-4 bg-gray-900/50 p-2 rounded max-h-52">
-                              {/* Visual Feedback Banner */}
                               {attendanceSession.attendedPhoneNumbers !== undefined && attendanceSession.attendedPhoneNumbers !== null ? (
                                   <div className="bg-green-900/40 border border-green-500/50 p-2 rounded mb-3 text-center">
                                       <span className="text-green-400 font-bold text-xs">✅ נוכחות דווחה ושמורה במערכת</span>
@@ -1001,7 +958,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                       return (
                                           <div key={phone} className={`flex items-center justify-between p-3 rounded border transition-colors ${isMarked ? 'bg-green-900/30 border-green-500' : 'bg-gray-800 border-gray-700'}`}>
                                               <div onClick={() => toggleAttendance(phone)} className="text-white font-bold cursor-pointer flex-1">{user?.fullName || phone}</div>
-                                              
                                               <div className="flex items-center gap-3">
                                                   <button onClick={() => toggleAttendance(phone)} className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${isMarked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-500 hover:bg-gray-700'}`}>
                                                       {isMarked ? '✓' : ''}
@@ -1041,9 +997,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
          </div>
       )}
 
-      {/* ... Other Tabs (Users, Settings, etc. - Unchanged) ... */}
       {activeTab === 'users' && (
-         // ... existing code ...
          <div className="space-y-6">
             <div className="bg-gray-800 p-4 rounded-xl border border-gray-700">
                  <h3 className="text-lg font-bold text-white mb-2">{editingUserId ? 'עריכת מתאמן' : 'הוספת מתאמן'}</h3>
@@ -1177,24 +1131,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
       
-      {activeTab === 'new_users' && (
-           <div className="space-y-2">
-               {newUsers.map(user => (
-                   <div key={user.id} className="bg-gray-800 p-3 rounded flex justify-between items-center">
-                       <div className="text-white">
-                           {user.fullName} ({user.phone})
-                           {user.isRestricted && <span className="mr-2 text-xs text-red-400 font-bold">(חסום)</span>}
-                       </div>
-                       <div className="flex gap-2">
-                           <Button size="sm" variant="secondary" onClick={() => handleEditUserClick(user)}>ערוך</Button>
-                           <Button size="sm" onClick={() => handleApproveUser(user)}>אשר</Button>
-                           <Button size="sm" variant="danger" onClick={() => handleDeleteUserClick(user.id)}>דחה</Button>
-                        </div>
-                   </div>
-               ))}
-           </div>
-      )}
-      
       {activeTab === 'connections' && (
           <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 text-white space-y-4">
               <h3 className="text-xl font-bold mb-4">חיבור ל-Supabase (ענן)</h3>
@@ -1213,9 +1149,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </div>
 
               <div className="mt-6 pt-6 border-t border-gray-700">
-                 <h4 className="text-sm font-bold mb-2">הוראות התקנה (חובה לעדכון):</h4>
-                 <p className="text-xs text-gray-400 mb-2">הוספנו טבלת הגדרות כלליות (שם מאמן, טלפון, וכו'). העתק את הסקריפט והרץ מחדש.</p>
-                 <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">העתק סקריפט SQL</Button>
+                 <h4 className="text-sm font-bold mb-2 text-brand-primary">הוראות חשובות לעדכון שרת (SQL):</h4>
+                 <p className="text-xs text-gray-400 mb-2">אם קיבלת שגיאה בעדכון "waitingList" או "isZoomSession", עליך להריץ את הסקריפט הבא ב-SQL Editor ב-Supabase כדי להוסיף את העמודות החסרות.</p>
+                 <Button size="sm" variant="secondary" onClick={handleCopySql} className="w-full text-xs">📋 העתק סקריפט SQL (ALTER TABLE)</Button>
               </div>
           </div>
       )}
@@ -1224,19 +1160,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="space-y-6">
                <div className="bg-gray-800 p-4 rounded border border-gray-700">
                   <h3 className="text-white mb-3 font-bold">פרטי מאמן והגדרות כלליות</h3>
-                  
                   <div className="bg-red-900/20 border border-red-500/50 p-3 rounded mb-4">
                       <label className="text-xs text-red-300 font-bold mb-1 block">הודעה דחופה למסך הבית (מחליף את המוטיבציה)</label>
-                      <input 
-                        type="text" 
-                        placeholder="הקלד הודעה דחופה..." 
-                        className="w-full bg-gray-900 text-white p-2 rounded border border-red-500/50 focus:border-red-500 outline-none"
-                        value={tempConfig.urgentMessage || ''} 
-                        onChange={e=>setTempConfig({...tempConfig, urgentMessage: e.target.value})}
-                      />
-                      <p className="text-[10px] text-gray-400 mt-1">השאר ריק כדי להציג את משפט המוטיבציה הרגיל.</p>
+                      <input type="text" placeholder="הקלד הודעה דחופה..." className="w-full bg-gray-900 text-white p-2 rounded border border-red-500/50 focus:border-red-500 outline-none" value={tempConfig.urgentMessage || ''} onChange={e=>setTempConfig({...tempConfig, urgentMessage: e.target.value})}/>
                   </div>
-
                   <div className="grid grid-cols-2 gap-3 mb-3">
                       <div>
                           <label className="text-xs text-gray-400">שם בעברית</label>
@@ -1266,108 +1193,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <input type="text" className="w-full bg-gray-900 text-white p-2 rounded border border-gray-600" value={tempConfig.defaultCity} onChange={e=>setTempConfig({...tempConfig, defaultCity: e.target.value})}/>
                   </div>
                   <Button onClick={handleSaveAppConfig} className="w-full">שמור פרטים</Button>
-              </div>
-
-              <div className="bg-gray-800 p-4 rounded border border-gray-700">
-                  <h3 className="text-white mb-2 font-bold">צבע ראשי לאפליקציה</h3>
-                  <div className="flex gap-2">{SESSION_COLORS.map(c => <button key={c} onClick={() => onColorChange(c)} className={`w-8 h-8 rounded-full ${primaryColor===c?'border-2 border-white':''}`} style={{backgroundColor:c}}/>)}</div>
-              </div>
-
-              <div className="bg-gray-800 p-4 rounded border border-gray-700">
-                  <h3 className="text-white mb-3 font-bold">משפטי מוטיבציה</h3>
-                  <p className="text-gray-400 text-xs mb-3">
-                      אם תוסיף משפטים משלך, המערכת תבחר אחד מהם באופן אקראי למתאמנים. אם לא יהיו משפטים, המערכת תשתמש בבינה מלאכותית (AI).
-                  </p>
-                  <div className="flex gap-2 mb-4">
-                      <input 
-                        type="text" 
-                        placeholder="כתוב משפט מוטיבציה..." 
-                        className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600"
-                        value={newQuoteText}
-                        onChange={e => setNewQuoteText(e.target.value)}
-                      />
-                      <Button onClick={handleAddQuoteClick}>הוסף</Button>
-                  </div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {quotes.length > 0 ? (
-                          quotes.map((quote) => (
-                              <div key={quote.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700">
-                                  <span className="text-white text-sm italic">"{quote.text}"</span>
-                                  <button onClick={() => onDeleteQuote && onDeleteQuote(quote.id)} className="text-xs text-red-400 hover:text-white px-2">
-                                      🗑️
-                                  </button>
-                              </div>
-                          ))
-                      ) : (
-                          <div className="text-gray-500 text-xs italic text-center py-2">משתמש ב-AI בלבד</div>
-                      )}
-                  </div>
-              </div>
-              
-              <div className="bg-gray-800 p-4 rounded border border-gray-700">
-                  <h3 className="text-white mb-3 font-bold">סוגי אימונים</h3>
-                  <div className="flex gap-2 mb-4">
-                      <input type="text" placeholder="הוסף סוג חדש" className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600" value={newTypeName} onChange={e=>setNewTypeName(e.target.value)}/>
-                      <Button onClick={handleAddOrUpdateType}>{editingTypeOriginalName ? 'עדכן' : 'הוסף'}</Button>
-                  </div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {workoutTypes.map((type, idx) => (
-                          <div key={idx} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700">
-                              <span className="text-white text-sm">{type}</span>
-                              <div className="flex gap-2">
-                                  <button onClick={()=>handleEditType(type)} className="text-xs text-blue-400 hover:text-white">✏️</button>
-                                  <button onClick={()=>handleDeleteType(type)} className="text-xs text-red-400 hover:text-white">🗑️</button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-
-              <div className="bg-gray-800 p-4 rounded border border-gray-700">
-                  <h3 className="text-white mb-3 font-bold">מיקומים</h3>
-                  <div className="flex flex-col gap-2 mb-4">
-                      <div className="flex gap-2">
-                         <input type="text" placeholder="שם המקום" className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600" value={newLocationName} onChange={e=>setNewLocationName(e.target.value)}/>
-                         <input type="text" placeholder="כתובת" className="bg-gray-900 text-white p-2 rounded flex-1 border border-gray-600" value={newLocationAddress} onChange={e=>setNewLocationAddress(e.target.value)}/>
-                      </div>
-                      <div className="flex gap-2 items-center">
-                          <input type="color" className="w-10 h-10 rounded cursor-pointer bg-transparent border-none p-0" value={newLocationColor} onChange={e=>setNewLocationColor(e.target.value)} />
-                          <Button onClick={handleAddOrUpdateLocation} className="flex-1 mr-auto">{editingLocationId ? 'עדכן' : 'הוסף מיקום'}</Button>
-                      </div>
-                  </div>
-                  <div className="space-y-2 max-h-40 overflow-y-auto">
-                      {locations.map((loc) => (
-                          <div key={loc.id} className="flex justify-between items-center bg-gray-900/50 p-2 rounded border border-gray-700" style={{borderRight: `4px solid ${loc.color || '#3B82F6'}`}}>
-                              <div><div className="text-white text-sm font-bold">{loc.name}</div><div className="text-gray-500 text-xs">{loc.address}</div></div>
-                              <div className="flex gap-2">
-                                  <button onClick={()=>handleEditLocation(loc)} className="text-xs text-blue-400 hover:text-white">✏️</button>
-                                  <button onClick={()=>handleDeleteLocation(loc.id)} className="text-xs text-red-400 hover:text-white">🗑️</button>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-              </div>
-
-              <div className="bg-gray-800 p-4 rounded border border-gray-700 space-y-2">
-                  <h3 className="text-white mb-2 font-bold">העתקת שבוע (תבניות)</h3>
-                  <p className="text-gray-400 text-xs mb-2">בחר תאריך משבוע המקור ותאריך משבוע היעד. כל האימונים יועתקו ללא הנרשמים.</p>
-                  <div className="flex flex-col gap-3 bg-gray-900 p-3 rounded">
-                      <div className="flex gap-2 items-center">
-                          <label className="text-xs text-gray-400 w-20">שבוע מקור:</label>
-                          <input type="date" className="bg-gray-800 text-white p-2 rounded flex-1 border border-gray-700" value={copySourceDate} onChange={e=>setCopySourceDate(e.target.value)}/>
-                      </div>
-                      <div className="flex gap-2 items-center">
-                          <label className="text-xs text-gray-400 w-20">שבוע יעד:</label>
-                          <input type="date" className="bg-gray-800 text-white p-2 rounded flex-1 border border-gray-700" value={copyTargetDate} onChange={e=>setCopyTargetDate(e.target.value)}/>
-                      </div>
-                      <Button onClick={handleCopyWeek} isLoading={isProcessingCopy} className="mt-2">העתק שבוע 📋</Button>
-                  </div>
-              </div>
-              
-              <div className="bg-red-900/20 p-4 rounded border border-red-900/50 mt-8">
-                  <h3 className="text-red-400 mb-2 font-bold text-sm">אזור סכנה / טיפול בבעיות</h3>
-                  <p className="text-gray-400 text-xs mb-3">אם המיקומים מופיעים בטעות בנייד ואינם מסתנכרנים, לחץ כאן לניקוי זכרון הדפדפן בלבד (לא מוחק מידע מהשרת).</p>
-                  <Button variant="danger" size="sm" onClick={handleResetCache} className="w-full">נקה זכרון מטמון (Cache) בלבד</Button>
               </div>
           </div>
       )}
