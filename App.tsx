@@ -74,6 +74,35 @@ END:VCALENDAR`;
     document.body.removeChild(link);
 };
 
+// --- Legal Texts ---
+const LEGAL_TEXTS = {
+    privacy: `
+**מדיניות פרטיות**
+
+1. **איסוף מידע:** האפליקציה אוספת את שמך, מספר הטלפון וכתובת האימייל שלך לצורך ניהול הרישום לאימונים, מעקב נוכחות ויצירת קשר בלבד.
+2. **שימוש במידע:** המידע משמש אך ורק את צוות האימון לצורך תפעול שוטף. המידע אינו מועבר לצד שלישי, אינו נמכר ואינו משמש לפרסום חיצוני.
+3. **אבטחת מידע:** אנו נוקטים באמצעים סבירים לאבטחת המידע, אך השימוש באפליקציה הוא על אחריות המשתמש בלבד.
+4. **מחיקת מידע:** ניתן לבקש מחיקת פרטים בכל עת בפנייה ישירה למאמן.
+    `,
+    terms: `
+**תנאי שימוש והסרת אחריות**
+
+1. **אחריות המשתמש:** ההשתתפות באימונים היא על אחריות המתאמן/ת בלבד.
+2. **הסרת אחריות:** המאמן, המפעילים ומפתחי האפליקציה אינם נושאים באחריות לכל נזק גופני, בריאותי או רכושי שעלול להיגרם במהלך האימונים, לפניהם או אחריהם.
+3. **כשירות רפואית:** בעצם ההרשמה לאימון, המתאמן מצהיר כי הוא כשיר רפואית לביצוע פעילות גופנית בעצימות הנדרשת.
+4. **שינויים וביטולים:** המאמן שומר לעצמו את הזכות לשנות מועדי אימונים, מיקומים או לבטלם בהתראה סבירה.
+    `,
+    health: `
+**הצהרת בריאות**
+
+אני החתום/ה מטה מצהיר/ה בזאת כי:
+1. הנני בריא/ה וכשיר/ה לעסוק בפעילות גופנית מאומצת.
+2. לא ידוע לי על שום מגבלה רפואית המונעת ממני להשתתף באימונים.
+3. התייעצתי עם רופא טרם תחילת הפעילות במידת הצורך.
+4. במידה ויחול שינוי במצבי הבריאותי, חובתי לדווח על כך למאמן באופן מיידי ולהפסיק את הפעילות עד לקבלת אישור רפואי חדש.
+5. אני משחרר/ת את המאמן מכל אחריות לכל פגיעה או נזק גופני שעלול להיגרם לי כתוצאה מהאימון.
+    `
+};
 
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -108,13 +137,15 @@ const App: React.FC = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showStreakTooltip, setShowStreakTooltip] = useState(false);
+  const [showLegalModal, setShowLegalModal] = useState(false);
+  const [legalTab, setLegalTab] = useState<'privacy' | 'terms' | 'health'>('privacy');
 
   // Login State
   const [loginPhone, setLoginPhone] = useState('');
   const [newUserName, setNewUserName] = useState('');
   
   // Profile Edit State
-  const [editProfileData, setEditProfileData] = useState({ fullName: '', email: '', displayName: '', userColor: '#A3E635', phone: '' });
+  const [editProfileData, setEditProfileData] = useState<{fullName: string, email: string, displayName: string, userColor: string, phone: string, healthFile?: string}>({ fullName: '', email: '', displayName: '', userColor: '#A3E635', phone: '', healthFile: '' });
 
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [quote, setQuote] = useState('');
@@ -368,7 +399,8 @@ const App: React.FC = () => {
               email: currentUser.email,
               displayName: currentUser.displayName || '',
               userColor: currentUser.userColor || '#A3E635',
-              phone: currentUser.phone 
+              phone: currentUser.phone,
+              healthFile: currentUser.healthDeclarationFile || ''
           });
           setShowProfileModal(true);
       }
@@ -380,13 +412,14 @@ const App: React.FC = () => {
       
       const newPhone = normalizePhone(editProfileData.phone);
       
-      const updatedUser = { 
+      const updatedUser: User = { 
           ...currentUser, 
           fullName: editProfileData.fullName, 
           email: editProfileData.email,
           displayName: editProfileData.displayName,
           userColor: editProfileData.userColor,
-          phone: newPhone
+          phone: newPhone,
+          healthDeclarationFile: editProfileData.healthFile
       };
       
       try {
@@ -401,6 +434,29 @@ const App: React.FC = () => {
       } catch (error) {
           alert('שגיאה בעדכון, ייתכן שהטלפון כבר קיים במערכת');
       }
+  };
+
+  const handleHealthFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          if (file.size > 200 * 1024) { // 200KB limit
+             alert('הקובץ גדול מדי (מקסימום 200KB). נסה לכווץ או לצלם מסך.');
+             return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+              if (ev.target?.result) {
+                  setEditProfileData(prev => ({ ...prev, healthFile: ev.target!.result as string }));
+              }
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+  
+  const openLegal = (tab: 'privacy' | 'terms' | 'health') => {
+      setLegalTab(tab);
+      setShowLegalModal(true);
   };
 
   const mainBackgroundClass = isAdminMode 
@@ -608,13 +664,23 @@ const App: React.FC = () => {
 
       {showProfileModal && (
            <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl">
+              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-sm border border-gray-700 shadow-2xl overflow-y-auto max-h-[90vh]">
                   <h3 className="text-white font-bold mb-4 text-xl">עריכת פרופיל</h3>
                   <div className="space-y-4 mb-6">
                       <div><label className="text-xs text-gray-400 mb-1 block">שם מלא</label><input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.fullName} onChange={e=>setEditProfileData({...editProfileData, fullName: e.target.value})}/></div>
                       <div><label className="text-xs text-gray-400 mb-1 block">טלפון</label><input type="tel" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.phone} onChange={e=>setEditProfileData({...editProfileData, phone: e.target.value})}/></div>
                       <div><label className="text-xs text-gray-400 mb-1 block">כינוי באפליקציה</label><input type="text" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.displayName} onChange={e=>setEditProfileData({...editProfileData, displayName: e.target.value})}/></div>
                       <div><label className="text-xs text-gray-400 mb-1 block">אימייל</label><input type="email" className="w-full p-3 bg-gray-900 text-white rounded-lg border border-gray-700 focus:border-brand-primary outline-none" value={editProfileData.email} onChange={e=>setEditProfileData({...editProfileData, email: e.target.value})}/></div>
+                      <div>
+                          <label className="text-xs text-gray-400 mb-1 flex justify-between items-center">
+                              <span>הצהרת בריאות (קובץ)</span>
+                              <button onClick={() => openLegal('health')} className="text-brand-primary underline text-[10px]">קרא את ההצהרה</button>
+                          </label>
+                          <div className="flex items-center gap-2 bg-gray-900 p-2 rounded border border-gray-700">
+                              <input type="file" accept="image/*,application/pdf" className="text-xs text-gray-300 w-full" onChange={handleHealthFileUpload}/>
+                          </div>
+                          {editProfileData.healthFile && <span className="text-green-500 text-xs mt-1 block">✓ קובץ מצורף</span>}
+                      </div>
                       <div><label className="text-xs text-gray-400 mb-1 block">צבע משתמש</label><div className="flex items-center gap-2"><input type="color" className="w-12 h-12 rounded cursor-pointer bg-transparent border-none" value={editProfileData.userColor} onChange={e=>setEditProfileData({...editProfileData, userColor: e.target.value})}/><span className="text-gray-400 text-sm">{editProfileData.userColor}</span></div></div>
                   </div>
                   <div className="flex gap-2">
@@ -624,15 +690,46 @@ const App: React.FC = () => {
               </div>
           </div>
       )}
+      
+      {showLegalModal && (
+          <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-gray-800 p-6 rounded-xl w-full max-w-lg border border-gray-700 shadow-2xl h-[80vh] flex flex-col">
+                  <div className="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+                      <h3 className="text-white font-bold text-xl">מידע משפטי</h3>
+                      <button onClick={()=>setShowLegalModal(false)} className="text-gray-400 hover:text-white">✕</button>
+                  </div>
+                  <div className="flex gap-2 mb-4">
+                      <button onClick={()=>setLegalTab('privacy')} className={`px-3 py-1 rounded text-sm ${legalTab==='privacy'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>פרטיות</button>
+                      <button onClick={()=>setLegalTab('terms')} className={`px-3 py-1 rounded text-sm ${legalTab==='terms'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>תנאי שימוש</button>
+                      <button onClick={()=>setLegalTab('health')} className={`px-3 py-1 rounded text-sm ${legalTab==='health'?'bg-brand-primary text-black':'bg-gray-700 text-gray-300'}`}>הצהרת בריאות</button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto text-gray-300 text-sm whitespace-pre-wrap leading-relaxed p-2 bg-gray-900/50 rounded border border-gray-700/50">
+                      {LEGAL_TEXTS[legalTab]}
+                  </div>
+                  <div className="mt-4">
+                      <Button onClick={()=>setShowLegalModal(false)} className="w-full">סגור</Button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {showInstallPrompt && <InstallPrompt onClose={()=>setShowInstallPrompt(false)} onInstall={handleInstallClick} canInstall={!!deferredPrompt} isIos={isIos}/>}
       
-      <footer className="fixed bottom-0 w-full bg-black/90 p-3 flex justify-between items-center border-t border-gray-800 z-50 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${isCloudConnected?'bg-green-500':'bg-red-500 animate-pulse'}`}/>
-              <span className="text-xs text-gray-500">{isCloudConnected?'מחובר':'מקומי'}</span>
+      <footer className="fixed bottom-0 w-full bg-black/90 p-3 flex flex-col items-center border-t border-gray-800 z-50 backdrop-blur-md">
+          <div className="w-full flex justify-between items-center mb-1">
+            <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${isCloudConnected?'bg-green-500':'bg-red-500 animate-pulse'}`}/>
+                <span className="text-xs text-gray-500">{isCloudConnected?'מחובר':'מקומי'}</span>
+            </div>
+            <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2">⚙️</button>
           </div>
-          <button onClick={toggleAdminMode} className="text-gray-600 hover:text-white p-2">⚙️</button>
+          <div className="text-[10px] text-center text-gray-500 w-full border-t border-gray-800/50 pt-2 flex justify-center gap-4">
+               <span>© {new Date().getFullYear()} כל הזכויות שמורות</span>
+               <span className="text-gray-600">|</span>
+               <button onClick={() => openLegal('privacy')} className="hover:text-brand-primary underline">מדיניות פרטיות</button>
+               <span className="text-gray-600">|</span>
+               <button onClick={() => openLegal('terms')} className="hover:text-brand-primary underline">תנאי שימוש</button>
+          </div>
       </footer>
     </div>
   );

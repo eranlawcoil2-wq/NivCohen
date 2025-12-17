@@ -33,6 +33,7 @@ export interface User {
   userColor?: string; // Custom color for the user name in lists
   monthlyRecord?: number; // Personal best: max workouts in a month
   isRestricted?: boolean; // If true, user cannot register for workouts
+  healthDeclarationFile?: string; // Base64 string or URL of the uploaded file
 }
 
 export interface TrainingSession {

@@ -39,8 +39,124 @@ const SESSION_COLORS = [
 ];
 
 const SQL_SCRIPT = `
--- (SQL Script preserved for brevity - same as before)
--- ... [SQL content remains unchanged from previous step] ...
+-- 1. Create Data Tables
+create table if not exists users (
+  id text primary key,
+  "fullName" text,
+  "displayName" text,
+  phone text unique,
+  email text,
+  "startDate" text,
+  "paymentStatus" text,
+  "isNew" boolean,
+  "userColor" text,
+  "monthlyRecord" int default 0,
+  "isRestricted" boolean default false,
+  "healthDeclarationFile" text
+);
+
+create table if not exists sessions (
+  id text primary key,
+  type text,
+  date text,
+  time text,
+  location text,
+  "maxCapacity" int,
+  description text,
+  "registeredPhoneNumbers" text[],
+  "attendedPhoneNumbers" text[] default '{}',
+  color text,
+  "isTrial" boolean,
+  "zoomLink" text,
+  "isZoomSession" boolean default false,
+  "isHidden" boolean default false
+);
+
+-- 2. Create Configuration Tables
+create table if not exists config_locations (
+  id text primary key,
+  name text,
+  address text,
+  color text default '#3B82F6'
+);
+
+create table if not exists config_workout_types (
+  id text primary key,
+  name text
+);
+
+create table if not exists config_general (
+  id text primary key,
+  "coachNameHeb" text,
+  "coachNameEng" text,
+  "coachPhone" text,
+  "coachAdditionalPhone" text,
+  "coachEmail" text,
+  "defaultCity" text
+);
+
+-- 3. Add Missing Columns (Idempotent)
+do $$
+begin
+  -- Users columns
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='monthlyRecord') then
+    alter table users add column "monthlyRecord" int default 0;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='userColor') then
+    alter table users add column "userColor" text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='isRestricted') then
+    alter table users add column "isRestricted" boolean default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='users' and column_name='healthDeclarationFile') then
+    alter table users add column "healthDeclarationFile" text;
+  end if;
+
+  -- Sessions columns
+  if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='attendedPhoneNumbers') then
+    alter table sessions add column "attendedPhoneNumbers" text[] default '{}';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='isZoomSession') then
+    alter table sessions add column "isZoomSession" boolean default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='zoomLink') then
+    alter table sessions add column "zoomLink" text;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='sessions' and column_name='isHidden') then
+    alter table sessions add column "isHidden" boolean default false;
+  end if;
+
+  -- Config columns
+  if not exists (select 1 from information_schema.columns where table_name='config_locations' and column_name='color') then
+    alter table config_locations add column color text default '#3B82F6';
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='config_general' and column_name='coachAdditionalPhone') then
+    alter table config_general add column "coachAdditionalPhone" text;
+  end if;
+end $$;
+
+-- 4. Security Policies (RLS)
+alter table users enable row level security;
+alter table sessions enable row level security;
+alter table config_locations enable row level security;
+alter table config_workout_types enable row level security;
+alter table config_general enable row level security;
+
+-- Create policies if they don't exist (Drop first to be safe for updates)
+drop policy if exists "Public Access Users" on users;
+create policy "Public Access Users" on users for all using (true);
+
+drop policy if exists "Public Access Sessions" on sessions;
+create policy "Public Access Sessions" on sessions for all using (true);
+
+drop policy if exists "Public Access Locations" on config_locations;
+create policy "Public Access Locations" on config_locations for all using (true);
+
+drop policy if exists "Public Access Types" on config_workout_types;
+create policy "Public Access Types" on config_workout_types for all using (true);
+
+drop policy if exists "Public Access General" on config_general;
+create policy "Public Access General" on config_general for all using (true);
 `;
 
 const getSunday = (d: Date) => {
@@ -133,7 +249,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // User Filter & Sort State
   const [filterText, setFilterText] = useState('');
-  const [sortKey, setSortKey] = useState<'fullName' | 'streak' | 'monthCount' | 'record'>('fullName');
+  // Added 'payment' and 'health' to sort keys
+  const [sortKey, setSortKey] = useState<'fullName' | 'streak' | 'monthCount' | 'record' | 'payment' | 'health'>('fullName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   
   // Template & Settings State
@@ -258,6 +375,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               // Displayed record is max(stored, current)
               valA = Math.max(a.monthlyRecord || 0, getMonthlyWorkoutsCount(a.phone));
               valB = Math.max(b.monthlyRecord || 0, getMonthlyWorkoutsCount(b.phone));
+          } else if (sortKey === 'payment') {
+              valA = a.paymentStatus;
+              valB = b.paymentStatus;
+          } else if (sortKey === 'health') {
+              valA = !!a.healthDeclarationFile;
+              valB = !!b.healthDeclarationFile;
           }
 
           if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
@@ -266,7 +389,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       });
   }, [existingUsers, filterText, sortKey, sortDirection, sessions]);
 
-  const handleSort = (key: 'fullName' | 'streak' | 'monthCount' | 'record') => {
+  const handleSort = (key: 'fullName' | 'streak' | 'monthCount' | 'record' | 'payment' | 'health') => {
       if (sortKey === key) {
           setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
       } else {
@@ -530,7 +653,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           userColor: formUser.userColor || '#A3E635',
           monthlyRecord: formUser.monthlyRecord || 0,
           isNew: false,
-          isRestricted: formUser.isRestricted || false
+          isRestricted: formUser.isRestricted || false,
+          healthDeclarationFile: formUser.healthDeclarationFile
       } as User;
 
       if (editingUserId) { onUpdateUser(userData); alert('פרטי משתמש עודכנו'); setEditingUserId(null); } 
@@ -831,7 +955,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                        <input type="number" className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.monthlyRecord || 0} onChange={e => setFormUser({...formUser, monthlyRecord: parseInt(e.target.value) || 0})}/>
                    </div>
                    <div className="flex flex-col">
-                       <label className="text-xs text-gray-400 mb-1">תשלום</label>
+                       <label className="text-xs text-gray-400 mb-1 cursor-pointer hover:text-white" onClick={() => handleSort('payment')}>תשלום (מיון)</label>
                        <select className="p-2 bg-gray-900 border border-gray-600 text-white rounded" value={formUser.paymentStatus} onChange={e => setFormUser({...formUser, paymentStatus: e.target.value as PaymentStatus})}>
                            <option value={PaymentStatus.PAID}>שולם</option>
                            <option value={PaymentStatus.PENDING}>בהמתנה</option>
@@ -855,7 +979,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div className="flex gap-2 mt-4">
                     <Button onClick={handleUserSubmit} className="flex-1">{editingUserId ? 'עדכן פרטים' : 'הוסף משתמש'}</Button>
-                    {editingUserId && <Button variant="secondary" onClick={() => {setEditingUserId(null); setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0, isRestricted: false });}}>ביטול</Button>}
+                    {editingUserId && <Button variant="secondary" onClick={() => {setEditingUserId(null); setFormUser({ fullName: '', displayName: '', phone: '', email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PAID, userColor: '#A3E635', monthlyRecord: 0, isRestricted: false, healthDeclarationFile: undefined });}}>ביטול</Button>}
                 </div>
             </div>
             
@@ -871,11 +995,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
                 <div className="grid grid-cols-12 bg-gray-900 p-3 border-b border-gray-700 text-xs text-gray-400 font-bold sticky top-0 z-10 text-right">
                     <div className="col-span-3 cursor-pointer hover:text-white" onClick={() => handleSort('fullName')}>שם {sortKey==='fullName' && (sortDirection==='asc'?'↑':'↓')}</div>
-                    <div className="col-span-2 text-center">סטטוס</div>
-                    <div className="col-span-2 text-center cursor-pointer hover:text-white" onClick={() => handleSort('streak')}>רצף {sortKey==='streak' && (sortDirection==='asc'?'↑':'↓')}</div>
-                    <div className="col-span-2 text-center cursor-pointer hover:text-white" onClick={() => handleSort('monthCount')}>חודש {sortKey==='monthCount' && (sortDirection==='asc'?'↑':'↓')}</div>
+                    <div className="col-span-2 text-center cursor-pointer hover:text-white" onClick={() => handleSort('payment')}>תשלום {sortKey==='payment' && (sortDirection==='asc'?'↑':'↓')}</div>
+                    <div className="col-span-1 text-center cursor-pointer hover:text-white" onClick={() => handleSort('health')}>הצהרה</div>
+                    <div className="col-span-1 text-center cursor-pointer hover:text-white" onClick={() => handleSort('streak')}>רצף</div>
+                    <div className="col-span-1 text-center cursor-pointer hover:text-white" onClick={() => handleSort('monthCount')}>חודש</div>
                     <div className="col-span-1 text-center cursor-pointer hover:text-white" onClick={() => handleSort('record')}>שיא</div>
-                    <div className="col-span-2 text-center">פעולות</div>
+                    <div className="col-span-3 text-center">פעולות</div>
                 </div>
                 <div className="overflow-y-auto flex-1">
                     {sortedAndFilteredUsers.map(user => {
@@ -897,16 +1022,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                          {getPaymentStatusText(user.paymentStatus)}
                                      </span>
                                 </div>
-                                <div className="col-span-2 text-center">
-                                    <span className="bg-yellow-500/10 text-yellow-500 px-2 py-0.5 rounded text-xs font-bold">{streak} 🔥</span>
+                                <div className="col-span-1 text-center flex justify-center">
+                                    {user.healthDeclarationFile ? (
+                                        <a href={user.healthDeclarationFile} download={`health_decl_${user.fullName}.pdf`} className="text-green-500 hover:text-green-400 text-lg" title="הורד הצהרת בריאות">📋✓</a>
+                                    ) : (
+                                        <span className="text-gray-600 text-lg" title="אין הצהרה">−</span>
+                                    )}
                                 </div>
-                                <div className="col-span-2 text-center">
+                                <div className="col-span-1 text-center">
+                                    <span className="bg-yellow-500/10 text-yellow-500 px-1 py-0.5 rounded text-xs font-bold">{streak}</span>
+                                </div>
+                                <div className="col-span-1 text-center">
                                     <span className="text-white text-sm font-bold">{monthCount}</span>
                                 </div>
                                 <div className="col-span-1 text-center">
                                     <span className="text-brand-primary text-sm font-bold">{record}</span>
                                 </div>
-                                <div className="col-span-2 flex justify-center gap-1">
+                                <div className="col-span-3 flex justify-center gap-1">
                                     <a href={`https://wa.me/${normalizePhoneForWhatsapp(user.phone)}`} target="_blank" rel="noreferrer" className="bg-green-600/20 text-green-400 p-1.5 rounded hover:bg-green-600 hover:text-white transition-colors flex items-center justify-center">
                                         <span className="text-xs">📞</span>
                                     </a>
@@ -921,6 +1053,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       )}
       
+      {/* ... (Rest of component unchanged) ... */}
       {activeTab === 'new_users' && (
            <div className="space-y-2">
                {newUsers.map(user => (
