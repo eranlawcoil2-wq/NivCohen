@@ -98,11 +98,17 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   
   // Try to get hourly data if available
   if (weather && weather.hourly && session.time) {
-      const sessionHour = session.time.split(':')[0]; // "18:30" -> "18"
-      const hourlyData = weather.hourly[sessionHour];
+      const sessionHourStr = session.time.split(':')[0]; // "18:30" -> "18"
+      const sessionHour = parseInt(sessionHourStr, 10);
+      const hourlyData = weather.hourly[sessionHourStr];
+      
+      // Determine if it is night (approx. between 19:00 and 06:00)
+      const isNight = sessionHour >= 19 || sessionHour < 6;
+
       if (hourlyData) {
           displayTemp = hourlyData.temp;
-          displayIcon = getWeatherIcon(hourlyData.weatherCode);
+          // Pass isNight to get the correct icon (Moon vs Sun)
+          displayIcon = getWeatherIcon(hourlyData.weatherCode, isNight);
       }
   }
 

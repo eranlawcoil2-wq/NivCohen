@@ -68,17 +68,20 @@ export const getWeatherForDates = async (dates: string[], lat: number = 31.93, l
   }
 };
 
-export const getWeatherIcon = (code: number): string => {
+export const getWeatherIcon = (code: number, isNight: boolean = false): string => {
   // WMO Weather interpretation codes (WW)
-  if (code === 0) return '☀️'; // Clear sky
-  if (code === 1 || code === 2 || code === 3) return '⛅'; // Mainly clear, partly cloudy, and overcast
+  if (code === 0) return isNight ? '🌙' : '☀️'; // Clear sky: Moon at night, Sun at day
+  if (code === 1) return isNight ? '🌙' : '🌤️'; // Mainly clear
+  if (code === 2) return isNight ? '☁️' : '⛅'; // Partly cloudy: Cloud at night, Sun/Cloud at day
+  if (code === 3) return '☁️'; // Overcast
+  
   if (code === 45 || code === 48) return '🌫️'; // Fog
-  if (code >= 51 && code <= 55) return 'DRIZZLE'; // Drizzle (use generic rain or text)
+  if (code >= 51 && code <= 55) return 'DRIZZLE'; // Drizzle
   if (code >= 61 && code <= 67) return '🌧️'; // Rain
   if (code >= 71 && code <= 77) return '❄️'; // Snow
   if (code >= 80 && code <= 82) return '🌦️'; // Rain showers
   if (code >= 95) return '⛈️'; // Thunderstorm
-  return '🌤️';
+  return isNight ? '🌙' : '🌤️'; // Default
 };
 
 export const getWeatherDescription = (code: number): string => {
