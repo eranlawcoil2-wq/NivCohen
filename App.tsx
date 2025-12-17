@@ -37,6 +37,8 @@ interface InstallButtonProps {
 }
 
 const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, onInstalled }) => {
+    // If the browser already installed or prompt not available, we can still show a fallback or nothing.
+    // For now, only show if PWA install prompt is ready.
     if (!deferredPrompt) return null;
 
     const handleInstall = async () => {
@@ -50,10 +52,10 @@ const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, 
     return (
         <button 
             onClick={handleInstall}
-            className={`fixed bottom-24 right-6 z-[100] ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'} text-brand-black p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black`}
-            title="הורד אפליקציה"
+            className={`fixed bottom-24 right-6 z-[100] ${isAdmin ? 'bg-red-500 text-white' : 'bg-brand-primary text-black'} p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black`}
+            title={isAdmin ? "התקן אפליקציית ניהול" : "התקן אפליקציית מתאמנים"}
         >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
         </button>
@@ -332,7 +334,7 @@ const App: React.FC = () => {
                             <p className="text-white text-sm font-bold leading-relaxed">{viewingSession.description}</p>
                         </div>
                     )}
-                    {viewingSession.zoomLink && (
+                    {viewingSession.isZoomSession && viewingSession.zoomLink && (
                         <a href={viewingSession.zoomLink} target="_blank" rel="noreferrer" className="block p-5 bg-blue-600/10 border border-blue-500/20 rounded-[30px] text-blue-400 text-center font-black italic">
                              כנס לאימון זום 🎥
                         </a>
@@ -345,7 +347,7 @@ const App: React.FC = () => {
                                 return (
                                     <div key={phone} className="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] border border-white/5 flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full" style={{ background: t?.userColor || '#A3E635' }}></div>
-                                        {t ? (t.displayName || t.fullName.split(' ')[0]) : 'متאמן'}
+                                        {t ? (t.displayName || t.fullName.split(' ')[0]) : 'מתאמן'}
                                     </div>
                                 );
                             }) : <p className="text-gray-600 text-xs italic">עדיין אין נרשמים...</p>}

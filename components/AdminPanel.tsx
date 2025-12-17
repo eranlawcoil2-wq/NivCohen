@@ -28,7 +28,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   
   const weekDates = useMemo(() => {
     const sun = new Date();
-    // 0 is Sunday. This ensures we start counting from the most recent Sunday.
+    // Sunday is index 0 in JS. This ensures we start counting from the most recent Sunday.
     sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { 
         const d = new Date(sun); 
@@ -92,7 +92,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           </div>
         )}
 
-        {activeTab === 'users' && (activeTab === 'users') && (
+        {activeTab === 'users' && (
             <div className="space-y-6">
                 <input type="text" placeholder="חיפוש מתאמן (שם או טלפון)..." className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                 <div className="grid gap-4">
