@@ -11,11 +11,13 @@ export const generateWorkoutDescription = async (type: WorkoutType, location: st
       התיאור צריך להיות עד 20 מילים, מלהיב ומושך מתאמנים להירשם. אל תשתמש במרכאות.
     `;
     
+    // Updated to gemini-3-flash-preview as recommended for basic text tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 
+    // Use .text property directly as per coding guidelines
     return (response.text || "").trim();
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -29,11 +31,13 @@ export const getMotivationQuote = async (): Promise<string> => {
 
     const prompt = `תן לי משפט מוטיבציה אחד בלבד, קצר וחזק בעברית לספורטאים. לא יותר מ-10 מילים. ללא מרכאות.`;
     
+    // Updated to gemini-3-flash-preview as recommended for basic text tasks
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 
+    // Use .text property directly as per coding guidelines
     return (response.text || "").trim();
   } catch (error) {
     console.error("Gemini API Error:", error);

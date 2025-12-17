@@ -58,6 +58,7 @@ export interface TrainingSession {
   isTrial?: boolean; // Is this a trial session for new users?
   zoomLink?: string; // Optional link for Zoom sessions
   isZoomSession?: boolean; // Flag to mark as Zoom even without link
+  isHybrid?: boolean; // New flag: Both In-Person and Zoom
   isHidden?: boolean; // If true, only visible to admin
   isCancelled?: boolean; // New flag for cancelled sessions
   manualHasStarted?: boolean; // New flag: Coach manually marked session as started/happening
