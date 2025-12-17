@@ -39,8 +39,10 @@ export const dataService = {
     if (supabase) {
       const { data, error } = await supabase.from('users').select('*');
       if (error) throw error;
+      // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo users.
       if (data) return data as User[];
     }
+    // Local mode fallback
     return safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
   },
 
@@ -80,6 +82,7 @@ export const dataService = {
     if (supabase) {
       const { data, error } = await supabase.from('sessions').select('*');
       if (error) throw error;
+      // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo sessions.
       if (data) return data as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
@@ -130,21 +133,13 @@ export const dataService = {
   getLocations: async (): Promise<LocationDef[]> => {
     if (supabase) {
        const { data, error } = await supabase.from('config_locations').select('*');
-       if (!error && data && data.length > 0) return data as LocationDef[];
-       // If DB is connected but empty, return empty list (do NOT auto seed unless explicitly asked)
-       // Fallback to defaults only if NO data at all
-       if (!error && (!data || data.length === 0)) {
-           return DEFAULT_LOCATIONS; 
-       }
+       if (!error && data) return data as LocationDef[];
+       // REMOVED FALLBACK TO DEFAULT_LOCATIONS IF EMPTY
+       // This ensures if user deletes all locations in cloud, it stays empty and doesn't respawn "Park Hayarkon"
     }
     
     // Local storage fallback
-    const localData = safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
-    // Extra safety: if local data has "Park Hayarkon", ignore it and return clean defaults
-    if (localData.some(l => l.name.includes('פארק הירקון'))) {
-        return DEFAULT_LOCATIONS;
-    }
-    return localData;
+    return safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
   },
   
   saveLocations: async (locations: LocationDef[]): Promise<void> => {
@@ -152,7 +147,6 @@ export const dataService = {
         const { error } = await supabase.from('config_locations').upsert(locations);
         if (error) {
              console.error("Error saving locations:", error);
-             // Fallback
              localStorage.setItem('niv_app_locations', JSON.stringify(locations));
         }
     } else {
@@ -174,6 +168,8 @@ export const dataService = {
       if (supabase) {
           const { data, error } = await supabase.from('config_workout_types').select('*');
           if (!error && data && data.length > 0) return data.map((t:any) => t.name);
+          // If empty in cloud, return empty array, don't fallback to defaults if they were deleted
+          if (!error && data && data.length === 0) return [];
       }
       return safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
   },

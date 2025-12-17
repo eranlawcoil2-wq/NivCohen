@@ -176,7 +176,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [editSessionForm, setEditSessionForm] = useState<Partial<TrainingSession>>({});
 
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
-  const [isReloading, setIsReloading] = useState(false);
   const [isProcessingCopy, setIsProcessingCopy] = useState(false);
 
   const newUsers = users.filter(u => u.isNew);
@@ -300,13 +299,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const getDayName = (dateStr: string) => new Date(dateStr).toLocaleDateString('he-IL', { weekday: 'long' });
   
-  const handleGlobalSave = () => {
-      setIsReloading(true);
-      setTimeout(() => {
-          window.location.reload();
-      }, 500);
-  };
-
   const handleAddOrUpdateType = () => { 
       if (!newTypeName.trim()) return;
       if (editingTypeOriginalName) {
@@ -371,11 +363,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
   
-  const handleResetDefaults = () => {
-      if(confirm('פעולה זו תאפס את סוגי האימונים והמיקומים לברירת המחדל (נס ציונה). האם להמשיך?')) {
+  const handleResetCache = () => {
+      if(confirm('פעולה זו תנקה את זכרון המטמון של הדפדפן בלבד, כדי לפתור בעיות תצוגה. הנתונים בשרת יישמרו. האם להמשיך?')) {
+          // Only clear local storage cache, do not call save back to server logic here.
           localStorage.removeItem('niv_app_locations');
           localStorage.removeItem('niv_app_types');
-          alert('הנתונים אופסו. הטעינה תתבצע מחדש.');
+          // Reload page to re-fetch from server
           window.location.reload();
       }
   };
@@ -513,28 +506,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
   };
   
-  const handleRemoveUserFromSession = async (phoneToRemove: string) => {
-      // Logic changed: Now done by unchecking the box and saving.
-      // Keeping this function for safety but removing the button that calls it.
-      if (!attendanceSession) return;
-      if (confirm('להסיר את המתאמן מהרשימה? (פעולה זו תבטל את הרישום שלו)')) {
-          const updatedRegistered = attendanceSession.registeredPhoneNumbers.filter(p => p !== phoneToRemove);
-          const updatedAttended = (attendanceSession.attendedPhoneNumbers || []).filter(p => p !== phoneToRemove);
-          const updatedMarked = new Set(markedAttendees);
-          updatedMarked.delete(phoneToRemove);
-          setMarkedAttendees(updatedMarked);
-          
-          const updatedSession = {
-              ...attendanceSession,
-              registeredPhoneNumbers: updatedRegistered,
-              attendedPhoneNumbers: updatedAttended
-          };
-          
-          setAttendanceSession(updatedSession);
-          await onUpdateSession(updatedSession);
-      }
-  };
-
   const handleGenerateDescription = async () => {
       if (!editSessionForm.type || !editSessionForm.location) {
           alert('נא למלא סוג אימון ומיקום');
@@ -697,11 +668,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <h2 className="text-2xl font-bold text-white">פאנל ניהול</h2>
         </div>
         <div className="flex gap-2">
-            <button onClick={onExitAdmin} className="text-gray-500 text-xs font-bold border border-gray-700 px-3 py-2 rounded hover:text-white">
-                יציאה
-            </button>
-            <button onClick={handleGlobalSave} disabled={isReloading} className={`bg-green-500 hover:bg-green-600 text-white border border-green-600 px-6 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2 shadow-lg ${isReloading ? 'opacity-50' : ''}`}>
-               {isReloading ? 'מרענן...' : 'שמירה 💾'}
+            <button onClick={onExitAdmin} className={`bg-green-500 hover:bg-green-600 text-white border border-green-600 px-6 py-2 rounded-lg transition-all text-sm font-bold flex items-center gap-2 shadow-lg`}>
+               חזרה לאתר 🏠
             </button>
         </div>
       </div>
@@ -864,7 +832,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                                                   <button onClick={() => toggleAttendance(phone)} className={`w-8 h-8 rounded-full border flex items-center justify-center transition-colors ${isMarked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-500 hover:bg-gray-700'}`}>
                                                       {isMarked ? '✓' : ''}
                                                   </button>
-                                                  {/* Trash button removed as requested */}
                                               </div>
                                           </div>
                                       );
@@ -1066,7 +1033,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <label className="text-xs text-red-300 font-bold mb-1 block">הודעה דחופה למסך הבית (מחליף את המוטיבציה)</label>
                       <input 
                         type="text" 
-                        placeholder="לדוגמה: האימון הערב בוטל עקב גשם!" 
+                        placeholder="הקלד הודעה דחופה..." 
                         className="w-full bg-gray-900 text-white p-2 rounded border border-red-500/50 focus:border-red-500 outline-none"
                         value={tempConfig.urgentMessage || ''} 
                         onChange={e=>setTempConfig({...tempConfig, urgentMessage: e.target.value})}
@@ -1203,8 +1170,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               
               <div className="bg-red-900/20 p-4 rounded border border-red-900/50 mt-8">
                   <h3 className="text-red-400 mb-2 font-bold text-sm">אזור סכנה / טיפול בבעיות</h3>
-                  <p className="text-gray-400 text-xs mb-3">אם המיקומים (כמו "פארק הירקון") מופיעים בטעות בנייד ואינם מסתנכרנים, לחץ כאן לאיפוס.</p>
-                  <Button variant="danger" size="sm" onClick={handleResetDefaults} className="w-full">איפוס נתונים לברירת מחדל (מחיקת זכרון מקומי)</Button>
+                  <p className="text-gray-400 text-xs mb-3">אם המיקומים מופיעים בטעות בנייד ואינם מסתנכרנים, לחץ כאן לניקוי זכרון הדפדפן בלבד (לא מוחק מידע מהשרת).</p>
+                  <Button variant="danger" size="sm" onClick={handleResetCache} className="w-full">נקה זכרון מטמון (Cache) בלבד</Button>
               </div>
           </div>
       )}

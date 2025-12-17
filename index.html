@@ -3,15 +3,76 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    
+    <!-- Dynamic Setup Script -->
+    <script>
+      (function() {
+        // Check if we are in Admin Mode
+        const params = new URLSearchParams(window.location.search);
+        const isAdmin = params.get('mode') === 'admin';
+
+        // --- Configuration ---
+        const themeColor = isAdmin ? '#EF4444' : '#A3E635'; // Red vs Green
+        const appName = isAdmin ? 'Niv Admin' : 'Niv Fitness';
+        const startUrl = isAdmin ? '/?mode=admin' : '/';
+        
+        // --- Generate SVG Icon ---
+        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>`;
+
+        // --- Create & Inject Link Tags for Icons ---
+        function addLink(rel, href) {
+          const link = document.createElement('link');
+          link.rel = rel;
+          link.href = href;
+          document.head.appendChild(link);
+        }
+
+        addLink('icon', svgIcon);
+        addLink('apple-touch-icon', svgIcon);
+
+        // --- Generate & Inject Dynamic Manifest ---
+        const manifest = {
+          "name": appName,
+          "short_name": appName,
+          "start_url": startUrl,
+          "display": "standalone",
+          "background_color": "#121212",
+          "theme_color": themeColor,
+          "icons": [
+            {
+              "src": svgIcon,
+              "sizes": "192x192",
+              "type": "image/svg+xml"
+            },
+            {
+              "src": svgIcon,
+              "sizes": "512x512",
+              "type": "image/svg+xml"
+            }
+          ]
+        };
+
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        addLink('manifest', manifestURL);
+
+        // --- Update Title ---
+        document.title = appName;
+
+        // --- Set Meta Theme Color ---
+        const metaTheme = document.createElement('meta');
+        metaTheme.name = 'theme-color';
+        metaTheme.content = '#121212'; // Keep bar dark, or use themeColor for colored bar
+        document.head.appendChild(metaTheme);
+
+      })();
+    </script>
+
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Niv Cohen">
-    <title>ניב כהן - אימוני כושר</title>
     
-    <!-- Dynamic Icon: Green Background with NIV text -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23A3E635%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23A3E635%22/><text x=%2250%22 y=%2250%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 dy=%22.35em%22 fill=%22%23121212%22>NIV</text></svg>">
-
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;700;900&display=swap" rel="stylesheet">
     
@@ -19,7 +80,7 @@
     <script>
       window.onerror = function(message, source, lineno, colno, error) {
         var root = document.getElementById('root');
-        if (root && root.innerHTML === '') { // Only show if nothing rendered
+        if (root && root.innerHTML === '') { 
              console.error(message);
         }
         return false;
@@ -28,14 +89,13 @@
 
     <style>
       :root {
-        --brand-primary: #A3E635; /* Default Lime 400 */
+        --brand-primary: #A3E635; 
       }
       body {
         background-color: #121212;
         color: #E5E7EB;
         -webkit-tap-highlight-color: transparent;
       }
-      /* Hide scrollbar for clean horizontal scroll */
       .no-scrollbar::-webkit-scrollbar {
         display: none;
       }
@@ -56,7 +116,7 @@
                 black: '#121212',
                 dark: '#1E1E1E',
                 primary: 'var(--brand-primary)', 
-                secondary: '#3B82F6', // Blue 500
+                secondary: '#3B82F6', 
                 danger: '#EF4444',
                 text: '#E5E7EB'
               }
@@ -82,7 +142,7 @@
   <body>
     <div id="root">
         <div style="padding: 20px; color: gray; text-align: center;">
-            <h1>טוען את האפליקציה...</h1>
+            <h1>טוען...</h1>
         </div>
     </div>
     <script type="module" src="/index.tsx"></script>

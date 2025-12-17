@@ -171,7 +171,12 @@ const App: React.FC = () => {
   const [weekOffset, setWeekOffset] = useState(0); 
   
   // Initialize admin mode from localStorage to persist login
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => localStorage.getItem('niv_app_is_admin') === 'true');
+  // Also check URL param to ensure we don't get into inconsistent state
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
+      const fromStorage = localStorage.getItem('niv_app_is_admin') === 'true';
+      const fromUrl = new URLSearchParams(window.location.search).get('mode') === 'admin';
+      return fromStorage || fromUrl;
+  });
   
   // Modals State
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -233,10 +238,9 @@ const App: React.FC = () => {
 
   const handleLogoClick = () => {
       if (isAdminMode) {
-          // If already in admin mode, exit
-          window.history.pushState({}, '', '/');
-          setIsAdminMode(false);
+          // If already in admin mode, exit via hard reload to clear URL
           localStorage.removeItem('niv_app_is_admin');
+          window.location.href = '/'; 
       } else {
           // If not in admin mode, show password modal
           setAdminPasswordInput('');
@@ -248,10 +252,9 @@ const App: React.FC = () => {
       // Logic changed: fallback is now 'admin' instead of '123456'
       const requiredPassword = appConfig.coachAdditionalPhone?.trim() || 'admin'; 
       if (adminPasswordInput === requiredPassword) {
-          setIsAdminMode(true);
           localStorage.setItem('niv_app_is_admin', 'true'); // Persist Login
-          setShowAdminLoginModal(false);
-          window.history.pushState({}, '', '/admin');
+          // FORCE RELOAD to apply red theme manifest in index.html
+          window.location.href = '/?mode=admin';
       } else {
           alert('סיסמא שגויה. נסה שוב.');
       }
@@ -688,7 +691,7 @@ const App: React.FC = () => {
                     </div>
                 )}
                 
-                {appConfig.urgentMessage ? (
+                {appConfig.urgentMessage && appConfig.urgentMessage.trim().length > 0 ? (
                     <div className="bg-red-600 border border-red-400 text-white font-black text-center p-3 rounded-lg shadow-lg mt-2 animate-pulse flex flex-col items-center justify-center">
                         <span className="text-xl">📢</span>
                         <span className="text-sm">{appConfig.urgentMessage}</span>
@@ -731,9 +734,8 @@ const App: React.FC = () => {
                 onAddQuote={handleAddQuote}
                 onDeleteQuote={handleDeleteQuote}
                 onExitAdmin={() => { 
-                    setIsAdminMode(false); 
                     localStorage.removeItem('niv_app_is_admin');
-                    window.history.pushState({}, '', '/'); 
+                    window.location.href = '/'; 
                 }}
             />
         ) : (
