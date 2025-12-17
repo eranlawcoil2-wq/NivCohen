@@ -3,7 +3,6 @@ import React, { useState, useMemo } from 'react';
 import { User, TrainingSession, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo, PaymentStatus } from '../types';
 import { Button } from './Button';
 import { SessionCard } from './SessionCard';
-import { getWeatherIcon } from '../services/weatherService';
 
 interface AdminPanelProps {
   users: User[]; sessions: TrainingSession[]; primaryColor: string; workoutTypes: string[]; locations: LocationDef[];
@@ -107,7 +106,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   const daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
                   return (
                       <div key={date} className="relative">
-                          <div className="bg-gray-900/50 rounded-[45px] p-6 border border-white/5">
+                          <div className="bg-gray-900/50 rounded-[45px] p-6 border border-white/5 shadow-2xl">
                             <div className="text-white font-black text-[11px] mb-6 border-b border-white/5 pb-3 flex justify-between items-center uppercase tracking-widest">
                                 <span className={date === new Date().toISOString().split('T')[0] ? 'text-red-500' : ''}>
                                   {new Date(date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })}
@@ -129,7 +128,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 <div className="sticky top-[70px] sm:top-[100px] z-40 bg-brand-black/95 py-4 space-y-3">
                     <input type="text" placeholder="חיפוש לפי שם, כינוי או טלפון..." className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 font-bold text-lg shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
-                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest flex items-center shrink-0">מיין לפי:</span>
                         {[ 
                             {id:'name', label:'שם'}, 
                             {id:'monthly', label:'אימונים'}, 
@@ -145,7 +143,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 <div className="grid gap-4">
                     {filteredUsers.map(u => {
                        const uStats = getUserStats(u);
-                       const hasHealth = !!u.healthDeclarationDate;
                        return (
                           <div key={u.id} className="bg-gray-800/40 p-6 rounded-[40px] border border-white/5 hover:border-red-500/40 transition-all cursor-pointer shadow-xl" onClick={()=>setEditingUser(u)}>
                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
@@ -156,25 +153,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                       <div className="text-[12px] text-gray-600 font-mono tracking-wider">{u.phone}</div>
                                    </div>
                                 </div>
-                                <div className="flex flex-wrap items-center gap-5 w-full sm:w-auto">
-                                   <div className="flex gap-4 bg-black/40 p-4 rounded-[25px] border border-white/5 flex-1 sm:flex-none justify-around">
-                                      <div className="text-center">
-                                         <p className="text-[8px] text-gray-600 uppercase font-black tracking-widest mb-1">החודש</p>
-                                         <p className="text-brand-primary font-black text-2xl leading-none">{uStats.monthly}</p>
-                                      </div>
-                                      <div className="text-center border-x border-white/10 px-4">
-                                         <p className="text-[8px] text-gray-600 uppercase font-black tracking-widest mb-1">שיא</p>
-                                         <p className="text-white font-black text-2xl leading-none">{uStats.peak}</p>
-                                      </div>
-                                      <div className="text-center">
-                                         <p className="text-[8px] text-orange-500 uppercase font-black tracking-widest mb-1">רצף</p>
-                                         <p className="text-orange-400 font-black text-2xl leading-none">{uStats.streak}</p>
-                                      </div>
-                                   </div>
-                                   <div className="flex gap-2">
-                                      <span className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg ${u.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 text-green-500 border border-green-500/30' : 'bg-red-500/20 text-red-500 border border-red-500/30'}`}>{u.paymentStatus === PaymentStatus.PAID ? 'שולם' : 'חוב'}</span>
-                                      <span className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg ${hasHealth ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-gray-800 text-gray-600 border border-white/5'}`}>{hasHealth ? 'הצהרה ✓' : 'אין הצהרה'}</span>
-                                   </div>
+                                <div className="flex items-center gap-2">
+                                    <span className={`px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg ${u.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 text-green-500 border border-green-500/30' : 'bg-red-500/20 text-red-500 border border-red-500/30'}`}>{u.paymentStatus === PaymentStatus.PAID ? 'שולם' : 'חוב'}</span>
                                 </div>
                              </div>
                           </div>
@@ -191,7 +171,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     
                     <div className="space-y-3">
                         <label className="text-[10px] text-red-500 font-black uppercase tracking-widest flex items-center gap-2">🚨 הודעה דחופה באתר (שורת פוש)</label>
-                        <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={props.appConfig.urgentMessage || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, urgentMessage: e.target.value})} placeholder="למשל: האימון היום הועבר לזום עקב הגשם..." />
+                        <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={props.appConfig.urgentMessage || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, urgentMessage: e.target.value})} placeholder="הודעה דחופה..." />
                     </div>
 
                     {props.deferredPrompt && (
@@ -200,37 +180,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           <Button onClick={props.onInstall} className="w-full py-5 rounded-[35px] bg-red-600 text-white font-black uppercase text-xs shadow-2xl shadow-red-600/20">📲 הורד עכשיו</Button>
                        </div>
                     )}
-
-                    <div className="space-y-4 pt-6">
-                        <div className="flex justify-between items-center border-r-4 border-brand-primary pr-4">
-                            <h4 className="text-white font-black text-sm uppercase tracking-widest">ניהול מיקומים</h4>
-                            <Button onClick={()=>{
-                                const name = prompt('שם המיקום:');
-                                const addr = prompt('כתובת מלאה לוויז:');
-                                if(name && addr) props.onUpdateLocations([...props.locations, {id: Date.now().toString(), name, address: addr}]);
-                            }} variant="outline" className="px-5 py-2 text-[10px] rounded-2xl">+ הוסף</Button>
-                        </div>
-                        <div className="grid gap-3">
-                            {props.locations.map(loc => (
-                                <div key={loc.id} className="flex gap-3 bg-gray-900/60 p-5 rounded-[30px] border border-white/5 items-center">
-                                    <div className="flex-1">
-                                        <p className="text-white font-black italic">{loc.name}</p>
-                                        <p className="text-gray-500 text-[10px] font-bold">{loc.address}</p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button onClick={()=>{
-                                            const n = prompt('ערוך שם מיקום:', loc.name);
-                                            const a = prompt('ערוך כתובת:', loc.address);
-                                            if(n && a) props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, name: n, address: a} : l));
-                                        }} className="text-blue-500 p-3">✏️</button>
-                                        <button onClick={()=>{if(confirm('למחוק את המיקום?')) props.onUpdateLocations(props.locations.filter(l=>l.id!==loc.id))}} className="text-red-500 p-3">🗑️</button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                 </div>
-                <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-6 rounded-[40px] font-black italic uppercase">יציאה מהניהול</Button>
+                <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-6 rounded-[40px] font-black italic uppercase">חזרה ללו"ז מתאמנים</Button>
             </div>
         )}
       </div>
@@ -239,64 +190,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         <div className="fixed inset-0 bg-black/95 z-[60] flex items-center justify-center p-6 backdrop-blur-xl overflow-y-auto no-scrollbar">
            <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 flex flex-col shadow-3xl text-right my-auto" dir="rtl">
               <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
-                <h3 className="text-3xl font-black text-white italic uppercase">ניהול מתאמן (תצוגת מאמן) 👤</h3>
+                <h3 className="text-3xl font-black text-white italic uppercase">ניהול מתאמן 👤</h3>
                 <button onClick={()=>setEditingUser(null)} className="text-gray-500 text-4xl">✕</button>
               </div>
               
               <div className="space-y-8 overflow-y-auto pr-2 no-scrollbar max-h-[75vh]">
-                  {/* Mirrors User Profile EXACTLY */}
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">שם מלא</label>
-                            <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold text-lg outline-none focus:border-brand-primary" value={editingUser.fullName} onChange={e=>setEditingUser({...editingUser, fullName: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי</label>
-                            <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold outline-none focus:border-brand-primary" value={editingUser.displayName || ''} onChange={e=>setEditingUser({...editingUser, displayName: e.target.value})} placeholder="כינוי..." />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">טלפון</label>
-                            <input className="w-full bg-gray-800/50 border border-white/5 p-5 rounded-3xl text-gray-500 font-mono text-xl" value={editingUser.phone} disabled />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">צבע אישי</label>
-                            <input type="color" className="w-full h-16 bg-gray-800 border border-white/10 rounded-3xl p-1 cursor-pointer" value={editingUser.userColor || '#A3E635'} onChange={e=>setEditingUser({...editingUser, userColor: e.target.value})} />
-                        </div>
-                    </div>
-
-                    {/* Admin-Only Payment status */}
-                    <div className="bg-red-900/10 border border-red-500/20 p-6 rounded-[35px] space-y-3">
-                        <label className="text-[10px] text-red-500 font-black uppercase block">סטטוס תשלום (מאמן בלבד)</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                          <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">שם מלא</label>
+                          <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold text-lg outline-none focus:border-brand-primary" value={editingUser.fullName} onChange={e=>setEditingUser({...editingUser, fullName: e.target.value})} />
+                      </div>
+                      <div>
+                          <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">כינוי</label>
+                          <input className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold outline-none focus:border-brand-primary" value={editingUser.displayName || ''} onChange={e=>setEditingUser({...editingUser, displayName: e.target.value})} placeholder="כינוי..." />
+                      </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                          <label className="text-[10px] text-gray-500 font-black uppercase block mb-2">טלפון</label>
+                          <input className="w-full bg-gray-800/50 border border-white/5 p-5 rounded-3xl text-gray-500 font-mono text-xl" value={editingUser.phone} disabled />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] text-red-500 font-black uppercase block">סטטוס תשלום</label>
                         <select className="w-full bg-gray-900 border border-white/10 p-5 rounded-3xl text-white font-black" value={editingUser.paymentStatus} onChange={e=>setEditingUser({...editingUser, paymentStatus: e.target.value as any})}>
                             <option value={PaymentStatus.PAID} className="bg-gray-900">שולם ✓</option>
                             <option value={PaymentStatus.PENDING} className="bg-gray-900">ממתין ⏳</option>
                             <option value={PaymentStatus.OVERDUE} className="bg-gray-900">חוב ⚠</option>
                         </select>
-                    </div>
-
-                    {/* Mirrors Trainee Health Declaration Exactly */}
-                    <div className="bg-brand-primary/5 p-6 rounded-[35px] border border-brand-primary/20 space-y-4">
-                        <h4 className="text-brand-primary font-black uppercase italic text-xs tracking-widest border-b border-brand-primary/10 pb-2">📜 הצהרת בריאות דיגיטלית</h4>
-                        <p className="text-gray-400 text-[11px] leading-relaxed italic">אני מצהיר בזאת כי מצבי הבריאותי תקין ומאפשר לי לבצע פעילות גופנית עצימה בשיטת CONSIST TRAINING.</p>
-                        
-                        <div className="grid grid-cols-1 gap-4">
-                            <div>
-                                <label className="text-[9px] text-gray-400 font-black block mb-2">מספר תעודת זהות</label>
-                                <input className="w-full bg-gray-900 border border-white/5 p-4 rounded-2xl text-white font-mono text-lg" placeholder="לא הוזן" value={editingUser.healthDeclarationId || ''} onChange={e=>setEditingUser({...editingUser, healthDeclarationId: e.target.value})} />
-                            </div>
-                            <div className="flex items-center gap-4 bg-gray-900/50 p-5 rounded-2xl">
-                                <div className={`w-8 h-8 rounded-xl border flex items-center justify-center ${editingUser.healthDeclarationDate ? 'bg-brand-primary border-brand-primary text-black' : 'border-white/10'}`}>
-                                    {editingUser.healthDeclarationDate ? '✓' : ''}
-                                </div>
-                                <div className="text-white text-xs font-black uppercase tracking-tighter">
-                                    {editingUser.healthDeclarationDate ? `נחתם ב: ${new Date(editingUser.healthDeclarationDate).toLocaleString('he-IL')}` : 'טרם נחתם'}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                      </div>
                   </div>
               </div>
               

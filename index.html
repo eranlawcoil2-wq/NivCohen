@@ -7,17 +7,16 @@
     
     <script>
       (function() {
-        // Detect view based on URL path
         const path = window.location.pathname.toUpperCase();
         const isAdmin = path.includes('/ADMIN');
         const isWork = path.includes('/WORK');
 
-        // Branding configuration
-        const themeColor = isAdmin ? '#EF4444' : '#A3E635'; // Red for Admin, Green for Trainee
+        // Theme Configuration: Red for Coach/Admin, Lime for Trainees/Work
+        const themeColor = isAdmin ? '#EF4444' : '#A3E635'; 
         const appLabel = isAdmin ? 'ADMIN' : (isWork ? 'WORK' : 'NIV');
         const startUrl = isAdmin ? '/ADMIN' : (isWork ? '/WORK' : '/');
         
-        // Dynamic SVG Icon: Text "NIV" on colored background
+        // Dynamic Icon: "NIV" on color background
         const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2258%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
 
         function addLink(rel, href) {
@@ -27,11 +26,9 @@
           document.head.appendChild(link);
         }
 
-        // Add Favicons
         addLink('icon', svgIcon);
         addLink('apple-touch-icon', svgIcon);
 
-        // Dynamic PWA Manifest
         const manifest = {
           "name": isAdmin ? "NIV COHEN - ADMIN" : "NIV COHEN - WORK",
           "short_name": `NIV ${appLabel}`,
@@ -52,7 +49,6 @@
 
         document.title = `NIV COHEN | ${appLabel}`;
 
-        // Meta tags
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
         metaTheme.content = '#121212';
@@ -71,7 +67,13 @@
       body { background-color: #121212; color: #E5E7EB; -webkit-tap-highlight-color: transparent; font-family: 'Heebo', sans-serif; overflow-x: hidden; }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      .shadow-3xl { shadow: 0 35px 60px -15px rgba(0, 0, 0, 0.3); }
+      
+      @keyframes pulse-whatsapp {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+      }
+      .whatsapp-float { animation: pulse-whatsapp 2s infinite; }
     </style>
     <script>
       tailwind.config = {
