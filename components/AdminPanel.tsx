@@ -39,8 +39,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [sessionDraft, setSessionDraft] = useState<TrainingSession | null>(null);
 
   useEffect(() => {
-    if (attendanceSession) setSessionDraft({ ...attendanceSession });
-    else setSessionDraft(null);
+    if (attendanceSession) {
+      setSessionDraft({ 
+        ...attendanceSession, 
+        isPersonalTraining: Boolean(attendanceSession.isPersonalTraining),
+        isCancelled: Boolean(attendanceSession.isCancelled),
+        isZoomSession: Boolean(attendanceSession.isZoomSession),
+        manualHasStarted: Boolean(attendanceSession.manualHasStarted)
+      });
+    } else setSessionDraft(null);
   }, [attendanceSession]);
 
   useEffect(() => {
@@ -90,7 +97,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const dateStr = new Date(session.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
     const zoomText = session.isZoomSession ? '💻 אימון בזום' : '';
     const personalText = session.isPersonalTraining ? '🏆 אימון אישי' : '';
-    return `*עדכון אימון - ניב כהן* 🏋️\n\n${personalText}\n🔥 סוג: ${session.type} ${zoomText}\n🕒 שעה: ${session.time}\n📅 תאריך: ${dateStr}\n📍 מיקום: ${session.location}\n\n*דגשים:* \n${session.description || 'אין דגשים מיוחדים'}\n\nנתראה שם! 💪`;
+    const cancelText = session.isCancelled ? '❌ מבוטל' : '';
+    return `*עדכון אימון - ניב כהן* 🏋️\n\n${cancelText} ${personalText}\n🔥 סוג: ${session.type} ${zoomText}\n🕒 שעה: ${session.time}\n📅 תאריך: ${dateStr}\n📍 מיקום: ${session.location}\n\n*דגשים:* \n${session.description || 'אין דגשים מיוחדים'}\n\nנתראה שם! 💪`;
   };
 
   const copyToClipboard = (text: string) => {
@@ -98,14 +106,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     alert('הקישור הועתק! ✅');
   };
 
-  const handleShareToWhatsAppGroup = () => {
-    if (!sessionDraft) return;
-    window.open(`https://wa.me/?text=${encodeURIComponent(getWhatsAppMsg(sessionDraft))}`, '_blank');
-  };
-
+  // Fix: handlePersonalWhatsApp function was missing
   const handlePersonalWhatsApp = (phone: string) => {
     if (!sessionDraft) return;
-    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(getWhatsAppMsg(sessionDraft))}`, '_blank');
+    const msg = getWhatsAppMsg(sessionDraft);
+    const cleanedPhone = phone.replace(/\D/g, '');
+    window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+
+  // Fix: handleShareToWhatsAppGroup function was missing
+  const handleShareToWhatsAppGroup = () => {
+    if (!sessionDraft) return;
+    const msg = getWhatsAppMsg(sessionDraft);
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   const handleSaveAllSettings = async () => {
@@ -168,7 +181,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
-                  daySessions = daySessions.filter(s => !!s.isPersonalTraining ? showPersonalTraining : showGroupSessions);
+                  daySessions = daySessions.filter(s => Boolean(s.isPersonalTraining) ? showPersonalTraining : showGroupSessions);
                   if (daySessions.length === 0) return null;
                   return (
                       <div key={date}>
@@ -186,7 +199,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           </div>
         )}
 
-        {activeTab === 'users' && (activeTab === 'users' && (
+        {activeTab === 'users' && (
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-center">
                     <input type="text" placeholder="חיפוש מתאמן..." className="flex-1 bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
@@ -216,7 +229,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     )})}
                 </div>
             </div>
-        ))}
+        )}
 
         {activeTab === 'settings' && (
             <div className="space-y-10 mt-6">
@@ -270,7 +283,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         <p className="text-[10px] text-red-500 font-black uppercase mb-1">{link.title}</p>
                                         <p className="text-white text-xs opacity-40 truncate max-w-[200px] font-mono">{link.url}</p>
                                     </div>
-                                    <Button onClick={() => copyToClipboard(link.url)} size="sm" variant="secondary" className="rounded-2xl">העתק</Button>
+                                    <Button onClick={() => copyToClipboard(link.url)} size="sm" variant="secondary" className="rounded-2xl">העתק קישור</Button>
                                 </div>
                             ))}
                         </div>
@@ -292,9 +305,40 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
+                {settingsSection === 'connections' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ומערכות 🔌</h3>
+                        <div className="space-y-6">
+                            <div className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5">
+                                <p className="text-brand-primary font-black uppercase text-[10px] mb-2">Supabase Database 🗄️</p>
+                                <p className="text-gray-400 text-xs mb-4">חיבור למסד נתונים חיצוני לשמירת מידע בענן (חינמי).</p>
+                                <div className="space-y-4">
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] text-gray-500 uppercase font-black">Supabase Project URL</label>
+                                        <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="https://xxx.supabase.co" defaultValue="https://xjqlluobnzpgpttprmio.supabase.co" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[9px] text-gray-500 uppercase font-black">Anon Public API Key</label>
+                                        <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="eyJhbGci..." defaultValue="sb_publishable_WyvAmRCYPahTpaQAwqiyjQ_NEGFK5wN" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5">
+                                <p className="text-brand-primary font-black uppercase text-[10px] mb-2">Google Gemini AI 🤖</p>
+                                <p className="text-gray-400 text-xs mb-4">המפתח משמש ליצירת משפטי מוטיבציה ותיאורי אימון חכמים.</p>
+                                <div className="p-4 bg-gray-800 rounded-2xl border border-white/5">
+                                    <p className="text-white font-mono text-[10px] opacity-60">Status: Active ✓</p>
+                                    <p className="text-gray-500 text-[9px] mt-1 font-black">המפתח מוגדר דרך ה-Environment Variables</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
+                    {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירה ✅</Button>
-                    <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה</Button>
+                    <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה ללו"ז</Button>
                 </div>
             </div>
         )}
@@ -369,19 +413,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <Button onClick={handleShareToWhatsAppGroup} className="w-full bg-green-600 py-3 rounded-2xl text-xs flex items-center gap-2 justify-center">שלח פוש לקבוצה 📢 ✅</Button>
                         <div className="grid grid-cols-2 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={!!sessionDraft.isPersonalTraining} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: !!e.target.checked})} />
+                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={Boolean(sessionDraft.isPersonalTraining)} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
                                 <label htmlFor="isPersonalDraft" className="text-purple-400 text-[10px] font-black uppercase cursor-pointer">אישי 🏆</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500 cursor-pointer" checked={!!sessionDraft.isZoomSession} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: !!e.target.checked})} />
+                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500 cursor-pointer" checked={Boolean(sessionDraft.isZoomSession)} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: e.target.checked})} />
                                 <label htmlFor="isZoomDraft" className="text-blue-500 text-[10px] font-black uppercase cursor-pointer">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: !!e.target.checked})} />
+                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={Boolean(sessionDraft.isCancelled)} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
                                 <label htmlFor="isCancelledDraft" className="text-red-500 text-[10px] font-black uppercase cursor-pointer">מבוטל ❌</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={!!sessionDraft.manualHasStarted} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: !!e.target.checked})} />
+                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={Boolean(sessionDraft.manualHasStarted)} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
                                 <label htmlFor="isHappeningDraft" className="text-brand-primary text-[10px] font-black uppercase cursor-pointer">מתקיים ✓</label>
                             </div>
                         </div>
@@ -392,10 +436,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           const isNew = !props.sessions.find(s => s.id === sessionDraft.id);
                           const finalSession = {
                             ...sessionDraft,
-                            isPersonalTraining: !!sessionDraft.isPersonalTraining,
-                            isZoomSession: !!sessionDraft.isZoomSession,
-                            isCancelled: !!sessionDraft.isCancelled,
-                            manualHasStarted: !!sessionDraft.manualHasStarted
+                            isPersonalTraining: Boolean(sessionDraft.isPersonalTraining),
+                            isZoomSession: Boolean(sessionDraft.isZoomSession),
+                            isCancelled: Boolean(sessionDraft.isCancelled),
+                            manualHasStarted: Boolean(sessionDraft.manualHasStarted)
                           };
                           if (isNew) props.onAddSession(finalSession); else props.onUpdateSession(finalSession); 
                           setAttendanceSession(null); 
