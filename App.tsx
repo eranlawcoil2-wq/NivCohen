@@ -115,7 +115,6 @@ const App: React.FC = () => {
       }
       setCurrentView(view);
       
-      // Fix for SecurityError on blob URLs or sandboxed environments
       const isBlob = window.location.protocol === 'blob:';
       if (!isBlob) {
           try {
@@ -124,7 +123,7 @@ const App: React.FC = () => {
               else if (view === 'work') newUrl += '?mode=work';
               window.history.pushState({}, '', newUrl);
           } catch (e) {
-              console.warn("History API navigation failed, continuing without URL update.");
+              console.warn("History pushState failed, using local state navigation only.");
           }
       }
   };
@@ -211,7 +210,7 @@ const App: React.FC = () => {
           setTimeout(() => {
             const el = document.getElementById(`day-${todayStr}`);
             if (el) {
-                // Increased scroll margin to ensure the day header remains fully visible below the sticky nav
+                // Ensure header doesn't hide the day title
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 setHasScrolledToToday(true);
             }
@@ -226,7 +225,6 @@ const App: React.FC = () => {
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
 
-      // Restrict interaction with finished sessions for trainees
       const now = new Date();
       const sessionStart = new Date(`${session.date}T${session.time}`);
       const diffMs = sessionStart.getTime() - now.getTime();
@@ -261,19 +259,23 @@ const App: React.FC = () => {
             </svg>
         </div>
         <div className="z-10 max-w-2xl space-y-12 py-12">
-            <div onClick={() => navigateTo('work')} className="cursor-pointer active:scale-95 transition-transform">
+            <div className="select-none">
                 <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             </div>
             
-            <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl" onClick={() => navigateTo('work')}>
-                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap cursor-pointer">
+            <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
+                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
                     {appConfig.coachBio}
                 </div>
             </div>
 
-            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block cursor-pointer active:scale-95 transition-transform" onClick={() => navigateTo('work')}>
+            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button onClick={() => navigateTo('work')} className="py-6 px-10 rounded-[40px] text-xl font-black shadow-2xl bg-brand-primary">כניסה למתאמנים 🚀</Button>
             </div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />

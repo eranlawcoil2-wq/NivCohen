@@ -5,81 +5,6 @@ import { Button } from './Button';
 import { SessionCard } from './SessionCard';
 import { dataService } from '../services/dataService';
 
-const SUPABASE_SQL = `
--- Initial database setup script for Niv Cohen Fitness
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY,
-  "fullName" TEXT NOT NULL,
-  "displayName" TEXT,
-  phone TEXT NOT NULL,
-  email TEXT,
-  "startDate" TEXT,
-  "paymentStatus" TEXT,
-  "isNew" BOOLEAN DEFAULT false,
-  "userColor" TEXT,
-  "monthlyRecord" INTEGER DEFAULT 0,
-  "isRestricted" BOOLEAN DEFAULT false,
-  "healthDeclarationFile" TEXT,
-  "healthDeclarationDate" TEXT,
-  "healthDeclarationId" TEXT
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-  id TEXT PRIMARY KEY,
-  type TEXT NOT NULL,
-  date TEXT NOT NULL,
-  time TEXT NOT NULL,
-  location TEXT NOT NULL,
-  "maxCapacity" INTEGER DEFAULT 15,
-  description TEXT,
-  "registeredPhoneNumbers" JSONB DEFAULT '[]'::jsonb,
-  "waitingList" JSONB DEFAULT '[]'::jsonb,
-  "attendedPhoneNumbers" JSONB DEFAULT '[]'::jsonb,
-  color TEXT,
-  "isTrial" BOOLEAN DEFAULT false,
-  "zoomLink" TEXT,
-  "isZoomSession" BOOLEAN DEFAULT false,
-  "isHidden" BOOLEAN DEFAULT false,
-  "isCancelled" BOOLEAN DEFAULT false,
-  "manualHasStarted" BOOLEAN DEFAULT false
-);
-
-CREATE TABLE IF NOT EXISTS config_locations (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  address TEXT,
-  color TEXT
-);
-
-CREATE TABLE IF NOT EXISTS config_workout_types (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS config_general (
-  id TEXT PRIMARY KEY DEFAULT 'main',
-  "coachNameHeb" TEXT,
-  "coachNameEng" TEXT,
-  "coachPhone" TEXT,
-  "coachAdditionalPhone" TEXT,
-  "coachEmail" TEXT,
-  "defaultCity" TEXT,
-  "urgentMessage" TEXT,
-  "coachBio" TEXT,
-  "healthDeclarationTemplate" TEXT,
-  "healthDeclarationDownloadUrl" TEXT
-);
-
-CREATE TABLE IF NOT EXISTS config_quotes (
-  id TEXT PRIMARY KEY,
-  text TEXT NOT NULL
-);
-
-INSERT INTO config_general (id, "coachNameHeb") 
-VALUES ('main', 'ניב כהן')
-ON CONFLICT (id) DO NOTHING;
-`;
-
 interface AdminPanelProps {
   users: User[]; sessions: TrainingSession[]; primaryColor: string; workoutTypes: string[]; locations: LocationDef[];
   weatherLocation: WeatherLocation; weatherData?: Record<string, WeatherInfo>; paymentLinks: PaymentLink[];
@@ -99,7 +24,7 @@ type SortMode = 'name' | 'monthly' | 'record' | 'streak' | 'health' | 'payment';
 
 export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings'>('attendance');
-  const [settingsSection, setSettingsSection] = useState<'general' | 'infrastructure' | 'quotes' | 'connections'>('general');
+  const [settingsSection, setSettingsSection] = useState<'general' | 'infrastructure' | 'quotes' | 'connections' | 'views'>('general');
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -232,6 +157,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     setIsCopyingWeek(false);
   };
 
+  const shareView = (mode: 'work' | 'admin') => {
+      const url = window.location.origin + '?mode=' + mode;
+      if (navigator.share) {
+          navigator.share({ title: 'לו"ז ניב כהן', url });
+      } else {
+          navigator.clipboard.writeText(url);
+          alert('הקישור הועתק ללוח!');
+      }
+  };
+
   return (
     <div className="bg-brand-black min-h-screen">
       <div className="sticky top-[140px] z-50 bg-brand-black/90 pt-4 border-b border-white/5 pb-2">
@@ -276,7 +211,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                  </div>
              )}
 
-             <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '' })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
+             <Button onClick={() => setAttendanceSession({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '' })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
              <div className="space-y-12">
               {weekDates.map(date => {
                   const daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
@@ -334,9 +269,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         {activeTab === 'settings' && (
             <div className="space-y-10">
                 <div className="flex gap-2 p-1 bg-gray-900 rounded-2xl overflow-x-auto no-scrollbar">
-                    {(['general', 'infrastructure', 'quotes', 'connections'] as const).map(s => (
+                    {(['general', 'infrastructure', 'quotes', 'connections', 'views'] as const).map(s => (
                         <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2 px-4 text-[9px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${settingsSection === s ? 'bg-gray-800 text-white' : 'text-gray-600'}`}>
-                            {s === 'general' ? 'מידע כללי' : s === 'infrastructure' ? 'מיקומים ואימונים' : s === 'quotes' ? 'מוטיבציה' : 'חיבורים'}
+                            {s === 'general' ? 'מידע כללי' : s === 'infrastructure' ? 'מיקומים' : s === 'quotes' ? 'מוטיבציה' : s === 'connections' ? 'חיבורים' : 'תצוגות'}
                         </button>
                     ))}
                 </div>
@@ -369,18 +304,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                 {settingsSection === 'infrastructure' && (
                     <div className="space-y-8">
-                        <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4">
+                        <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4 shadow-2xl">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="text-white font-black uppercase italic tracking-widest">מיקומים 📍</h4>
                                 <Button onClick={handleAddLocation} size="sm" variant="secondary">הוסף מיקום</Button>
                             </div>
                             <div className="grid gap-4">
                                 {props.locations.map(loc => (
-                                    <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[30px] border border-white/5 flex flex-col gap-4 group">
+                                    <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[30px] border border-white/5 flex flex-col gap-4">
                                         <div className="flex justify-between items-start">
                                             <div className="flex-1 space-y-2">
-                                                <input className="w-full bg-transparent text-white font-black text-lg outline-none focus:text-brand-primary italic" value={loc.name} placeholder="שם המיקום" onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} />
-                                                <input className="w-full bg-transparent text-xs text-gray-500 outline-none focus:text-white font-bold" value={loc.address} placeholder="כתובת (Waze)" onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} />
+                                                <label className="text-[9px] text-gray-600 font-black uppercase block">שם</label>
+                                                <input className="w-full bg-transparent text-white font-black text-lg outline-none focus:text-brand-primary italic border-b border-white/5 pb-1" value={loc.name} onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} />
+                                                <label className="text-[9px] text-gray-600 font-black uppercase block mt-2">כתובת / Waze</label>
+                                                <input className="w-full bg-transparent text-xs text-gray-500 outline-none focus:text-white font-bold" value={loc.address} onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} />
                                             </div>
                                             <button onClick={() => { if(confirm('למחוק מיקום?')) props.onUpdateLocations(props.locations.filter(l => l.id !== loc.id)) }} className="text-red-500/30 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>
                                         </div>
@@ -388,7 +325,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 ))}
                             </div>
                         </div>
-                        <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4">
+                        <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4 shadow-2xl">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="text-white font-black uppercase italic tracking-widest">סוגי אימון 🏋️</h4>
                                 <Button onClick={handleAddWorkoutType} size="sm" variant="secondary">הוסף אימון</Button>
@@ -410,7 +347,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 )}
 
                 {settingsSection === 'quotes' && (
-                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-6">
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-6 shadow-2xl">
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="text-white font-black uppercase italic tracking-widest">משפטי מוטיבציה 🧠</h4>
                             <Button onClick={handleAddQuote} size="sm" variant="secondary">הוסף משפט</Button>
@@ -429,36 +366,49 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 {settingsSection === 'connections' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ואינטגרציות 🔌</h3>
-                        
                         <div className="bg-blue-900/10 border border-blue-500/20 p-6 rounded-[30px] space-y-4">
                             <h4 className="text-blue-400 font-black text-sm uppercase">Supabase (בסיס נתונים)</h4>
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                החיבור ל-Supabase מאפשר שמירה עמידה של נתוני המתאמנים והאימונים בענן. 
-                                נכון לעכשיו האפליקציה משתמשת בחיבור ברירת מחדל.
+                                החיבור ל-Supabase מאפשר שמירה עמידה של נתוני המתאמנים והאימונים בענן.
                             </p>
                             <div className="space-y-2">
-                                <label className="text-[10px] text-gray-500 uppercase font-black block">Supabase URL</label>
-                                <input className="w-full bg-gray-900 border border-white/5 p-3 rounded-xl text-white font-mono text-xs" readOnly value="xjqlluobnzpgpttprmio.supabase.co" />
+                                <label className="text-[10px] text-gray-500 uppercase font-black block">מצב חיבור:</label>
+                                <p className="text-xs text-green-500 font-black">פעיל - xjqlluobnzpgpttprmio.supabase.co ✅</p>
                             </div>
                         </div>
-
                         <div className="bg-red-900/10 border border-red-500/20 p-6 rounded-[30px] space-y-4">
                             <h4 className="text-red-400 font-black text-sm uppercase">Google Gemini AI</h4>
                             <p className="text-xs text-gray-400 leading-relaxed">
-                                האפליקציה משתמשת ב-Gemini 1.5 Flash ליצירת תיאורי אימון ומשפטי מוטיבציה באופן אוטומטי.
-                                ה-API Key מוגדר כמשתנה סביבה (Environment Variable).
+                                האפליקציה משתמשת ב-Gemini 3.0 Flash ליצירת תיאורי אימון ומשפטי מוטיבציה באופן אוטומטי.
                             </p>
                             <div className="bg-black/40 p-4 rounded-xl border border-white/5">
                                 <p className="text-[10px] text-gray-500 uppercase font-black mb-1">מצב חיבור:</p>
                                 <p className="text-xs text-green-500 font-black">פעיל - API Key מזוהה ✅</p>
                             </div>
                         </div>
+                    </div>
+                )}
 
-                        <div className="bg-gray-900/50 p-6 rounded-[30px] space-y-4 border border-white/5">
-                            <h4 className="text-white font-black text-sm uppercase">WhatsApp Cloud API (עתידי)</h4>
-                            <p className="text-xs text-gray-400 leading-relaxed italic">
-                                בקרוב: אפשרות לשליחת התראות אוטומטיות לווטסאפ של המתאמנים על הרשמה או ביטול אימון.
-                            </p>
+                {settingsSection === 'views' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">קישורים לשיתוף 🔗</h3>
+                        <div className="grid gap-6">
+                            <div className="bg-brand-primary/10 border border-brand-primary/20 p-8 rounded-[40px] flex flex-col items-center gap-4 group hover:bg-brand-primary/20 transition-all cursor-pointer" onClick={() => shareView('work')}>
+                                <div className="text-5xl">🏋️</div>
+                                <div className="text-center">
+                                    <h4 className="text-brand-primary font-black uppercase italic text-xl">תצוגת מתאמן</h4>
+                                    <p className="text-xs text-gray-500 mt-1">לוח אימונים, הרשמה ופרופיל אישי</p>
+                                </div>
+                                <Button className="w-full bg-brand-primary text-black py-4 rounded-2xl">שתף קישור מתאמנים 📤</Button>
+                            </div>
+                            <div className="bg-red-600/10 border border-red-600/20 p-8 rounded-[40px] flex flex-col items-center gap-4 group hover:bg-red-600/20 transition-all cursor-pointer" onClick={() => shareView('admin')}>
+                                <div className="text-5xl">⚙️</div>
+                                <div className="text-center">
+                                    <h4 className="text-red-500 font-black uppercase italic text-xl">תצוגת מאמן</h4>
+                                    <p className="text-xs text-gray-500 mt-1">ניהול נוכחות, מתאמנים והגדרות מערכת</p>
+                                </div>
+                                <Button className="w-full bg-red-600 text-white py-4 rounded-2xl">שתף קישור מאמן 📤</Button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -480,10 +430,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                      {/* Left Side: Trainee List with Search and Add */}
                       <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[600px] overflow-y-auto no-scrollbar border border-white/5 space-y-4">
                         <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">נוכחות ({attendanceSession.registeredPhoneNumbers.length})</p>
-                        
                         <div className="relative">
                             <input 
                                 type="text" 
@@ -514,7 +462,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 </div>
                             )}
                         </div>
-
                         <div className="space-y-2">
                             {attendanceSession.registeredPhoneNumbers.map(phone => {
                                 const u = props.users.find(user => normalizePhone(user.phone) === normalizePhone(phone));
@@ -534,8 +481,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             })}
                         </div>
                       </div>
-
-                      {/* Right Side: Session Details */}
                       <div className="space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">סוג</label>
@@ -557,37 +502,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">דגשים למתאמנים</label>
                             <textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24 text-sm leading-relaxed" value={attendanceSession.description || ''} onChange={e=>setAttendanceSession({...attendanceSession, description: e.target.value})} placeholder="כתוב כאן דגשים..."></textarea>
                         </div>
-
                         <div className="grid grid-cols-3 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isZoom" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isZoomSession || false} onChange={e=>setAttendanceSession({...attendanceSession, isZoomSession: e.target.checked})} />
-                                <label htmlFor="isZoom" className="text-blue-400 text-[9px] font-black uppercase">זום 💻</label>
+                                <label htmlFor="isZoom" className="text-blue-400 text-[9px] font-black uppercase cursor-pointer">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isHidden" className="w-4 h-4 accent-orange-500" checked={attendanceSession.isHidden || false} onChange={e=>setAttendanceSession({...attendanceSession, isHidden: e.target.checked})} />
-                                <label htmlFor="isHidden" className="text-orange-400 text-[9px] font-black uppercase">נסתר 👁️‍🗨️</label>
+                                <label htmlFor="isHidden" className="text-orange-400 text-[9px] font-black uppercase cursor-pointer">נסתר 👁️‍🗨️</label>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isCancelled" className="w-4 h-4 accent-red-500" checked={attendanceSession.isCancelled || false} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
-                                <label htmlFor="isCancelled" className="text-red-500 text-[9px] font-black uppercase">מבוטל ❌</label>
+                                <label htmlFor="isCancelled" className="text-red-500 text-[9px] font-black uppercase cursor-pointer">מבוטל ❌</label>
                             </div>
                         </div>
-
                         {attendanceSession.isZoomSession && (
                             <div className="space-y-1">
                                 <label className="text-[10px] text-blue-500 font-black uppercase px-2">לינק לזום</label>
                                 <input className="w-full bg-blue-900/10 border border-blue-500/20 p-4 rounded-2xl text-white font-mono text-xs" value={attendanceSession.zoomLink || ''} onChange={e=>setAttendanceSession({...attendanceSession, zoomLink: e.target.value})} placeholder="https://zoom.us/..." />
                             </div>
                         )}
-
                         <div className="flex items-center gap-3 bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20">
                             <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted || false} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
-                            <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase">אימון מתקיים ✓</label>
+                            <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase cursor-pointer">אימון מתקיים ✓</label>
                         </div>
                       </div>
                   </div>
                   <div className="mt-8 flex gap-4">
-                      <Button onClick={()=>{ if (attendanceSession.id.length > 15) props.onAddSession(attendanceSession); else props.onUpdateSession(attendanceSession); setAttendanceSession(null); }} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
+                      <Button onClick={()=>{ const isNew = !props.sessions.find(s => s.id === attendanceSession.id); if (isNew) props.onAddSession(attendanceSession); else props.onUpdateSession(attendanceSession); setAttendanceSession(null); }} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
                       <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-10 rounded-[45px]">מחק 🗑️</Button>
                   </div>
               </div>
