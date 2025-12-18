@@ -108,7 +108,7 @@ export const dataService = {
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
-        if (error) console.error("Supabase Session Update Error:", error);
+        if (error) console.error("Supabase Update Session Error:", error);
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
       localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.map(s => s.id === id ? {id, ...data} : s)));
