@@ -313,8 +313,8 @@ const App: React.FC = () => {
                   return (
                       <div key={ds} className="relative">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
-                             <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
-                             <p className={`text-4xl font-black italic tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'} opacity-30`}>{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
+                             <h2 className={`text-4xl sm:text-5xl font-black italic uppercase tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
+                             <p className={`text-4xl sm:text-5xl font-black italic tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'} opacity-30`}>{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                               {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
