@@ -65,7 +65,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
   const statusBg = isCancelled 
     ? 'bg-red-600 border-2 border-white shadow-[0_0_15px_rgba(239,68,68,0.8)]' 
-    : (isFinished ? 'bg-gray-600 text-gray-300' 
+    : (isFinished ? 'bg-gray-600 text-gray-100' 
     : (isHappening && isZoom 
         ? 'bg-gradient-to-r from-brand-primary to-blue-500' 
         : (isHappening ? 'bg-brand-primary' : (isZoom ? 'bg-blue-500' : 'bg-gray-700'))));
@@ -82,7 +82,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       style={{ borderColor: borderColor }}
     >
       <div className="absolute -top-3 -left-1 flex gap-1 z-20">
-         <div className={`${statusBg} ${isFinished ? 'text-gray-300' : 'text-white sm:text-black'} text-[10px] sm:text-[13px] font-black px-3 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-2xl flex items-center gap-1.5 uppercase italic tracking-tighter`}>
+         <div className={`${statusBg} ${isFinished ? 'text-gray-200' : 'text-white sm:text-black'} text-[10px] sm:text-[13px] font-black px-3 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-2xl flex items-center gap-1.5 uppercase italic tracking-tighter`}>
             {isHappening && !isCancelled && !isFinished && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
             {statusLabel}
          </div>
@@ -90,7 +90,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
       <div>
         <div className="flex justify-between items-start mb-2 sm:mb-6">
-           <span className={`text-2xl sm:text-5xl font-black font-mono italic leading-none transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600 line-through' : 'text-white'}`}>{session.time}</span>
+           <span className={`text-2xl sm:text-5xl font-black font-mono italic leading-none transition-colors duration-500 ${isCancelled ? 'text-gray-600 line-through' : (isFinished ? 'text-gray-500' : 'text-white')}`}>{session.time}</span>
            {hourlyWeather && (
                <div className="flex flex-col items-end opacity-40">
                   <span className="text-lg sm:text-2xl">{getWeatherIcon(hourlyWeather.weatherCode)}</span>

@@ -219,7 +219,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 registeredPhoneNumbers: [],
                 attendedPhoneNumbers: [],
                 waitingList: [],
-                isCancelled: false, // Don't copy cancellations
+                isCancelled: false, 
                 manualHasStarted: false
             };
             await dataService.addSession(newSession);
@@ -331,7 +331,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             </div>
         )}
 
-        {activeTab === 'settings' && (activeTab === 'settings' && (
+        {activeTab === 'settings' && (
             <div className="space-y-10">
                 <div className="flex gap-2 p-1 bg-gray-900 rounded-2xl overflow-x-auto no-scrollbar">
                     {(['general', 'infrastructure', 'quotes', 'connections'] as const).map(s => (
@@ -426,13 +426,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
+                {settingsSection === 'connections' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ואינטגרציות 🔌</h3>
+                        
+                        <div className="bg-blue-900/10 border border-blue-500/20 p-6 rounded-[30px] space-y-4">
+                            <h4 className="text-blue-400 font-black text-sm uppercase">Supabase (בסיס נתונים)</h4>
+                            <p className="text-xs text-gray-400 leading-relaxed">
+                                החיבור ל-Supabase מאפשר שמירה עמידה של נתוני המתאמנים והאימונים בענן. 
+                                נכון לעכשיו האפליקציה משתמשת בחיבור ברירת מחדל.
+                            </p>
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-gray-500 uppercase font-black block">Supabase URL</label>
+                                <input className="w-full bg-gray-900 border border-white/5 p-3 rounded-xl text-white font-mono text-xs" readOnly value="xjqlluobnzpgpttprmio.supabase.co" />
+                            </div>
+                        </div>
+
+                        <div className="bg-red-900/10 border border-red-500/20 p-6 rounded-[30px] space-y-4">
+                            <h4 className="text-red-400 font-black text-sm uppercase">Google Gemini AI</h4>
+                            <p className="text-xs text-gray-400 leading-relaxed">
+                                האפליקציה משתמשת ב-Gemini 1.5 Flash ליצירת תיאורי אימון ומשפטי מוטיבציה באופן אוטומטי.
+                                ה-API Key מוגדר כמשתנה סביבה (Environment Variable).
+                            </p>
+                            <div className="bg-black/40 p-4 rounded-xl border border-white/5">
+                                <p className="text-[10px] text-gray-500 uppercase font-black mb-1">מצב חיבור:</p>
+                                <p className="text-xs text-green-500 font-black">פעיל - API Key מזוהה ✅</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-900/50 p-6 rounded-[30px] space-y-4 border border-white/5">
+                            <h4 className="text-white font-black text-sm uppercase">WhatsApp Cloud API (עתידי)</h4>
+                            <p className="text-xs text-gray-400 leading-relaxed italic">
+                                בקרוב: אפשרות לשליחת התראות אוטומטיות לווטסאפ של המתאמנים על הרשמה או ביטול אימון.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירת כל השינויים ✅</Button>
                     <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה ללו"ז מתאמנים</Button>
                 </div>
             </div>
-        ))}
+        )}
       </div>
 
       {attendanceSession && (

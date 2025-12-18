@@ -114,14 +114,18 @@ const App: React.FC = () => {
           }
       }
       setCurrentView(view);
-      let newUrl = window.location.origin;
-      if (view === 'admin') newUrl += '/?mode=admin';
-      else if (view === 'work') newUrl += '/?mode=work';
       
-      try {
-          window.history.pushState({}, '', newUrl);
-      } catch (e) {
-          console.warn("History pushState failed, likely due to preview environment constraints.");
+      // Fix for SecurityError on blob URLs or sandboxed environments
+      const isBlob = window.location.protocol === 'blob:';
+      if (!isBlob) {
+          try {
+              let newUrl = window.location.origin + window.location.pathname;
+              if (view === 'admin') newUrl += '?mode=admin';
+              else if (view === 'work') newUrl += '?mode=work';
+              window.history.pushState({}, '', newUrl);
+          } catch (e) {
+              console.warn("History API navigation failed, continuing without URL update.");
+          }
       }
   };
 
@@ -207,10 +211,11 @@ const App: React.FC = () => {
           setTimeout(() => {
             const el = document.getElementById(`day-${todayStr}`);
             if (el) {
+                // Increased scroll margin to ensure the day header remains fully visible below the sticky nav
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 setHasScrolledToToday(true);
             }
-          }, 500);
+          }, 600);
       }
   }, [sessions, todayStr, isAdminMode, isLanding, hasScrolledToToday]);
 
@@ -221,13 +226,13 @@ const App: React.FC = () => {
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
 
-      // Check if session is finished (1.5 hours after start)
+      // Restrict interaction with finished sessions for trainees
       const now = new Date();
       const sessionStart = new Date(`${session.date}T${session.time}`);
       const diffMs = sessionStart.getTime() - now.getTime();
       const diffHours = diffMs / (1000 * 60 * 60);
       if (diffHours <= -1.5) {
-          alert('לא ניתן להירשם או לבטל אימון שהסתיים');
+          alert('לא ניתן לבצע שינויים באימון שהסתיים.');
           return;
       }
 
@@ -341,7 +346,7 @@ const App: React.FC = () => {
                   const ds = d.toISOString().split('T')[0];
                   const daySessions = sessions.filter(s => s.date === ds && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                   return (
-                      <div key={ds} id={`day-${ds}`} className="relative scroll-mt-40">
+                      <div key={ds} id={`day-${ds}`} className="relative scroll-mt-[220px]">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
                              <h2 className={`text-4xl sm:text-5xl font-black italic uppercase tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
                              <p className={`text-4xl sm:text-5xl font-black italic tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'} opacity-30`}>{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
