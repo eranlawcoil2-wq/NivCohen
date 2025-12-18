@@ -33,9 +33,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 }) => {
   const registeredCount = session.registeredPhoneNumbers.length;
   const isFull = registeredCount >= session.maxCapacity;
-  const isCancelled = session.isCancelled || false;
-  const isZoom = session.isZoomSession || !!session.zoomLink;
-  const isPersonal = session.isPersonalTraining || false;
+  const isCancelled = !!session.isCancelled;
+  const isZoom = !!session.isZoomSession || !!session.zoomLink;
+  const isPersonal = !!session.isPersonalTraining;
   
   const sessionHour = session.time.split(':')[0];
   const hourlyWeather = weather?.hourly?.[sessionHour];
@@ -62,7 +62,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   else if (isFinished) borderColor = '#374151'; 
   else if (isHappening && isZoom) borderColor = '#3B82F6';
   else if (isHappening) borderColor = '#A3E635';
-  else if (isPersonal) borderColor = '#A855F7'; // Purple border for personal training
+  else if (isPersonal) borderColor = '#A855F7'; 
   else if (isZoom) borderColor = '#3B82F6';
 
   const statusBg = isCancelled 
@@ -73,17 +73,16 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         : (isHappening ? 'bg-brand-primary' : (isPersonal ? 'bg-purple-600' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')))));
   
   const statusLabel = isCancelled 
-    ? 'בוטל' 
+    ? 'בוטל ❌' 
     : (isFinished ? 'הסתיים' 
-    : (isHappening ? (isZoom ? 'חי + זום' : 'מתקיים') : (isPersonal ? 'אימון אישי 🏆' : (isZoom ? 'זום' : 'מתוכנן'))));
+    : (isHappening ? (isZoom ? 'חי + זום 💻' : 'מתקיים') : (isPersonal ? 'אימון אישי 🏆' : (isZoom ? 'זום 💻' : 'מתוכנן'))));
 
-  // Get trainee names for personal training sessions in admin mode
   const traineeNames = isAdmin && isPersonal 
     ? session.registeredPhoneNumbers.map(phone => {
+        const up = phone.replace(/\D/g, '');
         const u = allUsers.find(user => {
-            const up = user.phone.replace(/\D/g, '');
-            const sp = phone.replace(/\D/g, '');
-            return up.endsWith(sp.slice(-9)) || sp.endsWith(up.slice(-9));
+            const userP = user.phone.replace(/\D/g, '');
+            return userP.endsWith(up.slice(-9));
         });
         return u ? (u.displayName || u.fullName.split(' ')[0]) : phone;
       }).join(', ')
@@ -92,7 +91,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
-      className={`relative rounded-[30px] sm:rounded-[40px] p-4 sm:p-8 border-2 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-2xl ${(isCancelled || isFinished) ? 'opacity-50' : 'bg-gray-800/80 backdrop-blur-sm'}`}
+      className={`relative rounded-[30px] sm:rounded-[40px] p-4 sm:p-8 border-2 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-2xl ${(isCancelled || isFinished) ? 'opacity-80' : 'bg-gray-800/80 backdrop-blur-sm'}`}
       style={{ borderColor: borderColor }}
     >
       <div className="absolute -top-3 -left-1 flex gap-1 z-20">
@@ -100,14 +99,11 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             {isHappening && !isCancelled && !isFinished && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
             {statusLabel}
          </div>
-         {isPersonal && !isCancelled && !isFinished && (
-            <div className="bg-purple-500 text-white text-[9px] font-black px-3 py-1.5 rounded-full shadow-lg">אישי</div>
-         )}
       </div>
 
       <div>
         <div className="flex justify-between items-start mb-2 sm:mb-6">
-           <span className={`text-2xl sm:text-5xl font-black font-mono italic leading-none transition-colors duration-500 ${isCancelled ? 'text-gray-600 line-through' : (isFinished ? 'text-gray-500' : 'text-white')}`}>{session.time}</span>
+           <span className={`text-2xl sm:text-5xl font-black font-mono italic leading-none transition-colors duration-500 ${isCancelled ? 'text-red-500 line-through opacity-50' : (isFinished ? 'text-gray-500' : 'text-white')}`}>{session.time}</span>
            {hourlyWeather && (
                <div className="flex flex-col items-end opacity-40">
                   <span className="text-lg sm:text-2xl">{getWeatherIcon(hourlyWeather.weatherCode)}</span>
@@ -115,7 +111,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                </div>
            )}
         </div>
-        <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600' : (isPersonal ? 'text-purple-400' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white')))}`}>{session.type}</h3>
+        <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600' : (isPersonal ? 'text-purple-400' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white')))}`}>
+            {isZoom && <span className="mr-1">📹</span>}
+            {session.type}
+        </h3>
         <p className={`text-[8px] sm:text-[12px] font-black truncate mb-3 sm:mb-6 uppercase tracking-tighter transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location.split(',')[0]}</p>
         
         {isAdmin && isPersonal && traineeNames && (
@@ -135,7 +134,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       <div className="space-y-2 sm:space-y-4">
         <div className="flex justify-between items-center text-[8px] sm:text-[10px] font-black uppercase tracking-widest border-b border-gray-800/50 pb-1 sm:pb-2">
            <span className={(isFull && !isRegistered && !isFinished) ? 'text-red-500' : 'text-gray-500'}>{registeredCount}/{session.maxCapacity}</span>
-           {isRegistered && !isCancelled && !isFinished && !isAdmin && <span className="text-brand-primary">✓</span>}
+           {isRegistered && !isCancelled && !isFinished && !isAdmin && <span className="text-brand-primary">✓ רשום</span>}
         </div>
         
         {!isAdmin ? (
@@ -156,7 +155,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                     </button>
                 </div>
                 <Button size="sm" variant={isRegistered ? 'outline' : 'primary'} className={`w-full text-[9px] sm:text-[12px] py-2 sm:py-5 font-black italic uppercase rounded-2xl sm:rounded-[30px] shadow-xl ${(isCancelled || isFinished) ? 'bg-gray-700 border-transparent text-gray-500' : ''}`} onClick={(e) => { e.stopPropagation(); onRegisterClick(session.id); }} disabled={isCancelled || isFinished || (isFull && !isRegistered)}>
-                {isFinished ? 'הסתיים' : (isRegistered ? 'ביטול' : (isFull ? 'מלא' : 'הרשם'))}
+                {isCancelled ? 'בוטל' : (isFinished ? 'הסתיים' : (isRegistered ? 'ביטול הרשמה' : (isFull ? 'מלא' : 'הרשם עכשיו ⚡')))}
                 </Button>
             </div>
         ) : (

@@ -39,7 +39,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [sessionDraft, setSessionDraft] = useState<TrainingSession | null>(null);
 
   useEffect(() => {
-    if (attendanceSession) setSessionDraft({ ...attendanceSession, isPersonalTraining: !!attendanceSession.isPersonalTraining });
+    if (attendanceSession) setSessionDraft({ ...attendanceSession });
     else setSessionDraft(null);
   }, [attendanceSession]);
 
@@ -88,7 +88,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
   const getWhatsAppMsg = (session: TrainingSession) => {
     const dateStr = new Date(session.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
-    return `*עדכון אימון - ניב כהן* 🏋️\n\n🔥 סוג: ${session.type}\n🕒 שעה: ${session.time}\n📅 תאריך: ${dateStr}\n📍 מיקום: ${session.location}\n\n*דגשים:* \n${session.description || 'אין דגשים מיוחדים'}\n\nנתראה שם! 💪`;
+    const zoomText = session.isZoomSession ? '💻 אימון בזום' : '';
+    const personalText = session.isPersonalTraining ? '🏆 אימון אישי' : '';
+    return `*עדכון אימון - ניב כהן* 🏋️\n\n${personalText}\n🔥 סוג: ${session.type} ${zoomText}\n🕒 שעה: ${session.time}\n📅 תאריך: ${dateStr}\n📍 מיקום: ${session.location}\n\n*דגשים:* \n${session.description || 'אין דגשים מיוחדים'}\n\nנתראה שם! 💪`;
   };
 
   const copyToClipboard = (text: string) => {
@@ -184,7 +186,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           </div>
         )}
 
-        {activeTab === 'users' && (
+        {activeTab === 'users' && (activeTab === 'users' && (
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-center">
                     <input type="text" placeholder="חיפוש מתאמן..." className="flex-1 bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
@@ -214,7 +216,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     )})}
                 </div>
             </div>
-        )}
+        ))}
 
         {activeTab === 'settings' && (
             <div className="space-y-10 mt-6">
@@ -254,19 +256,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
-                {settingsSection === 'quotes' && (
-                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                      <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מוטיבציה 💪</h3>
-                      <div className="space-y-4">
-                          {props.quotes.map(q => (
-                              <div key={q.id} className="bg-gray-900/50 p-4 rounded-2xl flex justify-between items-center">
-                                  <span className="text-white italic">"{q.text}"</span>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-                )}
-
                 {settingsSection === 'views' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">קישורי תצוגה מהירים 🔗</h3>
@@ -281,7 +270,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         <p className="text-[10px] text-red-500 font-black uppercase mb-1">{link.title}</p>
                                         <p className="text-white text-xs opacity-40 truncate max-w-[200px] font-mono">{link.url}</p>
                                     </div>
-                                    <Button onClick={() => copyToClipboard(link.url)} size="sm" variant="secondary" className="rounded-2xl">העתק קישור</Button>
+                                    <Button onClick={() => copyToClipboard(link.url)} size="sm" variant="secondary" className="rounded-2xl">העתק</Button>
                                 </div>
                             ))}
                         </div>
@@ -289,7 +278,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4 mb-4">ניהול סוגי אימון 🎨</h3>
                             <div className="flex justify-between items-center mb-4">
                                 <p className="text-[10px] text-gray-500 font-black uppercase">רשימת סוגי אימון</p>
-                                <Button onClick={() => { const n = prompt('סוג אימון חדש:'); if(n) setLocalWorkoutTypes([...localWorkoutTypes, n]); }} size="sm" variant="secondary">הוסף סוג</Button>
+                                <Button onClick={() => { const n = prompt('סוג אימון חדש:'); if(n) setLocalWorkoutTypes([...localWorkoutTypes, n]); }} size="sm" variant="secondary">הוסף</Button>
                             </div>
                             <div className="grid gap-2">
                                 {localWorkoutTypes.map((type, idx) => (
@@ -303,31 +292,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
-                {settingsSection === 'connections' && (
-                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ומערכות 🔌</h3>
-                        <div className="space-y-6">
-                            <div className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5">
-                                <p className="text-brand-primary font-black uppercase text-[10px] mb-2">Supabase Database 🗄️</p>
-                                <p className="text-gray-400 text-xs mb-4">כאן מחברים את מסד הנתונים לשמירה קבועה בענן.</p>
-                                <div className="space-y-4">
-                                    <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="Supabase URL" defaultValue="https://xjqlluobnzpgpttprmio.supabase.co" />
-                                    <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="Supabase Anon Key" defaultValue="sb_publishable_WyvAmRCYPahTpaQAwqiyjQ_NEGFK5wN" />
-                                </div>
-                            </div>
-                            <div className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5">
-                                <p className="text-brand-primary font-black uppercase text-[10px] mb-2">Gemini AI API Key 🤖</p>
-                                <p className="text-gray-400 text-xs mb-4">מפתח לבינה מלאכותית ליצירת תיאורי אימון ומשפטי מוטיבציה.</p>
-                                <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="Gemini API Key" value={process.env.API_KEY || ''} disabled />
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
-                    {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
-                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירת כל השינויים ✅</Button>
-                    <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה ללו"ז מתאמנים</Button>
+                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירה ✅</Button>
+                    <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה</Button>
                 </div>
             </div>
         )}
@@ -400,10 +367,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                         <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">דגשים למתאמנים (פוש וואטסאפ)</label><textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24 text-sm" value={sessionDraft.description || ''} onChange={e=>setSessionDraft({...sessionDraft, description: e.target.value})} placeholder="כתוב כאן דגשים לאימון..."></textarea></div>
                         <Button onClick={handleShareToWhatsAppGroup} className="w-full bg-green-600 py-3 rounded-2xl text-xs flex items-center gap-2 justify-center">שלח פוש לקבוצה 📢 ✅</Button>
-                        <div className="grid grid-cols-3 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
+                        <div className="grid grid-cols-2 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={!!sessionDraft.isPersonalTraining} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: !!e.target.checked})} />
                                 <label htmlFor="isPersonalDraft" className="text-purple-400 text-[10px] font-black uppercase cursor-pointer">אישי 🏆</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500 cursor-pointer" checked={!!sessionDraft.isZoomSession} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: !!e.target.checked})} />
+                                <label htmlFor="isZoomDraft" className="text-blue-500 text-[10px] font-black uppercase cursor-pointer">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: !!e.target.checked})} />
@@ -419,10 +390,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   <div className="mt-12 flex gap-4">
                       <Button onClick={()=>{ 
                           const isNew = !props.sessions.find(s => s.id === sessionDraft.id);
-                          // Ensure we explicitly send booleans
                           const finalSession = {
                             ...sessionDraft,
                             isPersonalTraining: !!sessionDraft.isPersonalTraining,
+                            isZoomSession: !!sessionDraft.isZoomSession,
                             isCancelled: !!sessionDraft.isCancelled,
                             manualHasStarted: !!sessionDraft.manualHasStarted
                           };
