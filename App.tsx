@@ -69,13 +69,17 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
-  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(() => {
+  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin' | 'CHAMP'>(() => {
     const params = new URLSearchParams(window.location.search);
-    return (params.get('mode') as any) || 'landing';
+    const mode = params.get('mode');
+    if (mode === 'CHAMP') return 'CHAMP';
+    return (mode as any) || 'landing';
   });
 
   const isAdminMode = currentView === 'admin';
   const isLanding = currentView === 'landing';
+  const isChampMode = currentView === 'CHAMP';
+  
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => localStorage.getItem('niv_admin_auth') === 'true');
   const [showUrgent, setShowUrgent] = useState(true);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
@@ -103,7 +107,7 @@ const App: React.FC = () => {
       await dataService.updateUser(updated);
   };
 
-  const navigateTo = (view: 'landing' | 'work' | 'admin') => {
+  const navigateTo = (view: 'landing' | 'work' | 'admin' | 'CHAMP') => {
       if (view === 'admin' && !isAdminAuthenticated) {
           const pass = prompt('קוד גישה למאמן:');
           if(pass === (appConfig.coachAdditionalPhone || 'admin')) {
@@ -121,6 +125,7 @@ const App: React.FC = () => {
               let newUrl = window.location.origin + window.location.pathname;
               if (view === 'admin') newUrl += '?mode=admin';
               else if (view === 'work') newUrl += '?mode=work';
+              else if (view === 'CHAMP') newUrl += '?mode=CHAMP';
               window.history.pushState({}, '', newUrl);
           } catch (e) {
               console.warn("History pushState failed, using local state navigation only.");
@@ -210,7 +215,6 @@ const App: React.FC = () => {
           setTimeout(() => {
             const el = document.getElementById(`day-${todayStr}`);
             if (el) {
-                // Ensure header doesn't hide the day title
                 el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 setHasScrolledToToday(true);
             }
@@ -301,6 +305,7 @@ const App: React.FC = () => {
               <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group select-none active:scale-95 transition-transform">
                   <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[14px] sm:text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
+                  {isChampMode && <p className="text-[10px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
               </div>
               <div className="flex items-center gap-4">
                   <button onClick={() => setCurrentView('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>
@@ -312,12 +317,21 @@ const App: React.FC = () => {
                   )}
               </div>
           </div>
-          {currentUser && !isAdminMode && (
+          {currentUser && !isAdminMode && !isChampMode && (
               <div className="grid grid-cols-4 gap-2">
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">החודש</p><p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p></div>
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl leading-none">{stats.record}</p></div>
                   <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p></div>
                   <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg font-bold leading-none truncate w-full">{(monthLeader.name as string)}</p></div>
+              </div>
+          )}
+          {isChampMode && currentUser && (
+              <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex justify-between items-center">
+                  <p className="text-white font-black italic">היי {currentUser.displayName || currentUser.fullName}, הנה האימונים האישיים שלך 🏆</p>
+                  <div className="text-center">
+                      <p className="text-[8px] text-gray-500 uppercase">סה"כ</p>
+                      <p className="text-xl font-black text-brand-primary leading-none">{sessions.filter(s => s.isPersonalTraining && s.registeredPhoneNumbers.includes(normalizePhone(currentUser.phone))).length}</p>
+                  </div>
               </div>
           )}
       </header>
@@ -343,10 +357,22 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-16 pb-20">
-              {Array.from({length:7}, (_,i) => {
+              {Array.from({length:14}, (_,i) => {
                   const d = new Date(); d.setHours(12, 0, 0, 0); const dow = d.getDay(); d.setDate(d.getDate() - dow + i);
                   const ds = d.toISOString().split('T')[0];
-                  const daySessions = sessions.filter(s => s.date === ds && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
+                  
+                  let daySessions = sessions.filter(s => s.date === ds).sort((a,b)=>a.time.localeCompare(b.time));
+                  
+                  if (isChampMode) {
+                      // CHAMP mode shows only personal trainings where trainee is invited
+                      daySessions = daySessions.filter(s => s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)));
+                  } else {
+                      // Regular trainee view hides hidden/personal sessions unless already registered
+                      daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining);
+                  }
+
+                  if (isChampMode && daySessions.length === 0) return null;
+
                   return (
                       <div key={ds} id={`day-${ds}`} className="relative scroll-mt-[220px]">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
@@ -355,7 +381,7 @@ const App: React.FC = () => {
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                               {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[ds]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
-                              {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
+                              {daySessions.length === 0 && !isChampMode && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                           </div>
                       </div>
                   );
@@ -464,7 +490,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {isLanding && <WhatsAppButton phone={appConfig.coachPhone} />}
+      {(isLanding || isChampMode) && <WhatsAppButton phone={appConfig.coachPhone} />}
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
               <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>

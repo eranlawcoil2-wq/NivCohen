@@ -35,6 +35,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const isFull = registeredCount >= session.maxCapacity;
   const isCancelled = session.isCancelled || false;
   const isZoom = session.isZoomSession || !!session.zoomLink;
+  const isPersonal = session.isPersonalTraining || false;
   
   const sessionHour = session.time.split(':')[0];
   const hourlyWeather = weather?.hourly?.[sessionHour];
@@ -58,22 +59,31 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
   let borderColor = isAdmin ? '#EF4444' : '#333';
   if (isCancelled) borderColor = '#EF4444';
-  else if (isFinished) borderColor = '#374151'; // Dimmed border
+  else if (isFinished) borderColor = '#374151'; 
   else if (isHappening && isZoom) borderColor = '#3B82F6';
   else if (isHappening) borderColor = '#A3E635';
+  else if (isPersonal) borderColor = '#3B82F6';
   else if (isZoom) borderColor = '#3B82F6';
 
   const statusBg = isCancelled 
     ? 'bg-red-600 border-2 border-white shadow-[0_0_15px_rgba(239,68,68,0.8)]' 
-    : (isFinished ? 'bg-gray-600 text-gray-100' 
+    : (isFinished ? 'bg-gray-600 text-gray-200' 
     : (isHappening && isZoom 
         ? 'bg-gradient-to-r from-brand-primary to-blue-500' 
-        : (isHappening ? 'bg-brand-primary' : (isZoom ? 'bg-blue-500' : 'bg-gray-700'))));
+        : (isHappening ? 'bg-brand-primary' : (isPersonal ? 'bg-blue-600' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')))));
   
   const statusLabel = isCancelled 
     ? 'בוטל' 
     : (isFinished ? 'הסתיים' 
-    : (isHappening ? (isZoom ? 'חי + זום' : 'מתקיים') : (isZoom ? 'זום' : 'מתוכנן')));
+    : (isHappening ? (isZoom ? 'חי + זום' : 'מתקיים') : (isPersonal ? 'אימון אישי 🏆' : (isZoom ? 'זום' : 'מתוכנן'))));
+
+  // Get trainee names for personal training sessions in admin mode
+  const traineeNames = isAdmin && isPersonal 
+    ? session.registeredPhoneNumbers.map(phone => {
+        const u = allUsers.find(user => user.phone.replace(/\D/g, '').endsWith(phone.replace(/\D/g, '').slice(-9)));
+        return u ? (u.displayName || u.fullName.split(' ')[0]) : phone;
+      }).join(', ')
+    : '';
 
   return (
     <div 
@@ -98,9 +108,16 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                </div>
            )}
         </div>
-        <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white'))}`}>{session.type}</h3>
+        <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600' : (isPersonal ? 'text-blue-400' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white')))}`}>{session.type}</h3>
         <p className={`text-[8px] sm:text-[12px] font-black truncate mb-3 sm:mb-6 uppercase tracking-tighter transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location.split(',')[0]}</p>
         
+        {isAdmin && isPersonal && traineeNames && (
+            <div className="bg-blue-500/10 border-r-2 border-blue-500 p-2 rounded-l-lg mb-3">
+                <p className="text-blue-400 text-[9px] font-black uppercase mb-1">מתאמנים:</p>
+                <p className="text-white text-xs font-bold truncate">{traineeNames}</p>
+            </div>
+        )}
+
         {session.description && !isCancelled && !isFinished && (
             <div className="bg-brand-primary/10 border-r-2 sm:border-r-4 border-brand-primary p-2 sm:p-3 rounded-l-xl mb-3 sm:mb-6">
                 <p className="text-white text-[9px] sm:text-xs font-bold leading-tight">{session.description}</p>

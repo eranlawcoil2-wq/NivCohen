@@ -61,6 +61,7 @@ export interface TrainingSession {
   isHidden?: boolean;
   isCancelled?: boolean;
   manualHasStarted?: boolean;
+  isPersonalTraining?: boolean;
 }
 
 export interface WeatherLocation {
@@ -91,5 +92,5 @@ export interface AppConfig {
   urgentMessage?: string;
   coachBio?: string;
   healthDeclarationTemplate?: string;
-  healthDeclarationDownloadUrl?: string; // URL for the PDF version of the form
+  healthDeclarationDownloadUrl?: string; 
 }

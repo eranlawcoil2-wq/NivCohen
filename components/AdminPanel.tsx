@@ -34,6 +34,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
   const [isCopyingWeek, setIsCopyingWeek] = useState(false);
   const [targetCopyWeekOffset, setTargetCopyWeekOffset] = useState(1);
+  
+  // Attendance filters
+  const [showGroupSessions, setShowGroupSessions] = useState(true);
+  const [showPersonalTraining, setShowPersonalTraining] = useState(true);
 
   const normalizePhone = (p: string) => {
     let cleaned = p.replace(/\D/g, '');
@@ -72,7 +76,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       return props.users.filter(u => 
           (u.fullName.toLowerCase().includes(search) || u.phone.includes(search)) && 
           !attendanceSession.registeredPhoneNumbers.includes(normalizePhone(u.phone))
-      ).slice(0, 5);
+      ).slice(0, 10);
   }, [traineeSearch, props.users, attendanceSession]);
 
   const handleAddLocation = () => {
@@ -157,7 +161,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     setIsCopyingWeek(false);
   };
 
-  const shareView = (mode: 'work' | 'admin') => {
+  const shareView = (mode: 'work' | 'admin' | 'CHAMP') => {
       const url = window.location.origin + '?mode=' + mode;
       if (navigator.share) {
           navigator.share({ title: 'לו"ז ניב כהן', url });
@@ -182,13 +186,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       <div className="p-4 max-w-4xl mx-auto space-y-6 pb-24">
         {activeTab === 'attendance' && (
           <div className="space-y-6">
-             <div className="flex justify-between items-center bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl">
-                <button onClick={()=>setWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
-                <div className="flex flex-col items-center">
-                    <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full">{weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}</span>
-                    <button onClick={() => setIsCopyingWeek(!isCopyingWeek)} className="text-[10px] text-gray-500 font-black uppercase mt-2 hover:text-red-500 transition-colors underline">שכפל שבוע 📑</button>
+             <div className="flex flex-col gap-4 bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl">
+                <div className="flex justify-between items-center">
+                    <button onClick={()=>setWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
+                    <div className="flex flex-col items-center">
+                        <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full">{weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}</span>
+                        <button onClick={() => setIsCopyingWeek(!isCopyingWeek)} className="text-[10px] text-gray-500 font-black uppercase mt-2 hover:text-red-500 transition-colors underline">שכפל שבוע 📑</button>
+                    </div>
+                    <button onClick={()=>setWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
                 </div>
-                <button onClick={()=>setWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
+                
+                <div className="flex justify-center gap-4 border-t border-white/5 pt-4">
+                    <button onClick={() => setShowGroupSessions(!showGroupSessions)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase transition-all ${showGroupSessions ? 'bg-red-600 text-white' : 'bg-gray-900 text-gray-600'}`}>קבוצתי {showGroupSessions ? '✓' : '✗'}</button>
+                    <button onClick={() => setShowPersonalTraining(!showPersonalTraining)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase transition-all ${showPersonalTraining ? 'bg-blue-600 text-white' : 'bg-gray-900 text-gray-600'}`}>אימון אישי {showPersonalTraining ? '✓' : '✗'}</button>
+                </div>
              </div>
 
              {isCopyingWeek && (
@@ -214,7 +225,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
              <Button onClick={() => setAttendanceSession({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '' })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
              <div className="space-y-12">
               {weekDates.map(date => {
-                  const daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
+                  let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
+                  
+                  // Filter sessions based on coach toggles
+                  daySessions = daySessions.filter(s => {
+                      if (s.isPersonalTraining) return showPersonalTraining;
+                      return showGroupSessions;
+                  });
+
+                  if (daySessions.length === 0) return null;
+
                   return (
                       <div key={date}>
                           <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-4">
@@ -409,6 +429,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 </div>
                                 <Button className="w-full bg-red-600 text-white py-4 rounded-2xl">שתף קישור מאמן 📤</Button>
                             </div>
+                            <div className="bg-blue-600/10 border border-blue-600/20 p-8 rounded-[40px] flex flex-col items-center gap-4 group hover:bg-blue-600/20 transition-all cursor-pointer" onClick={() => shareView('CHAMP')}>
+                                <div className="text-5xl">🏆</div>
+                                <div className="text-center">
+                                    <h4 className="text-blue-400 font-black uppercase italic text-xl">תצוגת CHAMP</h4>
+                                    <p className="text-xs text-gray-500 mt-1">תצוגה בלעדית למתאמנים באימון אישי</p>
+                                </div>
+                                <Button className="w-full bg-blue-600 text-white py-4 rounded-2xl">שתף קישור CHAMP 📤</Button>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -508,8 +536,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <label htmlFor="isZoom" className="text-blue-400 text-[9px] font-black uppercase cursor-pointer">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isHidden" className="w-4 h-4 accent-orange-500" checked={attendanceSession.isHidden || false} onChange={e=>setAttendanceSession({...attendanceSession, isHidden: e.target.checked})} />
-                                <label htmlFor="isHidden" className="text-orange-400 text-[9px] font-black uppercase cursor-pointer">נסתר 👁️‍🗨️</label>
+                                <input type="checkbox" id="isPersonalTraining" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isPersonalTraining || false} onChange={e=>setAttendanceSession({...attendanceSession, isPersonalTraining: e.target.checked})} />
+                                <label htmlFor="isPersonalTraining" className="text-blue-400 text-[9px] font-black uppercase cursor-pointer">אימון אישי 🏆</label>
                             </div>
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isCancelled" className="w-4 h-4 accent-red-500" checked={attendanceSession.isCancelled || false} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
@@ -529,7 +557,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       </div>
                   </div>
                   <div className="mt-8 flex gap-4">
-                      <Button onClick={()=>{ const isNew = !props.sessions.find(s => s.id === attendanceSession.id); if (isNew) props.onAddSession(attendanceSession); else props.onUpdateSession(attendanceSession); setAttendanceSession(null); }} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
+                      <Button onClick={()=>{ 
+                          if (attendanceSession.id.includes(' ')) { // Hacky check for temporary IDs
+                              props.onAddSession(attendanceSession); 
+                          } else {
+                              props.onUpdateSession(attendanceSession); 
+                          }
+                          setAttendanceSession(null); 
+                      }} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
                       <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-10 rounded-[45px]">מחק 🗑️</Button>
                   </div>
               </div>
