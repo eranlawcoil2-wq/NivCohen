@@ -37,26 +37,38 @@ interface InstallButtonProps {
 }
 
 const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, onInstalled }) => {
-    if (!deferredPrompt) return null;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+
+    if (isStandalone) return null;
 
     const handleInstall = async () => {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-            onInstalled();
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            if (outcome === 'accepted') onInstalled();
+        } else if (isIOS) {
+            alert('כדי להתקין את האפליקציה:\n1. לחץ על כפתור השיתוף (מרובע עם חץ למעלה).\n2. בחר ב-"הוספה למסך הבית".');
+        } else {
+            alert('כדי להתקין:\nלחץ על שלוש הנקודות בדפדפן ובחר ב-"התקן אפליקציה".');
         }
     };
 
     return (
-        <button 
-            onClick={handleInstall}
-            className={`fixed bottom-24 right-6 z-[100] ${isAdmin ? 'bg-red-500 text-white shadow-red-500/40' : 'bg-brand-primary text-black shadow-brand-primary/40'} p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black`}
-            title={isAdmin ? "התקן אפליקציית ניהול" : "התקן אפליקציית מתאמנים"}
-        >
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-        </button>
+        <div className="fixed bottom-24 right-6 z-[100] flex flex-col items-end">
+            <div className="install-badge mb-2 bg-gray-900 border border-white/20 text-white text-[10px] font-black py-1 px-3 rounded-xl shadow-2xl whitespace-nowrap">
+                {isAdmin ? 'התקן אפליקציית ניהול 🛠️' : 'התקן לגישה מהירה ⚡'}
+            </div>
+            <button 
+                onClick={handleInstall}
+                className={`p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black ${isAdmin ? 'bg-red-500 text-white shadow-red-500/40' : 'bg-brand-primary text-black shadow-brand-primary/40'}`}
+                title="התקן אפליקציה"
+            >
+                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+            </button>
+        </div>
     );
 };
 

@@ -13,11 +13,11 @@
 
         // Theme Configuration: Red for Coach/Admin, Lime for Trainees/Work
         const themeColor = isAdmin ? '#EF4444' : '#A3E635'; 
-        const appLabel = isAdmin ? 'ADMIN' : (isWork ? 'WORK' : 'NIV');
+        const appLabel = isAdmin ? 'ניהול אימונים' : 'ניב כהן - כושר';
         const startUrl = isAdmin ? '/ADMIN' : (isWork ? '/WORK' : '/');
         
         // Dynamic Icon: "NIV" on color background
-        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2258%22 font-family=%22sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
+        const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2262%22 font-family=%22Heebo, sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
 
         function addLink(rel, href) {
           const link = document.createElement('link');
@@ -30,15 +30,15 @@
         addLink('apple-touch-icon', svgIcon);
 
         const manifest = {
-          "name": isAdmin ? "NIV COHEN - ADMIN" : "NIV COHEN - WORK",
-          "short_name": `NIV ${appLabel}`,
+          "name": appLabel,
+          "short_name": isAdmin ? "ADMIN - NIV" : "NIV COHEN",
           "start_url": startUrl,
           "display": "standalone",
           "background_color": "#121212",
           "theme_color": themeColor,
           "icons": [
-            { "src": svgIcon, "sizes": "192x192", "type": "image/svg+xml" },
-            { "src": svgIcon, "sizes": "512x512", "type": "image/svg+xml" }
+            { "src": svgIcon, "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+            { "src": svgIcon, "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
           ]
         };
 
@@ -47,7 +47,7 @@
         const manifestURL = URL.createObjectURL(blob);
         addLink('manifest', manifestURL);
 
-        document.title = `NIV COHEN | ${appLabel}`;
+        document.title = isAdmin ? `NIV COHEN | ADMIN` : `NIV COHEN | ${isWork ? 'WORKOUTS' : 'HOME'}`;
 
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
@@ -74,6 +74,13 @@
         100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
       }
       .whatsapp-float { animation: pulse-whatsapp 2s infinite; }
+
+      @keyframes float-badge {
+        0% { transform: translateY(0); }
+        50% { transform: translateY(-5px); }
+        100% { transform: translateY(0); }
+      }
+      .install-badge { animation: float-badge 3s ease-in-out infinite; }
     </style>
     <script>
       tailwind.config = {
