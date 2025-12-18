@@ -30,12 +30,12 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     </a>
 );
 
-interface InstallPromptProps {
+interface InstallPromptOverlayProps {
     isAdmin: boolean;
     deferredPrompt: any;
 }
 
-const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredPrompt }) => {
+const InstallPromptOverlay: React.FC<InstallPromptOverlayProps> = ({ isAdmin, deferredPrompt }) => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
     const [dismissed, setDismissed] = useState(localStorage.getItem('niv_pwa_dismissed') === 'true');
@@ -59,7 +59,8 @@ const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredP
 
     return (
         <div className="fixed inset-x-0 bottom-0 z-[150] p-6 install-overlay-animation">
-            <div className={`bg-gray-900 border-2 rounded-[40px] p-6 shadow-3xl text-right flex flex-col items-center gap-4 ${isAdmin ? 'border-red-500' : 'border-brand-primary'}`} dir="rtl">
+            <div className={`relative bg-gray-900 border-2 rounded-[40px] p-6 shadow-3xl text-right flex flex-col items-center gap-4 ${isAdmin ? 'border-red-500' : 'border-brand-primary'}`} dir="rtl">
+                <button onClick={handleDismiss} className="absolute top-4 left-4 text-gray-500 hover:text-white text-2xl transition-colors">✕</button>
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-brand-black text-2xl font-black ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>NIV</div>
                 <div className="text-center">
                     <h4 className="text-white font-black text-xl mb-1">
@@ -73,14 +74,11 @@ const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredP
                         <div className="flex items-center gap-3">
                             <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">1</span>
                             <span>לחץ שיתוף (ריבוע עם חץ)</span>
-                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">2</span>
                             <span>בחר "הוסף למסך הבית"</span>
-                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                         </div>
-                        <button onClick={handleDismiss} className="text-brand-primary font-bold text-center w-full py-2">הבנתי, תודה</button>
                     </div>
                 ) : (
                     <div className="flex gap-4 w-full">
@@ -110,6 +108,7 @@ const App: React.FC = () => {
   const isWorkMode = currentView === 'work';
   const isLanding = currentView === 'landing';
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(localStorage.getItem('niv_admin_auth') === 'true');
+  const [showUrgent, setShowUrgent] = useState(true);
   
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationDef[]>([]);
@@ -279,11 +278,39 @@ const App: React.FC = () => {
                 <rect x="75" y="90" width="10" height="2" fill="currentColor" />
             </svg>
         </div>
-        <div className="z-10 max-w-2xl space-y-12">
-            <h1 className="text-8xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
-            <p className="text-2xl sm:text-4xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
-            <div className="bg-gray-900/60 backdrop-blur-2xl p-10 rounded-[60px] border border-white/5 shadow-2xl">
-                <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+        <div className="z-10 max-w-2xl space-y-12 py-12">
+            <div 
+                onClick={() => navigateTo('work')} 
+                className="cursor-pointer active:scale-95 transition-transform"
+            >
+                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
+                <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
+            </div>
+            
+            <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
+                <h2 className="text-brand-primary font-black text-3xl sm:text-4xl mb-6 italic">מי זה ניב כהן? 🦁</h2>
+                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90">
+                    <p>
+                        נעים מאוד, אני ניב. אני מאמין שכושר הוא לא רק מטרה, אלא דרך חיים של התמדה וחוסן. 
+                    </p>
+                    <p>
+                        בנס ציונה, תחת כיפת השמיים ובאוויר הפתוח, אני מעביר אימונים אישיים וקבוצתיים שנועדו להוציא מכם את המקסימום. האווירה הדינמית של האימון הקבוצתי נותנת כוח, אבל אני יודע שלכל אחד יש את המכשולים האישיים שלו.
+                    </p>
+                    <p className="text-brand-primary italic">
+                        "השיטה שלי משלבת את הכוח של הקבוצה עם דיוק של אימון אישי."
+                    </p>
+                    <p>
+                        אני מעודד את המתאמנים שלי לשלב מדי פעם אימון אישי נקודתי לחיזוק החולשות הספציפיות - זה מה שיוצר את ההתקדמות המהותית והופך אתכם לגרסה הטובה ביותר של עצמכם.
+                    </p>
+                </div>
+            </div>
+
+            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
+                <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
+                <Button onClick={() => navigateTo('work')} className="py-6 px-12 rounded-[40px] text-xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
             </div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
@@ -293,14 +320,15 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {/* Urgent Message Banner */}
-      {!isAdminMode && appConfig.urgentMessage && (
-          <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[60] relative overflow-hidden">
-              <div className="animate-pulse flex items-center justify-center gap-2">
+      {/* Urgent Message Banner with Close Button */}
+      {!isAdminMode && appConfig.urgentMessage && showUrgent && (
+          <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[60] relative overflow-hidden flex items-center justify-center">
+              <div className="animate-pulse flex items-center gap-2">
                   <span>📢</span>
                   <span>{appConfig.urgentMessage}</span>
                   <span>📢</span>
               </div>
+              <button onClick={() => setShowUrgent(false)} className="absolute right-4 text-white/70 hover:text-white transition-colors">✕</button>
           </div>
       )}
 
@@ -310,15 +338,18 @@ const App: React.FC = () => {
                   onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} 
                   className="cursor-pointer group select-none active:scale-95 transition-transform"
               >
-                  <h1 className="text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
-                  <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
+                  <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
+                  <p className="text-[14px] sm:text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
-              {currentUser && !isAdminMode && (
-                  <div className="text-right">
-                      <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">פרופיל אישי</p>
-                      <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
-                  </div>
-              )}
+              <div className="flex items-center gap-4">
+                  <button onClick={() => setCurrentView('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>
+                  {currentUser && !isAdminMode && (
+                      <div className="text-right">
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">פרופיל אישי</p>
+                          <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
+                      </div>
+                  )}
+              </div>
           </div>
           {currentUser && !isAdminMode && (
               <div className="grid grid-cols-4 gap-2">
@@ -383,10 +414,19 @@ const App: React.FC = () => {
                     <div>
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
                         <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest">{viewingSession.time}</p>
+                        <p className="text-gray-500 text-sm font-black uppercase mt-1">📍 {viewingSession.location}</p>
                     </div>
                     <button onClick={() => setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                 </div>
                 <div className="space-y-6">
+                    {/* Instructions recap */}
+                    {viewingSession.description && (
+                         <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-4 rounded-l-2xl">
+                             <p className="text-white text-sm font-bold leading-relaxed">{viewingSession.description}</p>
+                         </div>
+                    )}
+
+                    {/* Hourly weather inside modal */}
                     {weatherData[viewingSession.date]?.hourly && (
                         <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 border-b border-white/5">
                             {Object.entries(weatherData[viewingSession.date].hourly || {}).map(([hour, data]: [string, any]) => (
