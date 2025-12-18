@@ -224,6 +224,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
+                {settingsSection === 'quotes' && (
+                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                      <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מוטיבציה 💪</h3>
+                      <div className="space-y-4">
+                          {props.quotes.map(q => (
+                              <div key={q.id} className="bg-gray-900/50 p-4 rounded-2xl flex justify-between items-center">
+                                  <span className="text-white italic">"{q.text}"</span>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+                )}
+
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירת כל השינויים ✅</Button>
