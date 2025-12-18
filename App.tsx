@@ -17,8 +17,10 @@ const normalizePhone = (phone: string): string => {
     return cleaned;
 };
 
-const navigateToLocation = (location: string) => {
-    window.open(`https://waze.com/ul?q=${encodeURIComponent(location)}`, '_blank');
+const navigateToLocation = (location: string, locations: LocationDef[] = []) => {
+    const loc = locations.find(l => l.name === location);
+    const query = loc?.address || location;
+    window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}`, '_blank');
 };
 
 const downloadICS = (session: TrainingSession) => {
@@ -74,7 +76,9 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
     if (mode === 'CHAMP') return 'CHAMP';
-    return (mode as any) || 'landing';
+    if (mode === 'admin') return 'admin';
+    if (mode === 'work') return 'work';
+    return 'landing';
   });
 
   const isAdminMode = currentView === 'admin';
@@ -123,17 +127,14 @@ const App: React.FC = () => {
       }
       setCurrentView(view);
       
-      const isBlob = window.location.protocol === 'blob:';
-      if (!isBlob) {
-          try {
-              let newUrl = window.location.origin + window.location.pathname;
-              if (view === 'admin') newUrl += '?mode=admin';
-              else if (view === 'work') newUrl += '?mode=work';
-              else if (view === 'CHAMP') newUrl += '?mode=CHAMP';
-              window.history.pushState({}, '', newUrl);
-          } catch (e) {
-              console.warn("History pushState failed, using local state navigation only.");
-          }
+      try {
+          let newUrl = window.location.origin + window.location.pathname;
+          if (view === 'admin') newUrl += '?mode=admin';
+          else if (view === 'work') newUrl += '?mode=work';
+          else if (view === 'CHAMP') newUrl += '?mode=CHAMP';
+          window.history.pushState({}, '', newUrl);
+      } catch (e) {
+          console.warn("History pushState failed.");
       }
   };
 
@@ -267,12 +268,16 @@ const App: React.FC = () => {
             </svg>
         </div>
         <div className="z-10 max-w-2xl space-y-12 py-12">
-            <div className="select-none">
-                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
+            <div className="select-none cursor-pointer" onClick={() => navigateTo('work')}>
+                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter hover:text-brand-primary transition-colors">NIV COHEN</h1>
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
+                <div className="mt-8">
+                    <Button className="px-12 py-6 rounded-full text-2xl shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
+                </div>
             </div>
             
             <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
+                <h2 className="text-brand-primary font-black text-3xl mb-6 italic">קצת עלי...</h2>
                 <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
                     {appConfig.coachBio}
                 </div>
@@ -302,13 +307,13 @@ const App: React.FC = () => {
 
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-[60] ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'} ${appConfig.urgentMessage && showUrgent ? 'mt-0' : ''}`}>
           <div className="flex justify-between items-center mb-6">
-              <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group select-none active:scale-95 transition-transform">
+              <div onClick={() => navigateTo('landing')} className="cursor-pointer group select-none active:scale-95 transition-transform">
                   <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[14px] sm:text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
                   {isChampMode && <p className="text-[10px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
               </div>
               <div className="flex items-center gap-4">
-                  <button onClick={() => setCurrentView('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>
+                  <button onClick={() => navigateTo('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>
                   {currentUser && !isAdminMode && (
                       <div className="text-right cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
                           <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
@@ -323,15 +328,6 @@ const App: React.FC = () => {
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl leading-none">{stats.record}</p></div>
                   <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p></div>
                   <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg font-bold leading-none truncate w-full">{(monthLeader.name as string)}</p></div>
-              </div>
-          )}
-          {isChampMode && currentUser && (
-              <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 flex justify-between items-center">
-                  <p className="text-white font-black italic">היי {currentUser.displayName || currentUser.fullName}, הנה האימונים האישיים שלך 🏆</p>
-                  <div className="text-center">
-                      <p className="text-[8px] text-gray-500 uppercase">סה"כ</p>
-                      <p className="text-xl font-black text-brand-primary leading-none">{sessions.filter(s => !!s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))).length}</p>
-                  </div>
               </div>
           )}
       </header>
@@ -374,14 +370,12 @@ const App: React.FC = () => {
                   let daySessions = sessions.filter(s => s.date === ds).sort((a,b)=>a.time.localeCompare(b.time));
                   
                   if (isChampMode) {
-                      // CHAMP mode: ONLY personal sessions where I am registered
                       daySessions = daySessions.filter(s => {
                           const isPersonal = !!s.isPersonalTraining;
                           const amRegistered = currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone));
                           return isPersonal && amRegistered;
                       });
                   } else {
-                      // Regular view: Hide all personal training sessions and hidden sessions
                       daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining);
                   }
 
@@ -394,7 +388,7 @@ const App: React.FC = () => {
                              <p className={`text-4xl sm:text-5xl font-black italic tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'} opacity-30`}>{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[ds]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
+                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[ds]} onWazeClick={(l) => navigateToLocation(l, locations)} onAddToCalendar={downloadICS}/>)}
                               {daySessions.length === 0 && !isChampMode && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                           </div>
                       </div>
@@ -423,32 +417,6 @@ const App: React.FC = () => {
                     <div>
                         <label className="text-[10px] text-gray-500 font-black mb-1 block">צבע כינוי</label>
                         <input type="color" className="w-full h-12 bg-gray-800 rounded-2xl p-2 cursor-pointer border-none" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
-                    </div>
-                    <div className="bg-gray-800/50 p-6 rounded-[40px] border border-white/5">
-                        <h4 className="text-brand-primary font-black uppercase italic mb-4">הצהרת בריאות 📋</h4>
-                        {currentUser.healthDeclarationDate ? (
-                            <div className="bg-brand-primary/10 border border-brand-primary/20 p-4 rounded-2xl">
-                                <p className="text-white font-bold text-sm">הצהרה חתומה ✓</p>
-                                <p className="text-gray-400 text-xs mt-1">נחתמה ב: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</p>
-                                <p className="text-gray-400 text-xs">ע"י: {currentUser.fullName}</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="max-h-32 overflow-y-auto p-3 bg-gray-900 rounded-xl text-xs text-gray-300 italic border border-white/5 no-scrollbar">{appConfig.healthDeclarationTemplate}</div>
-                                {appConfig.healthDeclarationDownloadUrl && <a href={appConfig.healthDeclarationDownloadUrl} target="_blank" className="text-xs text-brand-primary underline block text-center">להורדת טופס להדפסה 📄</a>}
-                                <div className="flex gap-2">
-                                    <input type="text" id="sign-id" placeholder="מספר ת.ז." className="flex-1 bg-gray-900 p-4 rounded-2xl text-white outline-none border border-white/10" />
-                                    <Button onClick={() => { const idVal = (document.getElementById('sign-id') as HTMLInputElement).value; if (idVal.length < 5) return alert('ת.ז. לא תקינה'); handleUpdateProfile({...currentUser, healthDeclarationDate: new Date().toISOString(), healthDeclarationId: idVal}); }} className="px-6 rounded-2xl">חתום ✍️</Button>
-                                </div>
-                            </div>
-                        )}
-                        <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-2">
-                            <label className="text-[10px] text-gray-500 font-black block">צירוף קובץ חתום</label>
-                            {currentUser.healthDeclarationFile && (
-                                <a href={currentUser.healthDeclarationFile} download="health-declaration" className="text-xs text-brand-primary underline mb-2 block">הורדת הקובץ הקיים 📥</a>
-                            )}
-                            <input type="file" className="text-xs text-gray-500" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => handleUpdateProfile({...currentUser, healthDeclarationFile: r.result as string}); r.readAsDataURL(f); }}} />
-                        </div>
                     </div>
                 </div>
                 <Button onClick={() => setShowProfile(false)} className="w-full mt-8 py-6 rounded-[40px] bg-white text-brand-black">סגור ✓</Button>

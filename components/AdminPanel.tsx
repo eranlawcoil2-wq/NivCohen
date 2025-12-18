@@ -1,9 +1,11 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, TrainingSession, WeatherLocation, LocationDef, AppConfig, Quote, WeatherInfo } from '../types';
 import { Button } from './Button';
 import { SessionCard } from './SessionCard';
 import { dataService } from '../services/dataService';
+import { getMotivationQuote } from '../services/geminiService';
 
 interface AdminPanelProps {
   users: User[]; sessions: TrainingSession[]; primaryColor: string; workoutTypes: string[]; locations: LocationDef[];
@@ -36,6 +38,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [localAppConfig, setLocalAppConfig] = useState<AppConfig>(props.appConfig);
   const [localLocations, setLocalLocations] = useState<LocationDef[]>(props.locations);
   const [localWorkoutTypes, setLocalWorkoutTypes] = useState<string[]>(props.workoutTypes);
+  const [localQuotes, setLocalQuotes] = useState<Quote[]>(props.quotes);
   const [sessionDraft, setSessionDraft] = useState<TrainingSession | null>(null);
 
   useEffect(() => {
@@ -55,8 +58,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       setLocalAppConfig(props.appConfig);
       setLocalLocations(props.locations);
       setLocalWorkoutTypes(props.workoutTypes);
+      setLocalQuotes(props.quotes);
     }
-  }, [props.appConfig, props.locations, props.workoutTypes, activeTab]);
+  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, activeTab]);
 
   const normalizePhone = (p: string) => {
     let cleaned = p.replace(/\D/g, '');
@@ -84,41 +88,65 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       });
   }, [props.users, searchTerm, userSortBy, props.getStatsForUser]);
 
+  // Fix: Added missing traineeSuggestions memoized list for the search input in the session management modal
   const traineeSuggestions = useMemo(() => {
-      if (!traineeSearch || !sessionDraft) return [];
-      const search = traineeSearch.toLowerCase();
-      return props.users.filter(u => 
-          (u.fullName.toLowerCase().includes(search) || (u.displayName && u.displayName.toLowerCase().includes(search)) || u.phone.includes(search)) && 
-          !sessionDraft.registeredPhoneNumbers.includes(normalizePhone(u.phone))
-      ).slice(0, 5);
-  }, [traineeSearch, props.users, sessionDraft]);
+    if (traineeSearch.length < 2) return [];
+    return props.users.filter(u => 
+      u.fullName.toLowerCase().includes(traineeSearch.toLowerCase()) || 
+      (u.displayName && u.displayName.toLowerCase().includes(traineeSearch.toLowerCase())) ||
+      u.phone.includes(traineeSearch)
+    ).slice(0, 5);
+  }, [props.users, traineeSearch]);
 
-  const getWhatsAppMsg = (session: TrainingSession) => {
-    const dateStr = new Date(session.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' });
-    const zoomText = session.isZoomSession ? '💻 אימון בזום' : '';
-    const personalText = session.isPersonalTraining ? '🏆 אימון אישי' : '';
-    const cancelText = session.isCancelled ? '❌ מבוטל' : '';
-    return `*עדכון אימון - ניב כהן* 🏋️\n\n${cancelText} ${personalText}\n🔥 סוג: ${session.type} ${zoomText}\n🕒 שעה: ${session.time}\n📅 תאריך: ${dateStr}\n📍 מיקום: ${session.location}\n\n*דגשים:* \n${session.description || 'אין דגשים מיוחדים'}\n\nנתראה שם! 💪`;
+  // Fix: Added missing getWhatsAppMsg helper to generate the push message text for WhatsApp
+  const getWhatsAppMsg = (s: TrainingSession) => {
+    const dateStr = new Date(s.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+    const dayName = new Date(s.date).toLocaleDateString('he-IL', { weekday: 'long' });
+    return `מתאמנים יקרים! תזכורת לאימון ${s.type} ביום ${dayName} (${dateStr}) בשעה ${s.time} ב${s.location}. ${s.description || ''} מחכה לראות אתכם! 💪⚡`;
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    alert('הקישור הועתק! ✅');
+  const handleCopyLastWeek = async () => {
+    if (!confirm('האם לשכפל את כל האימונים מהשבוע שעבר לשבוע הנוכחי?')) return;
+    
+    const lastSun = new Date(); lastSun.setHours(12, 0, 0, 0); 
+    lastSun.setDate(lastSun.getDate() - lastSun.getDay() + ((weekOffset - 1) * 7));
+    const lastWeekDates = Array.from({length:7}, (_, i) => { 
+        const d = new Date(lastSun); d.setDate(lastSun.getDate() + i); 
+        return d.toISOString().split('T')[0]; 
+    });
+
+    const sessionsToCopy = props.sessions.filter(s => lastWeekDates.includes(s.date));
+    
+    if (sessionsToCopy.length === 0) {
+        alert('לא נמצאו אימונים לשכפול בשבוע שעבר.');
+        return;
+    }
+
+    setSaveIndicator('משכפל שבוע...');
+    for (const s of sessionsToCopy) {
+        const newDate = new Date(s.date);
+        newDate.setDate(newDate.getDate() + 7);
+        const newSession: TrainingSession = {
+            ...s,
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            date: newDate.toISOString().split('T')[0],
+            registeredPhoneNumbers: [],
+            attendedPhoneNumbers: [],
+            isCancelled: false,
+            manualHasStarted: false
+        };
+        await dataService.addSession(newSession);
+        props.onAddSession(newSession);
+    }
+    setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
+    setTimeout(() => setSaveIndicator(null), 3000);
   };
 
-  // Fix: handlePersonalWhatsApp function was missing
-  const handlePersonalWhatsApp = (phone: string) => {
-    if (!sessionDraft) return;
-    const msg = getWhatsAppMsg(sessionDraft);
-    const cleanedPhone = phone.replace(/\D/g, '');
-    window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(msg)}`, '_blank');
-  };
-
-  // Fix: handleShareToWhatsAppGroup function was missing
-  const handleShareToWhatsAppGroup = () => {
-    if (!sessionDraft) return;
-    const msg = getWhatsAppMsg(sessionDraft);
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  const handleGenerateAIQuote = async () => {
+    setSaveIndicator('ה-AI חושב על משפט...');
+    const q = await getMotivationQuote();
+    setLocalQuotes([...localQuotes, { id: Date.now().toString(), text: q }]);
+    setSaveIndicator(null);
   };
 
   const handleSaveAllSettings = async () => {
@@ -127,7 +155,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       await Promise.all([
           dataService.saveAppConfig(localAppConfig),
           dataService.saveLocations(localLocations),
-          dataService.saveWorkoutTypes(localWorkoutTypes)
+          dataService.saveWorkoutTypes(localWorkoutTypes),
+          dataService.saveQuotes(localQuotes)
       ]);
       props.onUpdateAppConfig(localAppConfig);
       props.onUpdateLocations(localLocations);
@@ -177,7 +206,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 </div>
              </div>
 
-             <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ אימון חדש</Button>
+                <Button onClick={handleCopyLastWeek} variant="secondary" className="py-7 rounded-[45px] text-xl font-black italic border-dashed border-2 border-white/20">שכפל שבוע קודם 📑</Button>
+             </div>
+
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
@@ -251,16 +284,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     <div className="space-y-8">
                         <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4 shadow-2xl">
                             <div className="flex justify-between items-center mb-4">
-                                <h4 className="text-white font-black uppercase italic tracking-widest">מיקומים 📍</h4>
+                                <h4 className="text-white font-black uppercase italic tracking-widest">מיקומים וכתובות 📍</h4>
                                 <Button onClick={() => { const n = prompt('שם המיקום:'); if(n) setLocalLocations([...localLocations, {id: Date.now().toString(), name: n, address: n, color: '#A3E635'}]); }} size="sm" variant="secondary">הוסף מיקום</Button>
                             </div>
-                            <div className="grid gap-3">
+                            <div className="grid gap-4">
                                 {localLocations.map(loc => (
-                                    <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[30px] flex flex-col sm:flex-row justify-between items-center gap-4 border border-white/5">
-                                        <input className="bg-transparent text-white font-black italic flex-1 w-full outline-none" value={loc.name} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} />
-                                        <div className="flex items-center gap-4">
-                                            <input type="color" className="w-10 h-10 rounded-full border-none p-1 cursor-pointer bg-transparent" value={loc.color || '#A3E635'} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, color: e.target.value} : l))} />
-                                            <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500 bg-red-500/10 p-3 rounded-full hover:bg-red-500 hover:text-white transition-all">✕</button>
+                                    <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[35px] space-y-4 border border-white/5">
+                                        <div className="flex justify-between gap-4">
+                                            <input className="bg-transparent text-white font-black italic text-lg outline-none flex-1" value={loc.name} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} placeholder="שם המיקום (למשל: סטודיו נס ציונה)" />
+                                            <div className="flex items-center gap-2">
+                                                <input type="color" className="w-8 h-8 rounded-full border-none p-1 cursor-pointer bg-transparent" value={loc.color || '#A3E635'} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, color: e.target.value} : l))} />
+                                                <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500">✕</button>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[9px] text-gray-500 uppercase font-black">כתובת ל-Waze</label>
+                                            <input className="w-full bg-gray-800 p-3 rounded-xl text-white text-xs border border-white/5" value={loc.address} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} placeholder="כתובת מדויקת..." />
                                         </div>
                                     </div>
                                 ))}
@@ -269,68 +308,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
-                {settingsSection === 'views' && (
+                {settingsSection === 'quotes' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">קישורי תצוגה מהירים 🔗</h3>
-                        <div className="grid gap-4">
-                            {[
-                                { title: 'לו"ז מתאמנים', url: window.location.origin + window.location.pathname + '?mode=work' },
-                                { title: 'ממשק ניהול', url: window.location.origin + window.location.pathname + '?mode=admin' },
-                                { title: 'תצוגת CHAMP אישי', url: window.location.origin + window.location.pathname + '?mode=CHAMP' }
-                            ].map((link, i) => (
-                                <div key={i} className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5 flex justify-between items-center shadow-lg">
-                                    <div>
-                                        <p className="text-[10px] text-red-500 font-black uppercase mb-1">{link.title}</p>
-                                        <p className="text-white text-xs opacity-40 truncate max-w-[200px] font-mono">{link.url}</p>
-                                    </div>
-                                    <Button onClick={() => copyToClipboard(link.url)} size="sm" variant="secondary" className="rounded-2xl">העתק קישור</Button>
+                        <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                            <h3 className="text-white font-black uppercase italic tracking-widest">משפטי מוטיבציה ⚡</h3>
+                            <div className="flex gap-2">
+                                <Button onClick={handleGenerateAIQuote} size="sm" variant="outline">ייצור AI ✨</Button>
+                                <Button onClick={() => { const q = prompt('הכנס משפט מוטיבציה:'); if(q) setLocalQuotes([...localQuotes, {id: Date.now().toString(), text: q}]); }} size="sm" variant="secondary">הוסף ידנית</Button>
+                            </div>
+                        </div>
+                        <div className="grid gap-3">
+                            {localQuotes.map(q => (
+                                <div key={q.id} className="bg-gray-900/50 p-5 rounded-[30px] border border-white/5 flex justify-between items-center gap-4 group">
+                                    <p className="text-white font-bold italic text-sm">"{q.text}"</p>
+                                    <button onClick={() => setLocalQuotes(localQuotes.filter(x => x.id !== q.id))} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                                 </div>
                             ))}
-                        </div>
-                        <div className="pt-8 border-t border-white/5">
-                            <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4 mb-4">ניהול סוגי אימון 🎨</h3>
-                            <div className="flex justify-between items-center mb-4">
-                                <p className="text-[10px] text-gray-500 font-black uppercase">רשימת סוגי אימון</p>
-                                <Button onClick={() => { const n = prompt('סוג אימון חדש:'); if(n) setLocalWorkoutTypes([...localWorkoutTypes, n]); }} size="sm" variant="secondary">הוסף</Button>
-                            </div>
-                            <div className="grid gap-2">
-                                {localWorkoutTypes.map((type, idx) => (
-                                    <div key={idx} className="bg-gray-900/50 p-4 rounded-2xl flex justify-between items-center border border-white/5">
-                                        <span className="text-white font-bold">{type}</span>
-                                        <button onClick={() => setLocalWorkoutTypes(localWorkoutTypes.filter((_, i) => i !== idx))} className="text-red-500 p-2">✕</button>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {settingsSection === 'connections' && (
-                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ומערכות 🔌</h3>
-                        <div className="space-y-6">
-                            <div className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5">
-                                <p className="text-brand-primary font-black uppercase text-[10px] mb-2">Supabase Database 🗄️</p>
-                                <p className="text-gray-400 text-xs mb-4">חיבור למסד נתונים חיצוני לשמירת מידע בענן (חינמי).</p>
-                                <div className="space-y-4">
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-500 uppercase font-black">Supabase Project URL</label>
-                                        <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="https://xxx.supabase.co" defaultValue="https://xjqlluobnzpgpttprmio.supabase.co" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[9px] text-gray-500 uppercase font-black">Anon Public API Key</label>
-                                        <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/5" placeholder="eyJhbGci..." defaultValue="sb_publishable_WyvAmRCYPahTpaQAwqiyjQ_NEGFK5wN" />
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-gray-900/50 p-6 rounded-[35px] border border-white/5">
-                                <p className="text-brand-primary font-black uppercase text-[10px] mb-2">Google Gemini AI 🤖</p>
-                                <p className="text-gray-400 text-xs mb-4">המפתח משמש ליצירת משפטי מוטיבציה ותיאורי אימון חכמים.</p>
-                                <div className="p-4 bg-gray-800 rounded-2xl border border-white/5">
-                                    <p className="text-white font-mono text-[10px] opacity-60">Status: Active ✓</p>
-                                    <p className="text-gray-500 text-[9px] mt-1 font-black">המפתח מוגדר דרך ה-Environment Variables</p>
-                                </div>
-                            </div>
+                            {localQuotes.length === 0 && <p className="text-center text-gray-500 py-10 italic">אין משפטים מוגדרים. ה-AI ייצר משפטים אוטומטית.</p>}
                         </div>
                     </div>
                 )}
@@ -389,7 +383,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <span className="text-[10px] text-gray-500 font-mono">{phone}</span>
                                         </div>
                                         <div className="flex gap-2 items-center">
-                                            <button onClick={() => handlePersonalWhatsApp(phone)} className="text-green-500 p-2 hover:bg-green-500/10 rounded-full transition-colors">
+                                            <button onClick={() => {
+                                                if (!sessionDraft) return;
+                                                const msg = getWhatsAppMsg(sessionDraft);
+                                                window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                                            }} className="text-green-500 p-2 hover:bg-green-500/10 rounded-full transition-colors">
                                                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                                             </button>
                                             <button onClick={() => { const curr = sessionDraft.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setSessionDraft({...sessionDraft, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח' : 'לא נכח'}</button>
@@ -410,7 +408,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.time} onChange={e=>setSessionDraft({...sessionDraft, time: e.target.value})} /></div>
                         </div>
                         <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">דגשים למתאמנים (פוש וואטסאפ)</label><textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24 text-sm" value={sessionDraft.description || ''} onChange={e=>setSessionDraft({...sessionDraft, description: e.target.value})} placeholder="כתוב כאן דגשים לאימון..."></textarea></div>
-                        <Button onClick={handleShareToWhatsAppGroup} className="w-full bg-green-600 py-3 rounded-2xl text-xs flex items-center gap-2 justify-center">שלח פוש לקבוצה 📢 ✅</Button>
+                        <Button onClick={() => {
+                            if (!sessionDraft) return;
+                            const msg = getWhatsAppMsg(sessionDraft);
+                            window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                        }} className="w-full bg-green-600 py-3 rounded-2xl text-xs flex items-center gap-2 justify-center">שלח פוש לקבוצה 📢 ✅</Button>
                         <div className="grid grid-cols-2 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
                                 <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={Boolean(sessionDraft.isPersonalTraining)} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
