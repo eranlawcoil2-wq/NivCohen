@@ -104,10 +104,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
+  const [traineeSearch, setTraineeSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortMode>('name');
-  const [pushMessage, setPushMessage] = useState('');
-  const [sentTracking, setSentTracking] = useState<Record<string, string[]>>({});
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
+  const [isCopyingWeek, setIsCopyingWeek] = useState(false);
+  const [targetCopyWeekOffset, setTargetCopyWeekOffset] = useState(1);
 
   const normalizePhone = (p: string) => {
     let cleaned = p.replace(/\D/g, '');
@@ -140,6 +141,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       });
   }, [props.users, props.getStatsForUser, searchTerm, sortBy]);
 
+  const traineeSuggestions = useMemo(() => {
+      if (!traineeSearch || !attendanceSession) return [];
+      const search = traineeSearch.toLowerCase();
+      return props.users.filter(u => 
+          (u.fullName.toLowerCase().includes(search) || u.phone.includes(search)) && 
+          !attendanceSession.registeredPhoneNumbers.includes(normalizePhone(u.phone))
+      ).slice(0, 5);
+  }, [traineeSearch, props.users, attendanceSession]);
+
   const handleAddLocation = () => {
     const name = prompt('שם המיקום:');
     const address = prompt('כתובת המיקום:');
@@ -161,7 +171,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     if (text) {
       const newQuote: Quote = { id: Date.now().toString(), text };
       dataService.addQuote(newQuote).then(() => {
-        window.location.reload(); // Simple refresh for now
+        window.location.reload(); 
       });
     }
   };
@@ -187,15 +197,37 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     }
   };
 
-  const sendWhatsAppPush = (user: User, session: TrainingSession) => {
-    if (!session) return;
-    const dateObj = new Date(session.date);
-    const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'long' });
-    const dateFormatted = dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
-    const message = `היי ${user.fullName.split(' ')[0]}, תזכורת לאימון ${session.type} ביום ${dayName} (${dateFormatted}) בשעה ${session.time}.\n${pushMessage}`;
-    const phone = normalizePhone(user.phone);
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
-    setSentTracking(prev => ({ ...prev, [session.id]: [...(prev[session.id] || []), user.phone] }));
+  const copyWeekSessions = async () => {
+    const sessionsToCopy = props.sessions.filter(s => weekDates.includes(s.date));
+    if (sessionsToCopy.length === 0) return alert('אין אימונים בשבוע זה להעתקה');
+    
+    const confirmMsg = `האם להעתיק ${sessionsToCopy.length} אימונים לשבוע המבוקש? (המתאמנים לא יועתקו)`;
+    if (!confirm(confirmMsg)) return;
+
+    setSaveIndicator('מעתיק שבוע...');
+    try {
+        const daysDiff = (targetCopyWeekOffset - weekOffset) * 7;
+        for (const session of sessionsToCopy) {
+            const originalDate = new Date(session.date);
+            originalDate.setDate(originalDate.getDate() + daysDiff);
+            const newDateStr = originalDate.toISOString().split('T')[0];
+            
+            const newSession: TrainingSession = {
+                ...session,
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                date: newDateStr,
+                registeredPhoneNumbers: [],
+                attendedPhoneNumbers: [],
+                waitingList: []
+            };
+            await dataService.addSession(newSession);
+        }
+        setSaveIndicator('שבוע הועתק בהצלחה!');
+        setTimeout(() => { setSaveIndicator(null); window.location.reload(); }, 2000);
+    } catch (e) {
+        setSaveIndicator('שגיאה בהעתקת שבוע');
+    }
+    setIsCopyingWeek(false);
   };
 
   return (
@@ -215,16 +247,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           <div className="space-y-6">
              <div className="flex justify-between items-center bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl">
                 <button onClick={()=>setWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
-                <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full">{weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}</span>
+                <div className="flex flex-col items-center">
+                    <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full">{weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}</span>
+                    <button onClick={() => setIsCopyingWeek(!isCopyingWeek)} className="text-[10px] text-gray-500 font-black uppercase mt-2 hover:text-red-500 transition-colors underline">שכפל שבוע 📑</button>
+                </div>
                 <button onClick={()=>setWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
              </div>
+
+             {isCopyingWeek && (
+                 <div className="bg-gray-800/60 p-6 rounded-[35px] border border-red-500/30 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-300">
+                    <h4 className="text-white font-black italic uppercase text-center">שכפול כל האימונים 📑</h4>
+                    <p className="text-xs text-gray-400 text-center">העתקת האימונים מהתצוגה הנוכחית ({weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}) אל:</p>
+                    <div className="flex items-center justify-center gap-4">
+                        <select 
+                            className="bg-gray-900 text-white p-3 rounded-2xl border border-white/10 font-black outline-none"
+                            value={targetCopyWeekOffset}
+                            onChange={(e) => setTargetCopyWeekOffset(Number(e.target.value))}
+                        >
+                            {Array.from({length: 8}, (_, i) => (
+                                <option key={i} value={i-2}>{i-2 === 0 ? 'השבוע' : `שבוע ${i-2}`}</option>
+                            ))}
+                        </select>
+                        <Button onClick={copyWeekSessions} className="bg-red-600 px-8">בצע שכפול 🚀</Button>
+                        <button onClick={() => setIsCopyingWeek(false)} className="text-gray-500 text-sm font-black uppercase">ביטול</button>
+                    </div>
+                 </div>
+             )}
+
              <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '' })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
              <div className="space-y-12">
               {weekDates.map(date => {
                   const daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
                   return (
                       <div key={date}>
-                          <h4 className="text-gray-500 font-black text-[11px] mb-4 uppercase tracking-widest border-b border-white/5 pb-2">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })}</h4>
+                          <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-4">
+                              <h4 className="text-gray-500 font-black text-2xl uppercase tracking-widest">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
+                              <p className="text-gray-500 font-black text-2xl uppercase tracking-widest opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
+                          </div>
                           <div className="grid grid-cols-2 gap-4">
                             {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} onDuplicate={props.onDuplicateSession} onAddToCalendar={props.onAddToCalendar} isAdmin={true} locations={props.locations} weather={props.weatherData?.[s.date]} />)}
                           </div>
@@ -256,14 +315,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                              <div>
                                 <h3 className="text-white font-black text-xl italic" style={{ color: u.userColor }}>{u.fullName}</h3>
                                 <p className="text-xs text-gray-500 font-mono tracking-widest">{u.phone}</p>
-                                <div className="flex gap-2 mt-2">
-                                   <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase ${u.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>{u.paymentStatus === PaymentStatus.PAID ? 'שולם ✓' : 'חוב !'}</span>
-                                   {u.healthDeclarationDate && <span className="bg-blue-500/10 text-blue-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase">הצהרה ✓</span>}
-                                   {u.isRestricted && <span className="bg-gray-700 text-white px-3 py-1 rounded-lg text-[10px] font-black uppercase">חסום ⛔</span>}
-                                </div>
                              </div>
                           </div>
-                          
                           <div className="grid grid-cols-3 gap-8 text-center w-full sm:w-auto sm:mr-10 border-t sm:border-t-0 sm:border-r border-white/5 pt-4 sm:pt-0 sm:pr-10">
                              <div><p className="text-[10px] text-gray-500 font-black uppercase mb-1">החודש</p><p className="text-3xl font-black text-brand-primary leading-none">{(u as any).stats.monthly}</p></div>
                              <div><p className="text-[10px] text-gray-500 font-black uppercase mb-1">שיא</p><p className="text-3xl font-black text-white leading-none">{(u as any).stats.record}</p></div>
@@ -318,12 +371,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <h4 className="text-white font-black uppercase italic tracking-widest">מיקומים 📍</h4>
                                 <Button onClick={handleAddLocation} size="sm" variant="secondary">הוסף מיקום</Button>
                             </div>
-                            <div className="grid gap-2">
+                            <div className="grid gap-4">
                                 {props.locations.map(loc => (
-                                    <div key={loc.id} className="bg-gray-900/50 p-4 rounded-2xl border border-white/5 flex flex-col gap-2">
-                                        <input className="bg-transparent text-white font-bold outline-none focus:text-brand-primary" value={loc.name} onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} />
-                                        <input className="bg-transparent text-[10px] text-gray-500 outline-none focus:text-white" value={loc.address} onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} />
-                                        <button onClick={() => props.onUpdateLocations(props.locations.filter(l => l.id !== loc.id))} className="text-red-500 text-[10px] font-black uppercase text-left">מחיקה</button>
+                                    <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[30px] border border-white/5 flex flex-col gap-4 group">
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1 space-y-2">
+                                                <input className="w-full bg-transparent text-white font-black text-lg outline-none focus:text-brand-primary italic" value={loc.name} placeholder="שם המיקום" onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} />
+                                                <input className="w-full bg-transparent text-xs text-gray-500 outline-none focus:text-white font-bold" value={loc.address} placeholder="כתובת (Waze)" onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} />
+                                            </div>
+                                            <button onClick={() => { if(confirm('למחוק מיקום?')) props.onUpdateLocations(props.locations.filter(l => l.id !== loc.id)) }} className="text-red-500/30 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -359,21 +416,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             {props.quotes.map(q => (
                                 <div key={q.id} className="bg-gray-900/50 p-4 rounded-2xl border border-white/5 flex justify-between items-center group">
                                     <p className="text-white italic text-sm">"{q.text}"</p>
-                                    <button onClick={() => handleDeleteQuote(q.id)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">🗑️</button>
+                                    <button onClick={() => handleDeleteQuote(q.id)} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-2">🗑️</button>
                                 </div>
                             ))}
-                            {props.quotes.length === 0 && <p className="text-gray-600 text-center italic py-4">אין משפטים מוגדרים</p>}
-                        </div>
-                    </div>
-                )}
-
-                {settingsSection === 'connections' && (
-                    <div className="bg-gray-800/40 p-8 rounded-[40px] border border-white/5 space-y-6 overflow-hidden shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים וסנכרון 🔌</h3>
-                        <div className="space-y-4">
-                            <label className="text-[10px] text-blue-400 font-black uppercase block">Supabase SQL Setup</label>
-                            <pre className="bg-gray-900 p-6 rounded-[30px] text-[10px] text-gray-400 font-mono overflow-auto max-h-96 border border-white/5 no-scrollbar whitespace-pre-wrap">{SUPABASE_SQL}</pre>
-                            <Button onClick={() => { navigator.clipboard.writeText(SUPABASE_SQL); alert('SQL העותק ללוח!'); }} size="sm">העתק SQL 📋</Button>
                         </div>
                     </div>
                 )}
@@ -395,6 +440,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                      {/* Left Side: Trainee List with Search and Add */}
+                      <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[600px] overflow-y-auto no-scrollbar border border-white/5 space-y-4">
+                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">נוכחות ({attendanceSession.registeredPhoneNumbers.length})</p>
+                        
+                        <div className="relative">
+                            <input 
+                                type="text" 
+                                placeholder="הוספת מתאמן..." 
+                                className="w-full bg-gray-900 p-4 rounded-2xl text-white text-xs border border-white/5 outline-none focus:border-brand-primary"
+                                value={traineeSearch}
+                                onChange={(e) => setTraineeSearch(e.target.value)}
+                            />
+                            {traineeSuggestions.length > 0 && (
+                                <div className="absolute top-full left-0 right-0 z-30 bg-gray-900 border border-white/10 rounded-2xl mt-1 overflow-hidden shadow-2xl">
+                                    {traineeSuggestions.map(u => (
+                                        <button 
+                                            key={u.id} 
+                                            className="w-full p-4 text-right hover:bg-gray-800 transition-colors flex justify-between items-center group"
+                                            onClick={() => {
+                                                const phone = normalizePhone(u.phone);
+                                                setAttendanceSession({
+                                                    ...attendanceSession,
+                                                    registeredPhoneNumbers: [...attendanceSession.registeredPhoneNumbers, phone]
+                                                });
+                                                setTraineeSearch('');
+                                            }}
+                                        >
+                                            <span className="text-white text-sm font-bold">{u.fullName}</span>
+                                            <span className="text-brand-primary opacity-0 group-hover:opacity-100">+ הוסף</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            {attendanceSession.registeredPhoneNumbers.map(phone => {
+                                const u = props.users.find(user => normalizePhone(user.phone) === normalizePhone(phone));
+                                const isAttended = (attendanceSession.attendedPhoneNumbers || []).includes(phone);
+                                return (
+                                    <div key={phone} className="flex justify-between items-center p-4 rounded-2xl bg-gray-900/50 border border-white/5">
+                                        <div className="flex flex-col">
+                                            <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
+                                            <span className="text-[10px] text-gray-500 font-mono">{phone}</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button onClick={() => { const curr = attendanceSession.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setAttendanceSession({...attendanceSession, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח ✓' : 'לא נכח'}</button>
+                                            <button onClick={() => { if(confirm('להסיר מהאימון?')) setAttendanceSession({...attendanceSession, registeredPhoneNumbers: attendanceSession.registeredPhoneNumbers.filter(p => p !== phone)})}} className="text-red-500 text-xs p-2">✕</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                      </div>
+
+                      {/* Right Side: Session Details */}
                       <div className="space-y-5">
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">סוג</label>
@@ -412,50 +513,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">תאריך</label><input type="date" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={attendanceSession.date} onChange={e=>setAttendanceSession({...attendanceSession, date: e.target.value})} /></div>
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={attendanceSession.time} onChange={e=>setAttendanceSession({...attendanceSession, time: e.target.value})} /></div>
                         </div>
-                        <textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24" value={attendanceSession.description || ''} onChange={e=>setAttendanceSession({...attendanceSession, description: e.target.value})} placeholder="דגשים למתאמנים..."></textarea>
-                        
-                        <div className="bg-gray-800/40 p-6 rounded-[35px] border border-white/5 space-y-4">
-                            <label className="text-[10px] text-green-500 font-black uppercase block italic">שליחת הודעת פוש (WhatsApp) 💬</label>
-                            <textarea 
-                              className="w-full bg-gray-900 border border-white/10 p-4 rounded-2xl text-white text-xs italic" 
-                              rows={3}
-                              placeholder="כתוב הודעה נוספת כאן... (הפרטים יתווספו אוטומטית)"
-                              value={pushMessage}
-                              onChange={e => setPushMessage(e.target.value)}
-                            />
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">דגשים למתאמנים</label>
+                            <textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24 text-sm leading-relaxed" value={attendanceSession.description || ''} onChange={e=>setAttendanceSession({...attendanceSession, description: e.target.value})} placeholder="כתוב כאן דגשים..."></textarea>
                         </div>
+
+                        <div className="grid grid-cols-3 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id="isZoom" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isZoomSession} onChange={e=>setAttendanceSession({...attendanceSession, isZoomSession: e.target.checked})} />
+                                <label htmlFor="isZoom" className="text-blue-400 text-[9px] font-black uppercase">זום 💻</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id="isHidden" className="w-4 h-4 accent-orange-500" checked={attendanceSession.isHidden} onChange={e=>setAttendanceSession({...attendanceSession, isHidden: e.target.checked})} />
+                                <label htmlFor="isHidden" className="text-orange-400 text-[9px] font-black uppercase">נסתר 👁️‍🗨️</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id="isCancelled" className="w-4 h-4 accent-red-500" checked={attendanceSession.isCancelled} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
+                                <label htmlFor="isCancelled" className="text-red-500 text-[9px] font-black uppercase">מבוטל ❌</label>
+                            </div>
+                        </div>
+
+                        {attendanceSession.isZoomSession && (
+                            <div className="space-y-1">
+                                <label className="text-[10px] text-blue-500 font-black uppercase px-2">לינק לזום</label>
+                                <input className="w-full bg-blue-900/10 border border-blue-500/20 p-4 rounded-2xl text-white font-mono text-xs" value={attendanceSession.zoomLink || ''} onChange={e=>setAttendanceSession({...attendanceSession, zoomLink: e.target.value})} placeholder="https://zoom.us/..." />
+                            </div>
+                        )}
 
                         <div className="flex items-center gap-3 bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20">
                             <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
                             <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase">אימון מתקיים ✓</label>
                         </div>
                       </div>
-
-                      <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[600px] overflow-y-auto no-scrollbar border border-white/5 space-y-3">
-                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">נוכחות ושליחת פוש ({attendanceSession.registeredPhoneNumbers.length})</p>
-                        <div className="space-y-2">
-                            {attendanceSession.registeredPhoneNumbers.map(phone => {
-                                const u = props.users.find(user => normalizePhone(user.phone) === normalizePhone(phone));
-                                const isAttended = (attendanceSession.attendedPhoneNumbers || []).includes(phone);
-                                const isSent = (sentTracking[attendanceSession.id] || []).includes(phone);
-                                return (
-                                    <div key={phone} className={`flex flex-col gap-2 p-4 bg-gray-900/50 rounded-2xl border ${isSent ? 'border-green-500/20' : 'border-white/5'}`}>
-                                        <div className="flex justify-between items-center">
-                                            <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
-                                            <div className="flex gap-2">
-                                                <button onClick={() => u && sendWhatsAppPush(u, attendanceSession)} className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isSent ? 'bg-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'bg-gray-800 text-gray-500 hover:text-green-500'}`}><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg></button>
-                                                <button onClick={() => { const curr = attendanceSession.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setAttendanceSession({...attendanceSession, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח ✓' : 'לא נכח'}</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                      </div>
                   </div>
                   <div className="mt-8 flex gap-4">
                       <Button onClick={()=>{ if (attendanceSession.id.length > 15) props.onAddSession(attendanceSession); else props.onUpdateSession(attendanceSession); setAttendanceSession(null); }} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
-                      <Button onClick={()=>{if(confirm('למחוק אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-10 rounded-[45px]">🗑️</Button>
+                      <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-10 rounded-[45px]">מחק 🗑️</Button>
                   </div>
               </div>
           </div>
@@ -471,7 +564,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 </div>
                 <button onClick={()=>setEditingUser(null)} className="text-gray-500 text-4xl">✕</button>
               </div>
-              
               <div className="space-y-8">
                   <div className="grid grid-cols-2 gap-6">
                       <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שם מלא</label><input className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={editingUser.fullName} onChange={e=>setEditingUser({...editingUser, fullName: e.target.value})} /></div>
@@ -485,22 +577,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </select>
                       </div>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                      {Object.entries(props.getStatsForUser(editingUser)).map(([k, v]) => (
-                          <div key={k} className="bg-gray-800/50 p-4 rounded-3xl text-center border border-white/5">
-                              <p className="text-[9px] text-gray-500 uppercase font-black">{k === 'monthly' ? 'החודש' : k === 'record' ? 'שיא' : 'רצף'}</p>
-                              <p className="text-2xl font-black text-white">{v}</p>
-                          </div>
-                      ))}
-                  </div>
-                  
                   <div className="bg-gray-800/50 p-6 rounded-[35px] border border-white/5">
                       <h4 className="text-blue-400 font-black uppercase italic mb-4">הצהרת בריאות 📋</h4>
                       {editingUser.healthDeclarationDate ? (
-                          <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl mb-4">
-                             <p className="text-white font-bold text-sm">נחתמה ב: {editingUser.healthDeclarationDate}</p>
-                             <p className="text-gray-400 text-xs">ת.ז.: {editingUser.healthDeclarationId}</p>
+                          <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-2xl mb-4 text-white">
+                             <p className="font-bold text-sm">נחתמה ב: {editingUser.healthDeclarationDate}</p>
+                             <p className="text-gray-400 text-xs mt-1">ת.ז.: {editingUser.healthDeclarationId}</p>
                           </div>
                       ) : (
                           <p className="text-gray-600 text-xs italic mb-4">טרם נחתמה הצהרה</p>
@@ -509,7 +591,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           <a href={editingUser.healthDeclarationFile} download={`health-${editingUser.fullName}`} className="block w-full text-center py-4 bg-brand-primary/10 text-brand-primary font-black uppercase rounded-2xl border border-brand-primary/20">הורדת קובץ מצורף 📥</a>
                       )}
                   </div>
-
                   <div className="flex items-center gap-3 bg-red-900/10 p-4 rounded-2xl border border-red-500/20">
                       <input type="checkbox" id="restrictUser" className="w-6 h-6 accent-red-500" checked={editingUser.isRestricted} onChange={e=>setEditingUser({...editingUser, isRestricted: e.target.checked})} />
                       <label htmlFor="restrictUser" className="text-red-500 text-sm font-black uppercase italic">מתאמן חסום להרשמה ⛔</label>
@@ -517,7 +598,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
               </div>
               <div className="mt-12 flex gap-4">
                   <Button onClick={()=>{props.onUpdateUser(editingUser); setEditingUser(null);}} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
-                  <Button onClick={()=>{if(confirm('למחוק מתאמן?')){props.onDeleteUser(editingUser.id); setEditingUser(null);}}} variant="danger" className="px-10 rounded-[45px]">מחק 🗑️</Button>
+                  <Button onClick={()=>{if(confirm('מחיקת מתאמן?')){props.onDeleteUser(editingUser.id); setEditingUser(null);}}} variant="danger" className="px-10 rounded-[45px]">מחק 🗑️</Button>
               </div>
            </div>
         </div>

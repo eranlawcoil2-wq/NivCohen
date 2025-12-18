@@ -248,8 +248,8 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {!isAdminMode && appConfig.urgentMessage && showUrgent && (
-          <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[60] relative overflow-hidden flex items-center justify-center">
+      {appConfig.urgentMessage && showUrgent && (
+          <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[100] sticky top-0 left-0 right-0 overflow-hidden flex items-center justify-center">
               <div className="animate-pulse flex items-center gap-2">
                   <span>📢</span>
                   <span>{appConfig.urgentMessage}</span>
@@ -259,7 +259,7 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
+      <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'} ${appConfig.urgentMessage && showUrgent ? 'mt-0' : ''}`}>
           <div className="flex justify-between items-center mb-6">
               <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group select-none active:scale-95 transition-transform">
                   <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
@@ -299,7 +299,7 @@ const App: React.FC = () => {
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
-                onDuplicateSession={async s => { const n = {...s, id: Date.now().toString(), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; setSessions(p=>[...p, n]); await dataService.addSession(n); }}
+                onDuplicateSession={async s => { const n = {...s, id: Date.now().toString() + Math.random().toString(36).substr(2, 5), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; setSessions(p=>[...p, n]); await dataService.addSession(n); }}
                 onAddToCalendar={downloadICS}
                 getStatsForUser={getStatsForUser}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
@@ -314,7 +314,7 @@ const App: React.FC = () => {
                       <div key={ds} className="relative">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
                              <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
-                             <p className="text-[10px] font-black text-gray-700 uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
+                             <p className={`text-4xl font-black italic tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'} opacity-30`}>{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                               {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
@@ -381,7 +381,7 @@ const App: React.FC = () => {
 
       {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-2xl">
-            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 text-right shadow-3xl overflow-y-auto no-scrollbar max-h-[90vh]" dir="rtl">
+            <div className="bg-gray-900 p-8 rounded-[50px] w-full max-lg border border-white/10 text-right shadow-3xl overflow-y-auto no-scrollbar max-h-[90vh]" dir="rtl">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
@@ -427,7 +427,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <WhatsAppButton phone={appConfig.coachPhone} />
+      {isLanding && <WhatsAppButton phone={appConfig.coachPhone} />}
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
               <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
