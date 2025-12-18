@@ -3,14 +3,12 @@ import { supabase } from './supabaseClient';
 import { User, TrainingSession, LocationDef, WorkoutType, AppConfig, Quote } from '../types';
 import { INITIAL_USERS, INITIAL_SESSIONS } from '../constants';
 
-// Safe LocalStorage Parser
 function safeJsonParse<T>(key: string, fallback: T): T {
     try {
         const item = localStorage.getItem(key);
         if (!item) return fallback;
         const parsed = JSON.parse(item);
-        if (parsed === null || parsed === undefined) return fallback;
-        return parsed;
+        return parsed === null ? fallback : parsed;
     } catch (error) {
         console.error(`Error parsing localStorage key "${key}":`, error);
         return fallback;
@@ -27,16 +25,16 @@ const DEFAULT_LOCATIONS: LocationDef[] = [
 const DEFAULT_CONFIG: AppConfig = {
     coachNameHeb: 'ניב כהן',
     coachNameEng: 'NIV COHEN',
-    coachPhone: '0500000000',
+    coachPhone: '0528726618',
     coachAdditionalPhone: 'admin',
     coachEmail: '',
     defaultCity: 'נס ציונה',
-    coachBio: 'נעים מאוד, אני ניב. אני מאמין שכושר הוא לא רק מטרה, אלא דרך חיים של התמדה וחוסן.\n\nבנס ציונה, תחת כיפת השמיים ובאוויר הפתוח, אני מעביר אימונים אישיים וקבוצתיים שנועדו להוציא מכם את המקסימום.\n\nהשיטה שלי משלבת את הכוח של הקבוצה עם דיוק של אימון אישי.',
-    healthDeclarationTemplate: 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר לי לבצע פעילות גופנית מאומצת. אני מתחייב להודיע למאמן על כל שינוי במצבי הבריאותי. האימון מתבצע באחריותי המלאה.'
+    coachBio: `נעים מאוד, אני ניב. אני מאמין שכושר הוא לא רק מטרה, אלא דרך חיים של התמדה וחוסן.\n\nבנס ציונה, תחת כיפת השמיים ובאוויר הפתוח, אני מעביר אימונים אישיים וקבוצתיים שנועדו להוציא מכם את המקסימום. האווירה הדינמית של האימון הקבוצתי נותנת כוח, אבל אני יודע שלכל אחד יש את המכשולים האישיים שלו.\n\n"השיטה שלי משלבת את הכוח של הקבוצה עם דיוק של אימון אישי."\n\nאני מעודד את המתאמנים שלי לשלב מדי פעם אימון אישי נקודתי לחיזוק החולשות הספציפיות - זה מה שיוצר את ההתקדמות המהותית והופך אתכם לגרסה הטובה ביותר של עצמכם.`,
+    healthDeclarationTemplate: 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר לי לבצע פעילות גופנית מאומצת. אני מתחייב להודיע למאמן על כל שינוי במצבי הבריאותי. האימון מתבצע באחריותי המלאה.',
+    healthDeclarationDownloadUrl: ''
 };
 
 export const dataService = {
-  // --- USERS ---
   getUsers: async (): Promise<User[]> => {
     if (supabase) {
       const { data, error } = await supabase.from('users').select('*');
@@ -77,27 +75,18 @@ export const dataService = {
     }
   },
 
-  // --- SESSIONS ---
   getSessions: async (): Promise<TrainingSession[]> => {
     if (supabase) {
       const { data, error } = await supabase.from('sessions').select('*');
       if (error) throw error;
-      if (data) return data.map((s: any) => ({
-          ...s,
-          waitingList: s.waitingList || []
-      })) as TrainingSession[];
+      if (data) return data.map((s: any) => ({ ...s, waitingList: s.waitingList || [] })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
   },
 
   addSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-      const safeSession = {
-          ...session,
-          registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          waitingList: session.waitingList || []
-      };
-      const { error } = await supabase.from('sessions').insert([safeSession]);
+      const { error } = await supabase.from('sessions').insert([{ ...session, registeredPhoneNumbers: session.registeredPhoneNumbers || [], waitingList: session.waitingList || [] }]);
       if (error) throw error;
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
@@ -107,12 +96,7 @@ export const dataService = {
 
   updateSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-       const safeSession = {
-          ...session,
-          registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          waitingList: session.waitingList || []
-      };
-      const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);
+      const { error } = await supabase.from('sessions').update({ ...session, registeredPhoneNumbers: session.registeredPhoneNumbers || [], waitingList: session.waitingList || [] }).eq('id', session.id);
       if (error) throw error;
     } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
@@ -131,7 +115,6 @@ export const dataService = {
     }
   },
 
-  // --- LOCATIONS ---
   getLocations: async (): Promise<LocationDef[]> => {
     if (supabase) {
        const { data, error } = await supabase.from('config_locations').select('*');
@@ -142,31 +125,23 @@ export const dataService = {
   
   saveLocations: async (locations: LocationDef[]): Promise<void> => {
     if (supabase) {
-        const { error } = await supabase.from('config_locations').upsert(locations);
-        if (error) {
-             console.error("Error saving locations:", error);
-             localStorage.setItem('niv_app_locations', JSON.stringify(locations));
-        }
-    } else {
-        localStorage.setItem('niv_app_locations', JSON.stringify(locations));
+        await supabase.from('config_locations').upsert(locations);
     }
+    localStorage.setItem('niv_app_locations', JSON.stringify(locations));
   },
 
   deleteLocation: async (id: string): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_locations').delete().eq('id', id);
-          if (error) throw error;
+          await supabase.from('config_locations').delete().eq('id', id);
       }
       const current = safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
       localStorage.setItem('niv_app_locations', JSON.stringify(current.filter(l => l.id !== id)));
   },
 
-  // --- WORKOUT TYPES ---
   getWorkoutTypes: async (): Promise<string[]> => {
       if (supabase) {
           const { data, error } = await supabase.from('config_workout_types').select('*');
           if (!error && data && data.length > 0) return data.map((t:any) => t.name);
-          if (!error && data && data.length === 0) return [];
       }
       return safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
   },
@@ -174,22 +149,19 @@ export const dataService = {
   saveWorkoutTypes: async (types: string[]): Promise<void> => {
       if (supabase) {
            const records = types.map(t => ({ id: t, name: t }));
-           const { error } = await supabase.from('config_workout_types').upsert(records);
-           if (error) console.error(error);
+           await supabase.from('config_workout_types').upsert(records);
       }
       localStorage.setItem('niv_app_types', JSON.stringify(types));
   },
   
   deleteWorkoutType: async (type: string): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_workout_types').delete().eq('id', type);
-          if (error) console.error(error);
+          await supabase.from('config_workout_types').delete().eq('id', type);
       }
       const current = safeJsonParse<string[]>('niv_app_types', DEFAULT_TYPES);
       localStorage.setItem('niv_app_types', JSON.stringify(current.filter(t => t !== type)));
   },
 
-  // --- APP CONFIG ---
   getAppConfig: async (): Promise<AppConfig> => {
       if (supabase) {
           const { data, error } = await supabase.from('config_general').select('*').single();
@@ -200,13 +172,11 @@ export const dataService = {
 
   saveAppConfig: async (config: AppConfig): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
-          if (error) console.error(error);
+          await supabase.from('config_general').upsert({ id: 'main', ...config });
       }
       localStorage.setItem('niv_app_config', JSON.stringify(config));
   },
 
-  // --- QUOTES ---
   getQuotes: async (): Promise<Quote[]> => {
       if (supabase) {
           const { data, error } = await supabase.from('config_quotes').select('*');
@@ -217,8 +187,7 @@ export const dataService = {
 
   addQuote: async (quote: Quote): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_quotes').insert([quote]);
-          if (error) throw error;
+          await supabase.from('config_quotes').insert([quote]);
       } else {
           const quotes = safeJsonParse<Quote[]>('niv_app_quotes', []);
           localStorage.setItem('niv_app_quotes', JSON.stringify([...quotes, quote]));
@@ -227,8 +196,7 @@ export const dataService = {
 
   deleteQuote: async (id: string): Promise<void> => {
       if (supabase) {
-          const { error } = await supabase.from('config_quotes').delete().eq('id', id);
-          if (error) throw error;
+          await supabase.from('config_quotes').delete().eq('id', id);
       } else {
           const quotes = safeJsonParse<Quote[]>('niv_app_quotes', []);
           localStorage.setItem('niv_app_quotes', JSON.stringify(quotes.filter(q => q.id !== id)));

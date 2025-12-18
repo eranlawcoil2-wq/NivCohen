@@ -16,12 +16,10 @@ const normalizePhone = (phone: string): string => {
     return cleaned;
 };
 
-// Helper to open Waze with the location
 const navigateToLocation = (location: string) => {
     window.open(`https://waze.com/ul?q=${encodeURIComponent(location)}`, '_blank');
 };
 
-// Helper to download ICS file
 const downloadICS = (session: TrainingSession) => {
     const cleanDate = session.date.replace(/-/g, '');
     const cleanTime = session.time.replace(':', '');
@@ -132,30 +130,26 @@ const InstallPromptOverlay: React.FC<InstallPromptOverlayProps> = ({ isAdmin, de
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
-  
-  const getInitialView = () => {
+  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(() => {
     const params = new URLSearchParams(window.location.search);
     const mode = params.get('mode');
     if (mode === 'admin') return 'admin';
     if (mode === 'work') return 'work';
     return 'landing';
-  };
+  });
 
-  const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(getInitialView());
   const isAdminMode = currentView === 'admin';
-  const isWorkMode = currentView === 'work';
   const isLanding = currentView === 'landing';
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(localStorage.getItem('niv_admin_auth') === 'true');
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => localStorage.getItem('niv_admin_auth') === 'true');
   const [showUrgent, setShowUrgent] = useState(true);
-  
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
   const [locations, setLocations] = useState<LocationDef[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>({
-      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0502264663', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
+      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0528726618', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
   });
-  const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
+  const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(() => localStorage.getItem('niv_app_current_phone'));
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
@@ -186,15 +180,11 @@ const App: React.FC = () => {
       let newUrl = window.location.origin;
       if (view === 'admin') newUrl += '/?mode=admin';
       else if (view === 'work') newUrl += '/?mode=work';
-      
       window.history.pushState({}, '', newUrl);
   };
 
   useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
+    const handler = (e: any) => { e.preventDefault(); setDeferredPrompt(e); };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
@@ -248,21 +238,14 @@ const App: React.FC = () => {
     return { name: leader ? (leader.displayName || leader.fullName.split(' ')[0]) : '---', count: topCount };
   }, [sessions, users]);
 
-  useEffect(() => {
-    document.documentElement.style.setProperty('--brand-primary', isAdminMode ? '#EF4444' : '#A3E635');
-  }, [isAdminMode]);
-
   const refreshData = useCallback(async () => {
       try {
           const [u, s, locs, types, config, q] = await Promise.all([
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
           ]);
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
-          if (q.length > 0) {
-            setQuote(q[Math.floor(Math.random() * q.length)].text);
-          } else {
-            getMotivationQuote().then(setQuote);
-          }
+          if (q.length > 0) setQuote(q[Math.floor(Math.random() * q.length)].text);
+          else getMotivationQuote().then(setQuote);
           const dates = Array.from({length: 14}, (_, i) => {
             const d = new Date(); d.setDate(d.getDate() - 3 + i);
             return d.toISOString().split('T')[0];
@@ -291,12 +274,6 @@ const App: React.FC = () => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const handleDuplicateSession = async (session: TrainingSession) => {
-      const newSession = { ...session, id: Date.now().toString(), registeredPhoneNumbers: [], attendedPhoneNumbers: [] };
-      setSessions(prev => [...prev, newSession]);
-      await dataService.addSession(newSession);
-  };
-
   if (isLanding) {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
@@ -310,17 +287,14 @@ const App: React.FC = () => {
             </svg>
         </div>
         <div className="z-10 max-w-2xl space-y-12 py-12">
-            <div 
-                onClick={() => navigateTo('work')} 
-                className="cursor-pointer active:scale-95 transition-transform"
-            >
+            <div onClick={() => navigateTo('work')} className="cursor-pointer active:scale-95 transition-transform">
                 <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             </div>
             
             <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl" onClick={() => navigateTo('work')}>
                 <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap cursor-pointer">
-                    {appConfig.coachBio || 'ברוכים הבאים לעולם של התמדה וחוסן.'}
+                    {appConfig.coachBio}
                 </div>
             </div>
 
@@ -335,7 +309,6 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {/* Urgent Message Banner with Close Button */}
       {!isAdminMode && appConfig.urgentMessage && showUrgent && (
           <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[60] relative overflow-hidden flex items-center justify-center">
               <div className="animate-pulse flex items-center gap-2">
@@ -349,10 +322,7 @@ const App: React.FC = () => {
 
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
           <div className="flex justify-between items-center mb-6">
-              <div 
-                  onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} 
-                  className="cursor-pointer group select-none active:scale-95 transition-transform"
-              >
+              <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group select-none active:scale-95 transition-transform">
                   <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[14px] sm:text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
@@ -390,25 +360,20 @@ const App: React.FC = () => {
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
-                onDuplicateSession={handleDuplicateSession}
+                onDuplicateSession={async s => { const n = {...s, id: Date.now().toString(), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; setSessions(p=>[...p, n]); await dataService.addSession(n); }}
                 onAddToCalendar={downloadICS}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
             <div className="space-y-16 pb-20">
               {Array.from({length:7}, (_,i) => {
-                  const d = new Date();
-                  d.setHours(12, 0, 0, 0);
-                  const dayOfWeek = d.getDay(); 
-                  d.setDate(d.getDate() - dayOfWeek + i);
-                  const dateStr = d.toISOString().split('T')[0];
-                  const daySessions = sessions.filter(s => s.date === dateStr && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
+                  const d = new Date(); d.setHours(12, 0, 0, 0); const dow = d.getDay(); d.setDate(d.getDate() - dow + i);
+                  const ds = d.toISOString().split('T')[0];
+                  const daySessions = sessions.filter(s => s.date === ds && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                   return (
-                      <div key={dateStr} className="relative">
+                      <div key={ds} className="relative">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
-                             <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${dateStr === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>
-                                {d.toLocaleDateString('he-IL',{weekday:'long'})}
-                             </h2>
+                             <h2 className={`text-4xl font-black italic uppercase tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
                              <p className="text-[10px] font-black text-gray-700 uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
@@ -422,7 +387,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Trainee Profile Modal */}
       {showProfile && currentUser && (
           <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-6 backdrop-blur-2xl overflow-y-auto no-scrollbar">
               <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 text-right shadow-3xl my-auto" dir="rtl">
@@ -432,69 +396,42 @@ const App: React.FC = () => {
                 </div>
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black mb-1 block">שם מלא</label>
-                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.fullName} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black mb-1 block">כינוי</label>
-                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} />
-                        </div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">שם מלא</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.fullName} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">כינוי</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} /></div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black mb-1 block">טלפון</label>
-                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold font-mono" value={currentUser.phone} onChange={e => handleUpdateProfile({...currentUser, phone: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] text-gray-500 font-black mb-1 block">אימייל</label>
-                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.email} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} />
-                        </div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">טלפון</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold font-mono" value={currentUser.phone} onChange={e => handleUpdateProfile({...currentUser, phone: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">אימייל</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.email} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} /></div>
                     </div>
                     <div>
                         <label className="text-[10px] text-gray-500 font-black mb-1 block">צבע כינוי</label>
                         <input type="color" className="w-full h-12 bg-gray-800 rounded-2xl p-2 cursor-pointer border-none" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
                     </div>
-
                     <div className="bg-gray-800/50 p-6 rounded-[40px] border border-white/5">
                         <h4 className="text-brand-primary font-black uppercase italic mb-4">הצהרת בריאות 📋</h4>
                         {currentUser.healthDeclarationDate ? (
                             <div className="bg-brand-primary/10 border border-brand-primary/20 p-4 rounded-2xl">
                                 <p className="text-white font-bold text-sm">הצהרה חתומה ✓</p>
-                                <p className="text-gray-400 text-xs mt-1">נחתמה בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</p>
-                                <p className="text-gray-400 text-xs">נחתם ע"י: {currentUser.fullName}</p>
-                                <p className="text-gray-400 text-xs">ת.ז.: {currentUser.healthDeclarationId}</p>
+                                <p className="text-gray-400 text-xs mt-1">נחתמה ב: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</p>
+                                <p className="text-gray-400 text-xs">ע"י: {currentUser.fullName}</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="max-h-32 overflow-y-auto p-3 bg-gray-900 rounded-xl text-xs text-gray-300 leading-relaxed italic border border-white/5 no-scrollbar">
-                                    {appConfig.healthDeclarationTemplate}
-                                </div>
+                                <div className="max-h-32 overflow-y-auto p-3 bg-gray-900 rounded-xl text-xs text-gray-300 italic border border-white/5">{appConfig.healthDeclarationTemplate}</div>
+                                {appConfig.healthDeclarationDownloadUrl && <a href={appConfig.healthDeclarationDownloadUrl} target="_blank" className="text-xs text-brand-primary underline block text-center">להורדת טופס להדפסה 📄</a>}
                                 <div className="flex gap-2">
-                                    <input type="text" id="sign-id" placeholder="הכנס מספר ת.ז." className="flex-1 bg-gray-900 p-4 rounded-2xl text-white text-sm outline-none border border-white/10" />
-                                    <Button onClick={() => {
-                                        const idVal = (document.getElementById('sign-id') as HTMLInputElement).value;
-                                        if (idVal.length < 5) return alert('ת.ז. לא תקינה');
-                                        handleUpdateProfile({...currentUser, healthDeclarationDate: new Date().toISOString(), healthDeclarationId: idVal});
-                                    }} className="px-6 rounded-2xl">חתום ✍️</Button>
+                                    <input type="text" id="sign-id" placeholder="מספר ת.ז." className="flex-1 bg-gray-900 p-4 rounded-2xl text-white outline-none border border-white/10" />
+                                    <Button onClick={() => { const idVal = (document.getElementById('sign-id') as HTMLInputElement).value; if (idVal.length < 5) return alert('ת.ז. לא תקינה'); handleUpdateProfile({...currentUser, healthDeclarationDate: new Date().toISOString(), healthDeclarationId: idVal}); }} className="px-6 rounded-2xl">חתום ✍️</Button>
                                 </div>
                             </div>
                         )}
                         <div className="mt-4 pt-4 border-t border-white/5">
-                            <label className="text-[10px] text-gray-500 font-black block mb-2">צירוף קובץ חתום (אופציונלי)</label>
-                            <input type="file" className="text-xs text-gray-500 file:bg-gray-800 file:text-white file:border-none file:px-4 file:py-2 file:rounded-xl cursor-pointer" onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => handleUpdateProfile({...currentUser, healthDeclarationFile: reader.result as string});
-                                    reader.readAsDataURL(file);
-                                }
-                            }} />
-                            {currentUser.healthDeclarationFile && <p className="text-[10px] text-brand-primary mt-1">קובץ מצורף ✓</p>}
+                            <label className="text-[10px] text-gray-500 font-black block mb-2">צירוף קובץ חתום</label>
+                            <input type="file" className="text-xs text-gray-500" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => handleUpdateProfile({...currentUser, healthDeclarationFile: r.result as string}); r.readAsDataURL(f); }}} />
                         </div>
                     </div>
                 </div>
-                <Button onClick={() => setShowProfile(false)} className="w-full mt-8 py-6 rounded-[40px] bg-white text-brand-black">סגור ועדכן ✓</Button>
+                <Button onClick={() => setShowProfile(false)} className="w-full mt-8 py-6 rounded-[40px] bg-white text-brand-black">סגור ✓</Button>
               </div>
           </div>
       )}
@@ -505,25 +442,14 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
-                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest leading-none">{viewingSession.time}</p>
-                        <p className="text-gray-400 text-sm font-black uppercase mt-1">
-                            {new Date(viewingSession.date).toLocaleDateString('he-IL', {weekday: 'long', day: 'numeric', month: 'numeric'})}
-                        </p>
-                        <p className="text-gray-500 text-xs font-black uppercase mt-2 italic tracking-widest opacity-80 flex items-center gap-1">
-                             <span className="text-brand-primary">📍</span> {viewingSession.location}
-                        </p>
+                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest">{viewingSession.time}</p>
+                        <p className="text-gray-400 text-sm font-black uppercase mt-1">{new Date(viewingSession.date).toLocaleDateString('he-IL', {weekday: 'long', day: 'numeric', month: 'numeric'})}</p>
+                        <p className="text-gray-500 text-xs font-black uppercase mt-2 italic tracking-widest opacity-80 flex items-center gap-1"><span className="text-brand-primary">📍</span> {viewingSession.location}</p>
                     </div>
                     <button onClick={() => setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                 </div>
                 <div className="space-y-6">
-                    {/* Instructions recap */}
-                    {viewingSession.description && (
-                         <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-4 rounded-l-2xl">
-                             <p className="text-white text-sm font-bold leading-relaxed">{viewingSession.description}</p>
-                         </div>
-                    )}
-
-                    {/* Hourly weather inside modal - specific only */}
+                    {viewingSession.description && <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-4 rounded-l-2xl"><p className="text-white text-sm font-bold">{viewingSession.description}</p></div>}
                     {weatherData[viewingSession.date]?.hourly && (
                         <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 border-b border-white/5">
                             {Object.entries(weatherData[viewingSession.date].hourly || {}).map(([hour, data]: [string, any]) => (
@@ -535,20 +461,13 @@ const App: React.FC = () => {
                             ))}
                         </div>
                     )}
-
-                    {viewingSession.isZoomSession && viewingSession.zoomLink && (
-                        <a href={viewingSession.zoomLink} target="_blank" rel="noreferrer" className="block p-5 bg-blue-600/10 border border-blue-500/20 rounded-[30px] text-blue-400 text-center font-black italic">
-                             כנס לאימון זום 🎥
-                        </a>
-                    )}
-                    
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
                         <div className="flex justify-between items-center mb-4">
                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
                             <button onClick={() => downloadICS(viewingSession)} className="text-[10px] font-black text-brand-primary uppercase underline italic">הוסף ליומן 📅</button>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            {viewingSession.registeredPhoneNumbers.length > 0 ? viewingSession.registeredPhoneNumbers.map(phone => {
+                            {viewingSession.registeredPhoneNumbers.map(phone => {
                                 const t = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
                                 return (
                                     <div key={phone} className="px-3 py-1.5 rounded-full bg-gray-900 text-white text-[11px] border border-white/5 flex items-center gap-2">
@@ -556,15 +475,10 @@ const App: React.FC = () => {
                                         {t ? (t.displayName || t.fullName.split(' ')[0]) : 'מתאמן'}
                                     </div>
                                 );
-                            }) : <p className="text-gray-600 text-xs italic">עדיין אין נרשמים...</p>}
+                            })}
                         </div>
                     </div>
-
-                    <Button 
-                        onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} 
-                        className={`w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500 shadow-red-500/20' : 'bg-brand-primary shadow-brand-primary/20'}`}
-                        disabled={viewingSession.isCancelled || (viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity && !viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')))}
-                    >
+                    <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className={`w-full py-6 rounded-[40px] text-xl font-black shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500 shadow-red-500/20' : 'bg-brand-primary shadow-brand-primary/20'}`} disabled={viewingSession.isCancelled || (viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity && !viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')))}>
                         {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה מהירה ⚡'}
                     </Button>
                 </div>
@@ -574,16 +488,11 @@ const App: React.FC = () => {
 
       <InstallPromptOverlay isAdmin={isAdminMode} deferredPrompt={deferredPrompt} />
       {isLanding && <WhatsAppButton phone={appConfig.coachPhone} />}
-      
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
               <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
               <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-5xl font-mono outline-none border border-gray-700 focus:border-brand-primary" />
-              <Button onClick={() => { 
-                  const p = (document.getElementById('user-phone') as HTMLInputElement).value;
-                  if(p.length >= 9) { setCurrentUserPhone(p); localStorage.setItem('niv_app_current_phone', p); document.getElementById('login-modal')?.classList.add('hidden'); }
-                  else alert('מספר לא תקין');
-              }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
+              <Button onClick={() => { const p = (document.getElementById('user-phone') as HTMLInputElement).value; if(p.length >= 9) { setCurrentUserPhone(p); localStorage.setItem('niv_app_current_phone', p); document.getElementById('login-modal')?.classList.add('hidden'); } else alert('מספר לא תקין'); }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
           </div>
       </div>
     </div>
