@@ -16,6 +16,44 @@ const normalizePhone = (phone: string): string => {
     return cleaned;
 };
 
+// Helper to open Waze with the location
+const navigateToLocation = (location: string) => {
+    window.open(`https://waze.com/ul?q=${encodeURIComponent(location)}`, '_blank');
+};
+
+// Helper to download ICS file
+const downloadICS = (session: TrainingSession) => {
+    const cleanDate = session.date.replace(/-/g, '');
+    const cleanTime = session.time.replace(':', '');
+    const start = `${cleanDate}T${cleanTime}00`;
+    const [h, m] = session.time.split(':').map(Number);
+    const endHour = (h + 1).toString().padStart(2, '0');
+    const end = `${cleanDate}T${endHour}${m.toString().padStart(2, '0')}00`;
+    
+    const icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Niv Cohen Fitness//NONSGML v1.0//EN',
+        'BEGIN:VEVENT',
+        `DTSTART:${start}`,
+        `DTEND:${end}`,
+        `SUMMARY:אימון ${session.type} - ניב כהן`,
+        `DESCRIPTION:${session.description || ''}`,
+        `LOCATION:${session.location}`,
+        'END:VEVENT',
+        'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `workout-${session.date}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+};
+
 const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     <a 
         href={`https://wa.me/${phone.replace(/\D/g, '')}`} 
@@ -253,23 +291,6 @@ const App: React.FC = () => {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const addToCalendar = (session: TrainingSession) => {
-      const cleanDate = session.date.replace(/-/g, '');
-      const cleanTime = session.time.replace(':', '');
-      const start = `${cleanDate}T${cleanTime}00`;
-      const [h, m] = session.time.split(':').map(Number);
-      const endHour = (h + 1).toString().padStart(2, '0');
-      const end = `${cleanDate}T${endHour}${m.toString().padStart(2, '0')}00`;
-      const url = `https://www.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('אימון: ' + session.type)}&dates=${start}/${end}&location=${encodeURIComponent(session.location)}`;
-      window.open(url, '_blank');
-  };
-
-  const navigateToLocation = (locationName: string) => {
-      const loc = locations.find(l => l.name === locationName);
-      const addr = loc ? loc.address : locationName;
-      window.open(`https://waze.com/ul?q=${encodeURIComponent(addr)}`, '_blank');
-  };
-
   const handleDuplicateSession = async (session: TrainingSession) => {
       const newSession = { ...session, id: Date.now().toString(), registeredPhoneNumbers: [], attendedPhoneNumbers: [] };
       setSessions(prev => [...prev, newSession]);
@@ -297,8 +318,8 @@ const App: React.FC = () => {
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             </div>
             
-            <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
-                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
+            <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl" onClick={() => navigateTo('work')}>
+                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap cursor-pointer">
                     {appConfig.coachBio || 'ברוכים הבאים לעולם של התמדה וחוסן.'}
                 </div>
             </div>
@@ -370,7 +391,7 @@ const App: React.FC = () => {
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
                 onDuplicateSession={handleDuplicateSession}
-                onAddToCalendar={addToCalendar}
+                onAddToCalendar={downloadICS}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
@@ -391,7 +412,7 @@ const App: React.FC = () => {
                              <p className="text-[10px] font-black text-gray-700 uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]} onWazeClick={navigateToLocation} onAddToCalendar={addToCalendar}/>)}
+                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
                               {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                           </div>
                       </div>
@@ -441,6 +462,7 @@ const App: React.FC = () => {
                             <div className="bg-brand-primary/10 border border-brand-primary/20 p-4 rounded-2xl">
                                 <p className="text-white font-bold text-sm">הצהרה חתומה ✓</p>
                                 <p className="text-gray-400 text-xs mt-1">נחתמה בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</p>
+                                <p className="text-gray-400 text-xs">נחתם ע"י: {currentUser.fullName}</p>
                                 <p className="text-gray-400 text-xs">ת.ז.: {currentUser.healthDeclarationId}</p>
                             </div>
                         ) : (
@@ -459,7 +481,7 @@ const App: React.FC = () => {
                             </div>
                         )}
                         <div className="mt-4 pt-4 border-t border-white/5">
-                            <label className="text-[10px] text-gray-500 font-black block mb-2">צירוף קובץ (אופציונלי)</label>
+                            <label className="text-[10px] text-gray-500 font-black block mb-2">צירוף קובץ חתום (אופציונלי)</label>
                             <input type="file" className="text-xs text-gray-500 file:bg-gray-800 file:text-white file:border-none file:px-4 file:py-2 file:rounded-xl cursor-pointer" onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
@@ -468,6 +490,7 @@ const App: React.FC = () => {
                                     reader.readAsDataURL(file);
                                 }
                             }} />
+                            {currentUser.healthDeclarationFile && <p className="text-[10px] text-brand-primary mt-1">קובץ מצורף ✓</p>}
                         </div>
                     </div>
                 </div>
@@ -482,11 +505,13 @@ const App: React.FC = () => {
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
-                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest">{viewingSession.time}</p>
-                        <p className="text-gray-500 text-sm font-black uppercase mt-1">
+                        <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest leading-none">{viewingSession.time}</p>
+                        <p className="text-gray-400 text-sm font-black uppercase mt-1">
                             {new Date(viewingSession.date).toLocaleDateString('he-IL', {weekday: 'long', day: 'numeric', month: 'numeric'})}
                         </p>
-                        <p className="text-gray-500 text-xs font-black uppercase mt-1 italic tracking-widest opacity-80">📍 {viewingSession.location}</p>
+                        <p className="text-gray-500 text-xs font-black uppercase mt-2 italic tracking-widest opacity-80 flex items-center gap-1">
+                             <span className="text-brand-primary">📍</span> {viewingSession.location}
+                        </p>
                     </div>
                     <button onClick={() => setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                 </div>
@@ -498,13 +523,13 @@ const App: React.FC = () => {
                          </div>
                     )}
 
-                    {/* Hourly weather inside modal */}
+                    {/* Hourly weather inside modal - specific only */}
                     {weatherData[viewingSession.date]?.hourly && (
                         <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 border-b border-white/5">
                             {Object.entries(weatherData[viewingSession.date].hourly || {}).map(([hour, data]: [string, any]) => (
-                                <div key={hour} className={`flex flex-col items-center p-2 rounded-2xl min-w-[50px] ${hour === viewingSession.time.split(':')[0] ? 'bg-brand-primary/20 border border-brand-primary/30' : 'bg-gray-800'}`}>
+                                <div key={hour} className={`flex flex-col items-center p-3 rounded-2xl min-w-[60px] ${hour === viewingSession.time.split(':')[0] ? 'bg-brand-primary/20 border border-brand-primary/30 shadow-lg' : 'bg-gray-800 opacity-60'}`}>
                                     <span className="text-[10px] text-gray-500 font-black">{hour}:00</span>
-                                    <span className="text-xl">{getWeatherIcon(data.weatherCode)}</span>
+                                    <span className="text-2xl my-1">{getWeatherIcon(data.weatherCode)}</span>
                                     <span className="text-xs font-black text-white">{Math.round(data.temp)}°</span>
                                 </div>
                             ))}
@@ -518,7 +543,10 @@ const App: React.FC = () => {
                     )}
                     
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
-                        <p className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
+                        <div className="flex justify-between items-center mb-4">
+                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
+                            <button onClick={() => downloadICS(viewingSession)} className="text-[10px] font-black text-brand-primary uppercase underline italic">הוסף ליומן 📅</button>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                             {viewingSession.registeredPhoneNumbers.length > 0 ? viewingSession.registeredPhoneNumbers.map(phone => {
                                 const t = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
