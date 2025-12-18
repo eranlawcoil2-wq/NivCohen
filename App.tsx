@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, TrainingSession, PaymentStatus, LocationDef, AppConfig, WeatherInfo, Quote } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
@@ -95,6 +94,9 @@ const App: React.FC = () => {
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
+  
+  // Week navigation for trainees
+  const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
@@ -128,7 +130,7 @@ const App: React.FC = () => {
               else if (view === 'CHAMP') newUrl += '?mode=CHAMP';
               window.history.pushState({}, '', newUrl);
           } catch (e) {
-              console.warn("History API navigation failed, continuing with view state only.");
+              console.warn("History pushState failed, using local state navigation only.");
           }
       }
   };
@@ -211,7 +213,7 @@ const App: React.FC = () => {
   const todayStr = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-      if (!isAdminMode && !isLanding && sessions.length > 0 && !hasScrolledToToday) {
+      if (!isAdminMode && !isLanding && sessions.length > 0 && !hasScrolledToToday && traineeWeekOffset === 0) {
           setTimeout(() => {
             const el = document.getElementById(`day-${todayStr}`);
             if (el) {
@@ -220,7 +222,7 @@ const App: React.FC = () => {
             }
           }, 600);
       }
-  }, [sessions, todayStr, isAdminMode, isLanding, hasScrolledToToday]);
+  }, [sessions, todayStr, isAdminMode, isLanding, hasScrolledToToday, traineeWeekOffset]);
 
   const handleRegisterClick = async (sid: string) => {
       if (!currentUserPhone) { document.getElementById('login-modal')?.classList.remove('hidden'); return; }
@@ -276,10 +278,6 @@ const App: React.FC = () => {
 
             <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button onClick={() => navigateTo('work')} className="py-6 px-10 rounded-[40px] text-xl font-black shadow-2xl bg-brand-primary">כניסה למתאמנים 🚀</Button>
             </div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
@@ -356,18 +354,28 @@ const App: React.FC = () => {
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
-            <div className="space-y-16 pb-20">
-              {Array.from({length:14}, (_,i) => {
-                  const d = new Date(); d.setHours(12, 0, 0, 0); const dow = d.getDay(); d.setDate(d.getDate() - dow + i);
+            <div className="space-y-10 pb-20">
+              {/* Trainee Week Switcher */}
+              <div className="flex justify-between items-center bg-gray-800/40 p-4 rounded-3xl border border-white/5 shadow-xl">
+                <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
+                <div className="flex flex-col items-center">
+                    <span className="text-brand-primary font-black uppercase tracking-[0.3em] bg-brand-primary/10 px-4 py-1 rounded-full">{traineeWeekOffset === 0 ? 'השבוע' : traineeWeekOffset === 1 ? 'שבוע הבא' : traineeWeekOffset === -1 ? 'שבוע שעבר' : `בעוד ${traineeWeekOffset} שבועות`}</span>
+                </div>
+                <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
+              </div>
+
+              {Array.from({length:7}, (_,i) => {
+                  const d = new Date(); d.setHours(12, 0, 0, 0); 
+                  const dow = d.getDay(); 
+                  // Start exactly from Sunday of the selected week
+                  d.setDate(d.getDate() - dow + i + (traineeWeekOffset * 7));
                   const ds = d.toISOString().split('T')[0];
                   
                   let daySessions = sessions.filter(s => s.date === ds).sort((a,b)=>a.time.localeCompare(b.time));
                   
                   if (isChampMode) {
-                      // CHAMP mode shows only personal trainings where trainee is invited
                       daySessions = daySessions.filter(s => s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)));
                   } else {
-                      // Regular trainee view hides hidden/personal sessions unless already registered
                       daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining);
                   }
 

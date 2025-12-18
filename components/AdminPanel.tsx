@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { User, TrainingSession, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo, PaymentStatus } from '../types';
 import { Button } from './Button';
@@ -48,6 +47,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
   const weekDates = useMemo(() => {
     const sun = new Date(); sun.setHours(12, 0, 0, 0); 
+    // Start from Sunday of current week plus offset
     sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { 
         const d = new Date(sun); d.setDate(sun.getDate() + i); 
@@ -173,20 +173,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
   return (
     <div className="bg-brand-black min-h-screen">
-      <div className="sticky top-[140px] z-50 bg-brand-black/90 pt-4 border-b border-white/5 pb-2">
-        <div className="flex gap-2 p-2 max-w-4xl mx-auto">
-          {['attendance', 'users', 'settings'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t as any)} className={`flex-1 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${activeTab === t ? 'bg-red-600 text-white shadow-xl shadow-red-600/20' : 'bg-gray-800/50 text-gray-500'}`}>
-              {t === 'attendance' ? 'נוכחות' : t === 'users' ? 'מתאמנים' : 'הגדרות'}
-            </button>
-          ))}
+      {/* Admin Top Navigation Header */}
+      <div className="fixed top-[130px] left-0 right-0 z-50 bg-brand-black/90 pt-4 border-b border-white/5 pb-4 backdrop-blur-xl">
+        <div className="flex flex-col gap-4 max-w-4xl mx-auto px-4">
+            <div className="flex gap-2">
+            {['settings', 'users', 'attendance'].map(t => (
+                <button 
+                key={t} 
+                onClick={() => setActiveTab(t as any)} 
+                className={`flex-1 py-4 rounded-2xl text-sm font-black uppercase tracking-widest transition-all ${activeTab === t ? 'bg-red-600 text-white shadow-xl shadow-red-600/40' : 'bg-gray-800/50 text-gray-500'}`}
+                >
+                {t === 'attendance' ? 'נוכחות' : t === 'users' ? 'מתאמנים' : 'הגדרות'}
+                </button>
+            ))}
+            </div>
+            {activeTab === 'settings' && (
+                <div className="flex gap-2 p-1 bg-gray-900/60 rounded-2xl overflow-x-auto no-scrollbar border border-white/5">
+                    {(['views', 'connections', 'quotes', 'infrastructure', 'general'] as const).map(s => (
+                        <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2.5 px-4 text-[11px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${settingsSection === s ? 'bg-gray-800 text-white shadow-lg' : 'text-gray-600'}`}>
+                            {s === 'general' ? 'מידע כללי' : s === 'infrastructure' ? 'מיקומים' : s === 'quotes' ? 'מוטיבציה' : s === 'connections' ? 'חיבורים' : 'תצוגות'}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
       </div>
 
-      <div className="p-4 max-w-4xl mx-auto space-y-6 pb-24">
+      <div className="p-4 max-w-4xl mx-auto pt-[180px] sm:pt-[220px] space-y-6 pb-24">
         {activeTab === 'attendance' && (
           <div className="space-y-6">
-             <div className="flex flex-col gap-4 bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl">
+             <div className="flex flex-col gap-4 bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl mt-6">
                 <div className="flex justify-between items-center">
                     <button onClick={()=>setWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
                     <div className="flex flex-col items-center">
@@ -227,7 +243,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
                   
-                  // Filter sessions based on coach toggles
                   daySessions = daySessions.filter(s => {
                       if (s.isPersonalTraining) return showPersonalTraining;
                       return showGroupSessions;
@@ -253,7 +268,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
         {activeTab === 'users' && (
             <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-4 mt-6">
                     <input type="text" placeholder="חיפוש מתאמן..." className="flex-1 bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                     <select className="bg-gray-800 border border-white/10 p-4 rounded-[30px] text-white text-sm font-black outline-none" value={sortBy} onChange={e=>setSortBy(e.target.value as SortMode)}>
                         <option value="name">מיון: שם</option>
@@ -287,15 +302,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         )}
 
         {activeTab === 'settings' && (
-            <div className="space-y-10">
-                <div className="flex gap-2 p-1 bg-gray-900 rounded-2xl overflow-x-auto no-scrollbar">
-                    {(['general', 'infrastructure', 'quotes', 'connections', 'views'] as const).map(s => (
-                        <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2 px-4 text-[9px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${settingsSection === s ? 'bg-gray-800 text-white' : 'text-gray-600'}`}>
-                            {s === 'general' ? 'מידע כללי' : s === 'infrastructure' ? 'מיקומים' : s === 'quotes' ? 'מוטיבציה' : s === 'connections' ? 'חיבורים' : 'תצוגות'}
-                        </button>
-                    ))}
-                </div>
-
+            <div className="space-y-10 mt-6">
                 {settingsSection === 'general' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 👤</h3>
@@ -558,7 +565,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   </div>
                   <div className="mt-8 flex gap-4">
                       <Button onClick={()=>{ 
-                          if (attendanceSession.id.includes(' ')) { // Hacky check for temporary IDs
+                          const isNew = !props.sessions.find(s => s.id === attendanceSession.id);
+                          if (isNew) {
                               props.onAddSession(attendanceSession); 
                           } else {
                               props.onUpdateSession(attendanceSession); 

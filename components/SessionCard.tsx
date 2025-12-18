@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TrainingSession, User, LocationDef, WeatherInfo } from '../types';
 import { Button } from './Button';
@@ -62,7 +61,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   else if (isFinished) borderColor = '#374151'; 
   else if (isHappening && isZoom) borderColor = '#3B82F6';
   else if (isHappening) borderColor = '#A3E635';
-  else if (isPersonal) borderColor = '#3B82F6';
+  else if (isPersonal) borderColor = '#A855F7';
   else if (isZoom) borderColor = '#3B82F6';
 
   const statusBg = isCancelled 
@@ -70,7 +69,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
     : (isFinished ? 'bg-gray-600 text-gray-200' 
     : (isHappening && isZoom 
         ? 'bg-gradient-to-r from-brand-primary to-blue-500' 
-        : (isHappening ? 'bg-brand-primary' : (isPersonal ? 'bg-blue-600' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')))));
+        : (isHappening ? 'bg-brand-primary' : (isPersonal ? 'bg-purple-600' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')))));
   
   const statusLabel = isCancelled 
     ? 'בוטל' 
@@ -80,11 +79,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // Get trainee names for personal training sessions in admin mode
   const traineeNames = isAdmin && isPersonal 
     ? session.registeredPhoneNumbers.map(phone => {
-        // Find user by normalized phone match
         const u = allUsers.find(user => {
             const up = user.phone.replace(/\D/g, '');
             const sp = phone.replace(/\D/g, '');
-            return up === sp || up.endsWith(sp.slice(-9)) || sp.endsWith(up.slice(-9));
+            return up.endsWith(sp.slice(-9)) || sp.endsWith(up.slice(-9));
         });
         return u ? (u.displayName || u.fullName.split(' ')[0]) : phone;
       }).join(', ')
@@ -101,6 +99,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             {isHappening && !isCancelled && !isFinished && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
             {statusLabel}
          </div>
+         {isPersonal && !isCancelled && !isFinished && (
+            <div className="bg-purple-500 text-white text-[9px] font-black px-3 py-1.5 rounded-full shadow-lg">אישי</div>
+         )}
       </div>
 
       <div>
@@ -113,12 +114,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                </div>
            )}
         </div>
-        <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600' : (isPersonal ? 'text-blue-400' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white')))}`}>{session.type}</h3>
+        <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-600' : (isPersonal ? 'text-purple-400' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white')))}`}>{session.type}</h3>
         <p className={`text-[8px] sm:text-[12px] font-black truncate mb-3 sm:mb-6 uppercase tracking-tighter transition-colors duration-500 ${(isCancelled || isFinished) ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location.split(',')[0]}</p>
         
         {isAdmin && isPersonal && traineeNames && (
-            <div className="bg-blue-500/10 border-r-2 border-blue-500 p-2 rounded-l-lg mb-3">
-                <p className="text-blue-400 text-[9px] font-black uppercase mb-1">מתאמנים:</p>
+            <div className="bg-purple-500/10 border-r-2 border-purple-500 p-2 rounded-l-lg mb-3">
+                <p className="text-purple-400 text-[9px] font-black uppercase mb-1">מתאמנים:</p>
                 <p className="text-white text-[10px] font-bold truncate">{traineeNames}</p>
             </div>
         )}
