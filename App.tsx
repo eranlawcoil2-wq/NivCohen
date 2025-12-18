@@ -11,8 +11,9 @@ import { dataService } from './services/dataService';
 const normalizePhone = (phone: string): string => {
     if (!phone) return '';
     let cleaned = phone.replace(/\D/g, '');
-    if (cleaned.startsWith('972')) cleaned = '0' + cleaned.substring(3);
-    else if (!cleaned.startsWith('0')) cleaned = '0' + cleaned;
+    if (cleaned.startsWith('972')) cleaned = '972' + cleaned.substring(3);
+    else if (cleaned.startsWith('0')) cleaned = '972' + cleaned.substring(1);
+    else if (!cleaned.startsWith('972')) cleaned = '972' + cleaned;
     return cleaned;
 };
 
@@ -96,16 +97,16 @@ const App: React.FC = () => {
   const [showProfile, setShowProfile] = useState(false);
   const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
   
-  // Week navigation for trainees
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
   const handleUpdateProfile = async (updated: User) => {
       setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
-      if (updated.phone !== currentUserPhone) {
-          setCurrentUserPhone(updated.phone);
-          localStorage.setItem('niv_app_current_phone', updated.phone);
+      if (normalizePhone(updated.phone) !== normalizePhone(currentUserPhone || '')) {
+          const np = normalizePhone(updated.phone);
+          setCurrentUserPhone(np);
+          localStorage.setItem('niv_app_current_phone', np);
       }
       await dataService.updateUser(updated);
   };
@@ -329,7 +330,7 @@ const App: React.FC = () => {
                   <p className="text-white font-black italic">היי {currentUser.displayName || currentUser.fullName}, הנה האימונים האישיים שלך 🏆</p>
                   <div className="text-center">
                       <p className="text-[8px] text-gray-500 uppercase">סה"כ</p>
-                      <p className="text-xl font-black text-brand-primary leading-none">{sessions.filter(s => s.isPersonalTraining && s.registeredPhoneNumbers.includes(normalizePhone(currentUser.phone))).length}</p>
+                      <p className="text-xl font-black text-brand-primary leading-none">{sessions.filter(s => s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))).length}</p>
                   </div>
               </div>
           )}
@@ -356,7 +357,6 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-10 pb-20">
-              {/* Trainee Week Switcher */}
               <div className="flex justify-between items-center bg-gray-800/40 p-4 rounded-3xl border border-white/5 shadow-xl">
                 <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
                 <div className="flex flex-col items-center">
@@ -368,16 +368,21 @@ const App: React.FC = () => {
               {Array.from({length:7}, (_,i) => {
                   const d = new Date(); d.setHours(12, 0, 0, 0); 
                   const dow = d.getDay(); 
-                  // Start exactly from Sunday of the selected week
                   d.setDate(d.getDate() - dow + i + (traineeWeekOffset * 7));
                   const ds = d.toISOString().split('T')[0];
                   
                   let daySessions = sessions.filter(s => s.date === ds).sort((a,b)=>a.time.localeCompare(b.time));
                   
                   if (isChampMode) {
-                      daySessions = daySessions.filter(s => s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone)));
+                      // CHAMP mode: ONLY personal sessions where I am registered
+                      daySessions = daySessions.filter(s => {
+                          const isPersonal = Boolean(s.isPersonalTraining);
+                          const amRegistered = currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone));
+                          return isPersonal && amRegistered;
+                      });
                   } else {
-                      daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining);
+                      // Regular view: Hide all personal training sessions
+                      daySessions = daySessions.filter(s => !s.isHidden && !Boolean(s.isPersonalTraining));
                   }
 
                   if (isChampMode && daySessions.length === 0) return null;
@@ -465,15 +470,6 @@ const App: React.FC = () => {
                 </div>
                 <div className="space-y-6">
                     {viewingSession.description && <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-4 rounded-l-2xl"><p className="text-white text-sm font-bold leading-tight">{viewingSession.description}</p></div>}
-                    {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
-                        <div className="flex justify-center border-b border-white/5 pb-4">
-                            <div className="bg-brand-primary/20 border border-brand-primary/30 p-4 rounded-3xl shadow-xl flex flex-col items-center min-w-[100px]">
-                                <span className="text-[10px] text-gray-400 font-black uppercase mb-1">מזג אוויר בזמן האימון</span>
-                                <span className="text-5xl my-2">{getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}</span>
-                                <span className="text-2xl font-black text-white">{Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°</span>
-                            </div>
-                        </div>
-                    )}
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
                         <div className="flex justify-between items-center mb-4">
                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
@@ -491,9 +487,11 @@ const App: React.FC = () => {
                             })}
                         </div>
                     </div>
-                    <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className={`w-full py-6 rounded-[40px] text-xl font-black shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500 shadow-red-500/20' : 'bg-brand-primary shadow-brand-primary/20'}`} disabled={viewingSession.isCancelled || (viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity && !viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')))}>
-                        {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה מהירה ⚡'}
-                    </Button>
+                    {!Boolean(viewingSession.isPersonalTraining) && (
+                        <Button onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} className={`w-full py-6 rounded-[40px] text-xl font-black shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500 shadow-red-500/20' : 'bg-brand-primary shadow-brand-primary/20'}`} disabled={viewingSession.isCancelled || (viewingSession.registeredPhoneNumbers.length >= viewingSession.maxCapacity && !viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')))}>
+                            {viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'ביטול הרשמה' : 'הרשמה מהירה ⚡'}
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>
@@ -504,7 +502,7 @@ const App: React.FC = () => {
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
               <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
               <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-5xl font-mono outline-none border border-gray-700 focus:border-brand-primary" />
-              <Button onClick={() => { const p = (document.getElementById('user-phone') as HTMLInputElement).value; if(p.length >= 9) { setCurrentUserPhone(p); localStorage.setItem('niv_app_current_phone', p); document.getElementById('login-modal')?.classList.add('hidden'); } else alert('מספר לא תקין'); }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
+              <Button onClick={() => { const p = (document.getElementById('user-phone') as HTMLInputElement).value; if(p.length >= 9) { const np = normalizePhone(p); setCurrentUserPhone(np); localStorage.setItem('niv_app_current_phone', np); document.getElementById('login-modal')?.classList.add('hidden'); } else alert('מספר לא תקין'); }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
           </div>
       </div>
     </div>
