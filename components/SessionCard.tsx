@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { TrainingSession, User, LocationDef, WeatherInfo } from '../types';
 import { Button } from './Button';
@@ -61,7 +62,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   else if (isFinished) borderColor = '#374151'; 
   else if (isHappening && isZoom) borderColor = '#3B82F6';
   else if (isHappening) borderColor = '#A3E635';
-  else if (isPersonal) borderColor = '#A855F7';
+  else if (isPersonal) borderColor = '#A855F7'; // Purple border for personal training
   else if (isZoom) borderColor = '#3B82F6';
 
   const statusBg = isCancelled 

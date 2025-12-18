@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { User, TrainingSession, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo, PaymentStatus } from '../types';
 import { Button } from './Button';
@@ -173,9 +174,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
   return (
     <div className="bg-brand-black min-h-screen">
-      {/* Admin Top Navigation Header */}
-      <div className="fixed top-[130px] left-0 right-0 z-50 bg-brand-black/90 pt-4 border-b border-white/5 pb-4 backdrop-blur-xl">
-        <div className="flex flex-col gap-4 max-w-4xl mx-auto px-4">
+      {/* Fixed Admin Header Controls */}
+      <div className="fixed top-[130px] left-0 right-0 z-[60] bg-brand-black/90 pt-4 border-b border-white/5 pb-4 backdrop-blur-xl px-4">
+        <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex gap-2">
             {['settings', 'users', 'attendance'].map(t => (
                 <button 
@@ -199,7 +200,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         </div>
       </div>
 
-      <div className="p-4 max-w-4xl mx-auto pt-[180px] sm:pt-[220px] space-y-6 pb-24">
+      <div className="p-4 max-w-4xl mx-auto pt-[200px] sm:pt-[240px] space-y-6 pb-24">
         {activeTab === 'attendance' && (
           <div className="space-y-6">
              <div className="flex flex-col gap-4 bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl mt-6">
@@ -238,7 +239,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                  </div>
              )}
 
-             <Button onClick={() => setAttendanceSession({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '' })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
+             <Button onClick={() => setAttendanceSession({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
@@ -476,7 +477,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 onChange={(e) => setTraineeSearch(e.target.value)}
                             />
                             {traineeSuggestions.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 z-30 bg-gray-900 border border-white/10 rounded-2xl mt-1 overflow-hidden shadow-2xl">
+                                <div className="absolute top-full left-0 right-0 z-[210] bg-gray-900 border border-white/10 rounded-2xl mt-1 overflow-hidden shadow-2xl">
                                     {traineeSuggestions.map(u => (
                                         <button 
                                             key={u.id} 
@@ -504,7 +505,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 return (
                                     <div key={phone} className="flex justify-between items-center p-4 rounded-2xl bg-gray-900/50 border border-white/5">
                                         <div className="flex flex-col">
-                                            <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
+                                                <a 
+                                                    href={`https://wa.me/${phone.replace(/\D/g, '')}`} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="text-green-500 hover:scale-110 transition-transform"
+                                                >
+                                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                                                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                                    </svg>
+                                                </a>
+                                            </div>
                                             <span className="text-[10px] text-gray-500 font-mono">{phone}</span>
                                         </div>
                                         <div className="flex gap-2">
@@ -539,16 +552,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                         <div className="grid grid-cols-3 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isZoom" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isZoomSession || false} onChange={e=>setAttendanceSession({...attendanceSession, isZoomSession: e.target.checked})} />
-                                <label htmlFor="isZoom" className="text-blue-400 text-[9px] font-black uppercase cursor-pointer">זום 💻</label>
+                                <input type="checkbox" id="isZoom" className="w-6 h-6 accent-blue-500 cursor-pointer" checked={attendanceSession.isZoomSession || false} onChange={e=>setAttendanceSession({...attendanceSession, isZoomSession: e.target.checked})} />
+                                <label htmlFor="isZoom" className="text-blue-400 text-[10px] font-black uppercase cursor-pointer">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isPersonalTraining" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isPersonalTraining || false} onChange={e=>setAttendanceSession({...attendanceSession, isPersonalTraining: e.target.checked})} />
-                                <label htmlFor="isPersonalTraining" className="text-blue-400 text-[9px] font-black uppercase cursor-pointer">אימון אישי 🏆</label>
+                                <input type="checkbox" id="isPersonalTraining" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={attendanceSession.isPersonalTraining || false} onChange={e=>setAttendanceSession({...attendanceSession, isPersonalTraining: e.target.checked})} />
+                                <label htmlFor="isPersonalTraining" className="text-purple-400 text-[10px] font-black uppercase cursor-pointer">אישי 🏆</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isCancelled" className="w-4 h-4 accent-red-500" checked={attendanceSession.isCancelled || false} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
-                                <label htmlFor="isCancelled" className="text-red-500 text-[9px] font-black uppercase cursor-pointer">מבוטל ❌</label>
+                                <input type="checkbox" id="isCancelled" className="w-6 h-6 accent-red-500 cursor-pointer" checked={attendanceSession.isCancelled || false} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
+                                <label htmlFor="isCancelled" className="text-red-500 text-[10px] font-black uppercase cursor-pointer">מבוטל ❌</label>
                             </div>
                         </div>
                         {attendanceSession.isZoomSession && (
@@ -557,13 +570,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <input className="w-full bg-blue-900/10 border border-blue-500/20 p-4 rounded-2xl text-white font-mono text-xs" value={attendanceSession.zoomLink || ''} onChange={e=>setAttendanceSession({...attendanceSession, zoomLink: e.target.value})} placeholder="https://zoom.us/..." />
                             </div>
                         )}
-                        <div className="flex items-center gap-3 bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20">
-                            <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted || false} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
-                            <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase cursor-pointer">אימון מתקיים ✓</label>
+                        <div className="flex items-center gap-3 bg-brand-primary/10 p-6 rounded-3xl border border-brand-primary/20">
+                            <input type="checkbox" id="isHappening" className="w-8 h-8 accent-brand-primary cursor-pointer" checked={attendanceSession.manualHasStarted || false} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
+                            <label htmlFor="isHappening" className="text-brand-primary text-lg font-black uppercase cursor-pointer flex-1">אימון מתקיים ✓</label>
                         </div>
                       </div>
                   </div>
-                  <div className="mt-8 flex gap-4">
+                  <div className="mt-12 flex gap-4">
                       <Button onClick={()=>{ 
                           const isNew = !props.sessions.find(s => s.id === attendanceSession.id);
                           if (isNew) {
@@ -572,8 +585,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                               props.onUpdateSession(attendanceSession); 
                           }
                           setAttendanceSession(null); 
-                      }} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
-                      <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-10 rounded-[45px]">מחק 🗑️</Button>
+                      }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
+                      <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(attendanceSession.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]">מחק 🗑️</Button>
                   </div>
               </div>
           </div>
