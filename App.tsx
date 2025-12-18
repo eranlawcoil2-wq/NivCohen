@@ -330,7 +330,7 @@ const App: React.FC = () => {
                   <p className="text-white font-black italic">היי {currentUser.displayName || currentUser.fullName}, הנה האימונים האישיים שלך 🏆</p>
                   <div className="text-center">
                       <p className="text-[8px] text-gray-500 uppercase">סה"כ</p>
-                      <p className="text-xl font-black text-brand-primary leading-none">{sessions.filter(s => s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))).length}</p>
+                      <p className="text-xl font-black text-brand-primary leading-none">{sessions.filter(s => !!s.isPersonalTraining && currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))).length}</p>
                   </div>
               </div>
           )}
@@ -376,13 +376,13 @@ const App: React.FC = () => {
                   if (isChampMode) {
                       // CHAMP mode: ONLY personal sessions where I am registered
                       daySessions = daySessions.filter(s => {
-                          const isPersonal = Boolean(s.isPersonalTraining);
+                          const isPersonal = !!s.isPersonalTraining;
                           const amRegistered = currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone));
                           return isPersonal && amRegistered;
                       });
                   } else {
-                      // Regular view: Hide all personal training sessions
-                      daySessions = daySessions.filter(s => !s.isHidden && !Boolean(s.isPersonalTraining));
+                      // Regular view: Hide all personal training sessions and hidden sessions
+                      daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining);
                   }
 
                   if (isChampMode && daySessions.length === 0) return null;

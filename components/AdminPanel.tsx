@@ -150,7 +150,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
-                  daySessions = daySessions.filter(s => s.isPersonalTraining ? showPersonalTraining : showGroupSessions);
+                  daySessions = daySessions.filter(s => !!s.isPersonalTraining ? showPersonalTraining : showGroupSessions);
                   if (daySessions.length === 0) return null;
                   return (
                       <div key={date}>
@@ -237,6 +237,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   </div>
                 )}
 
+                {settingsSection === 'views' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">ניהול סוגי אימון (תצוגות) 🎨</h3>
+                        <div className="flex justify-between items-center">
+                            <p className="text-[10px] text-gray-500 font-black uppercase">רשימת סוגי אימון</p>
+                            <Button onClick={() => { const n = prompt('סוג אימון חדש:'); if(n) setLocalWorkoutTypes([...localWorkoutTypes, n]); }} size="sm" variant="secondary">הוסף סוג</Button>
+                        </div>
+                        <div className="grid gap-2">
+                            {localWorkoutTypes.map((type, idx) => (
+                                <div key={idx} className="bg-gray-900/50 p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                                    <span className="text-white font-bold">{type}</span>
+                                    <button onClick={() => setLocalWorkoutTypes(localWorkoutTypes.filter((_, i) => i !== idx))} className="text-red-500 p-2">✕</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירת כל השינויים ✅</Button>
@@ -255,7 +273,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                       <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[600px] overflow-y-auto no-scrollbar border border-white/5 space-y-4">
-                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">נוכחות ({sessionDraft.registeredPhoneNumbers.length})</p>
+                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">נוכחות ({sessionDraft.registeredPhoneNumbers.length})</p>
+                            {sessionDraft.registeredPhoneNumbers.length > 0 && (
+                                <button onClick={() => { if(confirm('לנקות את כל המתאמנים מהרשימה?')) setSessionDraft({...sessionDraft, registeredPhoneNumbers: [], attendedPhoneNumbers: []}); }} className="text-[10px] text-red-500 font-black uppercase">נקה הכל 🗑️</button>
+                            )}
+                        </div>
                         <div className="relative">
                             <input type="text" placeholder="הוספת מתאמן..." className="w-full bg-gray-900 p-4 rounded-2xl text-white text-xs border border-white/5 outline-none focus:border-brand-primary" value={traineeSearch} onChange={(e) => setTraineeSearch(e.target.value)} />
                             {traineeSuggestions.length > 0 && (
@@ -310,15 +333,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <Button onClick={handleShareToWhatsAppGroup} className="w-full bg-green-600 py-3 rounded-2xl text-xs flex items-center gap-2 justify-center">שלח פוש לקבוצה 📢 ✅</Button>
                         <div className="grid grid-cols-3 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={sessionDraft.isPersonalTraining || false} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
+                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={!!sessionDraft.isPersonalTraining} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
                                 <label htmlFor="isPersonalDraft" className="text-purple-400 text-[10px] font-black uppercase cursor-pointer">אישי 🏆</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={sessionDraft.isCancelled || false} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
+                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
                                 <label htmlFor="isCancelledDraft" className="text-red-500 text-[10px] font-black uppercase cursor-pointer">מבוטל ❌</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={sessionDraft.manualHasStarted || false} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
+                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={!!sessionDraft.manualHasStarted} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
                                 <label htmlFor="isHappeningDraft" className="text-brand-primary text-[10px] font-black uppercase cursor-pointer">מתקיים ✓</label>
                             </div>
                         </div>
