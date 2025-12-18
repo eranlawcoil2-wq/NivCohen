@@ -36,61 +36,51 @@ interface InstallPromptProps {
 }
 
 const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredPrompt }) => {
-    const [visible, setVisible] = useState(false);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    const [dismissed, setDismissed] = useState(false);
 
-    useEffect(() => {
-        // Only show if not installed and we are in a relevant view
-        if (!isStandalone) {
-            const timer = setTimeout(() => setVisible(true), 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [isStandalone]);
-
-    if (!visible || isStandalone) return null;
+    if (isStandalone || dismissed) return null;
 
     const triggerInstall = async () => {
         if (deferredPrompt) {
             deferredPrompt.prompt();
             await deferredPrompt.userChoice;
-            setVisible(false);
-        } else if (isIOS) {
-            // High-end instruction modal for iOS
-            setVisible(true);
-        } else {
+            setDismissed(true);
+        } else if (!isIOS) {
             alert('כדי להתקין: לחץ על שלוש הנקודות בדפדפן ובחר "התקן אפליקציה"');
-            setVisible(false);
         }
     };
 
     return (
-        <div className="fixed inset-x-0 bottom-0 z-[150] p-6 ios-prompt-animation">
+        <div className="fixed inset-x-0 bottom-0 z-[150] p-6 install-overlay-animation">
             <div className={`bg-gray-900 border-2 rounded-[40px] p-6 shadow-3xl text-right flex flex-col items-center gap-4 ${isAdmin ? 'border-red-500' : 'border-brand-primary'}`} dir="rtl">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-brand-black text-2xl font-black ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>NIV</div>
                 <div className="text-center">
-                    <h4 className="text-white font-black text-xl mb-1">הורד את האפליקציה למסך הבית</h4>
-                    <p className="text-gray-400 text-sm">לגישה מהירה ונוחה ללו"ז האימונים שלך</p>
+                    <h4 className="text-white font-black text-xl mb-1">
+                        הורד את אפליקציית ה{isAdmin ? 'ניהול' : 'לו"ז'}
+                    </h4>
+                    <p className="text-gray-400 text-sm">לגישה מהירה ישירות ממסך הבית</p>
                 </div>
                 
                 {isIOS ? (
                     <div className="bg-gray-800/50 p-4 rounded-3xl w-full text-sm text-gray-300 flex flex-col gap-3">
                         <div className="flex items-center gap-3">
                             <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">1</span>
-                            <span>לחץ על כפתור השיתוף בתחתית הדפדפן (ריבוע עם חץ)</span>
-                            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                            <span>לחץ שיתוף (ריבוע עם חץ)</span>
+                            <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">2</span>
-                            <span>גלול מטה ובחר ב-"הוסף למסך הבית"</span>
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                            <span>בחר "הוסף למסך הבית"</span>
+                            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                         </div>
-                        <button onClick={() => setVisible(false)} className="mt-2 text-brand-primary font-bold text-center w-full py-2">הבנתי, תודה</button>
+                        <button onClick={() => setDismissed(true)} className="text-brand-primary font-bold text-center w-full py-2">הבנתי</button>
                     </div>
                 ) : (
                     <div className="flex gap-4 w-full">
-                        <Button onClick={triggerInstall} className={`flex-1 py-4 rounded-3xl ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>התקן עכשיו 🚀</Button>
-                        <button onClick={() => setVisible(false)} className="px-6 text-gray-500 font-bold">לא עכשיו</button>
+                        <Button onClick={triggerInstall} className={`flex-1 py-4 rounded-3xl ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>הורד אפליקציה 🚀</Button>
+                        <button onClick={() => setDismissed(true)} className="px-6 text-gray-500 font-bold">לא עכשיו</button>
                     </div>
                 )}
             </div>
@@ -112,6 +102,8 @@ const App: React.FC = () => {
 
   const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(getInitialView());
   const isAdminMode = currentView === 'admin';
+  const isWorkMode = currentView === 'work';
+  const isLanding = currentView === 'landing';
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(localStorage.getItem('niv_admin_auth') === 'true');
   
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
@@ -119,7 +111,7 @@ const App: React.FC = () => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>({
-      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0500000000', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
+      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0502264663', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
   });
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
   const [quote, setQuote] = useState('');
@@ -270,7 +262,7 @@ const App: React.FC = () => {
       await dataService.addSession(newSession);
   };
 
-  if (currentView === 'landing') {
+  if (isLanding) {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-10 pointer-events-none">
@@ -288,8 +280,7 @@ const App: React.FC = () => {
             <div className="bg-gray-900/60 backdrop-blur-2xl p-10 rounded-[60px] border border-white/5 shadow-2xl">
                 <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
-            <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase">כניסה ללו"ז אימונים ⚡</Button>
-            <button onClick={() => navigateTo('admin')} className="text-gray-700 text-xs font-bold hover:text-red-500 transition-colors mt-10">ניהול מאמן</button>
+            {/* Landing page buttons removed as per user request */}
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
@@ -300,12 +291,15 @@ const App: React.FC = () => {
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
           <div className="flex justify-between items-center mb-6">
-              <div onClick={() => navigateTo('landing')} className="cursor-pointer group">
+              <div 
+                  onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} 
+                  className="cursor-pointer group select-none active:scale-95 transition-transform"
+              >
                   <h1 className="text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
               {currentUser && !isAdminMode && (
-                  <div className="text-right cursor-pointer" onClick={() => navigateTo('landing')}>
+                  <div className="text-right">
                       <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">פרופיל אישי</p>
                       <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                   </div>
@@ -316,7 +310,7 @@ const App: React.FC = () => {
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">החודש</p><p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p></div>
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl leading-none">{stats.record}</p></div>
                   <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p></div>
-                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg leading-none truncate w-full">{monthLeader.name}</p></div>
+                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg font-bold leading-none truncate w-full">{monthLeader.name}</p></div>
               </div>
           )}
       </header>
@@ -422,8 +416,11 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Direct installation overlay as requested */}
       <InstallPromptOverlay isAdmin={isAdminMode} deferredPrompt={deferredPrompt} />
-      <WhatsAppButton phone={appConfig.coachPhone} />
+      
+      {/* WhatsApp button only on Landing page as requested */}
+      {isLanding && <WhatsAppButton phone={appConfig.coachPhone} />}
       
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 text-center shadow-3xl">

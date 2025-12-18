@@ -14,9 +14,9 @@
 
         // Theme Configuration: Red for Coach/Admin, Lime for Trainees
         const themeColor = isAdmin ? '#EF4444' : '#A3E635'; 
-        const appLabel = isAdmin ? 'ניהול אימונים' : 'ניב כהן - כושר';
+        const appLabel = isAdmin ? 'ניהול - ניב כהן' : 'לו"ז - ניב כהן';
         
-        // start_url must include the query parameter to ensure the installed app opens the correct view
+        // start_url includes the query parameter to lock the PWA to that specific view
         const startUrl = isAdmin ? '/?mode=admin' : (isWork ? '/?mode=work' : '/');
         
         // Dynamic Icon: "NIV" on color background
@@ -34,7 +34,7 @@
 
         const manifest = {
           "name": appLabel,
-          "short_name": isAdmin ? "ADMIN - NIV" : "NIV COHEN",
+          "short_name": isAdmin ? "ADMIN" : "לו\"ז ניב",
           "start_url": startUrl,
           "display": "standalone",
           "background_color": "#121212",
@@ -78,19 +78,12 @@
       }
       .whatsapp-float { animation: pulse-whatsapp 2s infinite; }
 
-      @keyframes float-badge {
-        0% { transform: translateY(0); }
-        50% { transform: translateY(-5px); }
-        100% { transform: translateY(0); }
-      }
-      .install-badge { animation: float-badge 3s ease-in-out infinite; }
-      
-      .ios-prompt-animation {
-        animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-      }
       @keyframes slideUp {
         from { transform: translateY(100%); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
+      }
+      .install-overlay-animation {
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
       }
     </style>
     <script>
@@ -112,18 +105,18 @@
       }
     </script>
     <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^18.2.0",
-    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
-    "react/": "https://esm.sh/react@^18.2.0/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
-    "vite": "https://esm.sh/vite@^5.2.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.2.1",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.88.0"
-  }
-}
-</script>
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^18.2.0",
+        "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+        "react/": "https://esm.sh/react@^18.2.0/",
+        "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+        "vite": "https://esm.sh/vite@^5.2.0",
+        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.2.1",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.88.0"
+      }
+    }
+    </script>
 </head>
   <body>
     <div id="root"></div>
