@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, TrainingSession, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo, PaymentStatus } from '../types';
 import { Button } from './Button';
 import { SessionCard } from './SessionCard';
@@ -34,6 +34,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
   const [isCopyingWeek, setIsCopyingWeek] = useState(false);
   const [targetCopyWeekOffset, setTargetCopyWeekOffset] = useState(1);
+
+  // Local state for settings to prevent re-renders losing focus while typing
+  const [localAppConfig, setLocalAppConfig] = useState<AppConfig>(props.appConfig);
+  const [localLocations, setLocalLocations] = useState<LocationDef[]>(props.locations);
+  const [localWorkoutTypes, setLocalWorkoutTypes] = useState<string[]>(props.workoutTypes);
+
+  // Sync props to local state when props change (unless user is typing)
+  useEffect(() => { setLocalAppConfig(props.appConfig); }, [props.appConfig]);
+  useEffect(() => { setLocalLocations(props.locations); }, [props.locations]);
+  useEffect(() => { setLocalWorkoutTypes(props.workoutTypes); }, [props.workoutTypes]);
   
   // Attendance filters
   const [showGroupSessions, setShowGroupSessions] = useState(true);
@@ -48,7 +58,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
   const weekDates = useMemo(() => {
     const sun = new Date(); sun.setHours(12, 0, 0, 0); 
-    // Start from Sunday of current week plus offset
     sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { 
         const d = new Date(sun); d.setDate(sun.getDate() + i); 
@@ -84,15 +93,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const name = prompt('שם המיקום:');
     const address = prompt('כתובת המיקום:');
     if (name && address) {
-      props.onUpdateLocations([...props.locations, { id: Date.now().toString(), name, address, color: '#A3E635' }]);
+      setLocalLocations([...localLocations, { id: Date.now().toString(), name, address, color: '#A3E635' }]);
     }
   };
 
   const handleAddWorkoutType = () => {
     const name = prompt('שם סוג האימון החדש:');
     if (name) {
-      if (props.workoutTypes.includes(name)) return alert('סוג אימון זה כבר קיים');
-      props.onUpdateWorkoutTypes([...props.workoutTypes, name]);
+      if (localWorkoutTypes.includes(name)) return alert('סוג אימון זה כבר קיים');
+      setLocalWorkoutTypes([...localWorkoutTypes, name]);
     }
   };
 
@@ -117,9 +126,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const handleSaveAllSettings = async () => {
     setSaveIndicator('שומר...');
     try {
-      await dataService.saveAppConfig(props.appConfig);
-      await dataService.saveLocations(props.locations);
-      await dataService.saveWorkoutTypes(props.workoutTypes);
+      await Promise.all([
+          dataService.saveAppConfig(localAppConfig),
+          dataService.saveLocations(localLocations),
+          dataService.saveWorkoutTypes(localWorkoutTypes)
+      ]);
+      props.onUpdateAppConfig(localAppConfig);
+      props.onUpdateLocations(localLocations);
+      props.onUpdateWorkoutTypes(localWorkoutTypes);
       setSaveIndicator('נשמר בהצלחה ✓');
       setTimeout(() => setSaveIndicator(null), 3000);
     } catch (e) {
@@ -239,7 +253,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                  </div>
              )}
 
-             <Button onClick={() => setAttendanceSession({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
+             <Button onClick={() => setAttendanceSession({ id: Date.now().toString() + Math.random().toString(36).substr(2, 5), type: localWorkoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: localLocations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
@@ -309,23 +323,43 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 👤</h3>
                         <div className="space-y-3">
                             <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
-                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={props.appConfig.urgentMessage || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה שתופיע למעלה באדום..." />
+                            <input 
+                                className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" 
+                                value={localAppConfig.urgentMessage || ''} 
+                                onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} 
+                                placeholder="כתוב כאן הודעה שתופיע למעלה באדום..." 
+                            />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (דף נחיתה)</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed" value={props.appConfig.coachBio || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, coachBio: e.target.value})} placeholder="ספר על עצמך כאן..." />
+                            <textarea 
+                                className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed" 
+                                value={localAppConfig.coachBio || ''} 
+                                onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} 
+                                placeholder="ספר על עצמך כאן..." 
+                            />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-blue-400 font-black uppercase block">נוסח הצהרת בריאות</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic" value={props.appConfig.healthDeclarationTemplate || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, healthDeclarationTemplate: e.target.value})} placeholder="נוסח הצהרה..." />
+                            <textarea 
+                                className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic" 
+                                value={localAppConfig.healthDeclarationTemplate || ''} 
+                                onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} 
+                                placeholder="נוסח הצהרה..." 
+                            />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-gray-500 font-black uppercase block">לינק לטופס להורדה (PDF/Doc)</label>
-                            <input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={props.appConfig.healthDeclarationDownloadUrl || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, healthDeclarationDownloadUrl: e.target.value})} placeholder="https://..." />
+                            <input 
+                                className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" 
+                                value={localAppConfig.healthDeclarationDownloadUrl || ''} 
+                                onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationDownloadUrl: e.target.value})} 
+                                placeholder="https://..." 
+                            />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שם מאמן</label><input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={props.appConfig.coachNameHeb} onChange={e=>props.onUpdateAppConfig({...props.appConfig, coachNameHeb: e.target.value})} /></div>
-                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">טלפון</label><input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={props.appConfig.coachPhone} onChange={e=>props.onUpdateAppConfig({...props.appConfig, coachPhone: e.target.value})} /></div>
+                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שם מאמן</label><input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={localAppConfig.coachNameHeb} onChange={e=>setLocalAppConfig({...localAppConfig, coachNameHeb: e.target.value})} /></div>
+                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">טלפון</label><input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={localAppConfig.coachPhone} onChange={e=>setLocalAppConfig({...localAppConfig, coachPhone: e.target.value})} /></div>
                         </div>
                     </div>
                 )}
@@ -338,16 +372,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <Button onClick={handleAddLocation} size="sm" variant="secondary">הוסף מיקום</Button>
                             </div>
                             <div className="grid gap-4">
-                                {props.locations.map(loc => (
+                                {localLocations.map(loc => (
                                     <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[30px] border border-white/5 flex flex-col gap-4">
                                         <div className="flex justify-between items-start">
                                             <div className="flex-1 space-y-2">
                                                 <label className="text-[9px] text-gray-600 font-black uppercase block">שם</label>
-                                                <input className="w-full bg-transparent text-white font-black text-lg outline-none focus:text-brand-primary italic border-b border-white/5 pb-1" value={loc.name} onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} />
+                                                <input 
+                                                    className="w-full bg-transparent text-white font-black text-lg outline-none focus:text-brand-primary italic border-b border-white/5 pb-1" 
+                                                    value={loc.name} 
+                                                    onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} 
+                                                />
                                                 <label className="text-[9px] text-gray-600 font-black uppercase block mt-2">כתובת / Waze</label>
-                                                <input className="w-full bg-transparent text-xs text-gray-500 outline-none focus:text-white font-bold" value={loc.address} onChange={e => props.onUpdateLocations(props.locations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} />
+                                                <input 
+                                                    className="w-full bg-transparent text-xs text-gray-500 outline-none focus:text-white font-bold" 
+                                                    value={loc.address} 
+                                                    onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} 
+                                                />
                                             </div>
-                                            <button onClick={() => { if(confirm('למחוק מיקום?')) props.onUpdateLocations(props.locations.filter(l => l.id !== loc.id)) }} className="text-red-500/30 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>
+                                            <button onClick={() => { if(confirm('למחוק מיקום?')) setLocalLocations(localLocations.filter(l => l.id !== loc.id)) }} className="text-red-500/30 hover:text-red-500 transition-colors p-2 text-xl">🗑️</button>
                                         </div>
                                     </div>
                                 ))}
@@ -359,14 +401,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <Button onClick={handleAddWorkoutType} size="sm" variant="secondary">הוסף אימון</Button>
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                {props.workoutTypes.map((t, idx) => (
+                                {localWorkoutTypes.map((t, idx) => (
                                     <div key={idx} className="bg-gray-900/50 p-3 rounded-2xl border border-white/5 flex justify-between items-center">
                                         <input className="bg-transparent text-white text-sm font-bold outline-none flex-1" value={t} onChange={e => {
-                                          const newList = [...props.workoutTypes];
+                                          const newList = [...localWorkoutTypes];
                                           newList[idx] = e.target.value;
-                                          props.onUpdateWorkoutTypes(newList);
+                                          setLocalWorkoutTypes(newList);
                                         }} />
-                                        <button onClick={() => props.onUpdateWorkoutTypes(props.workoutTypes.filter(x => x !== t))} className="text-red-500 text-xs mr-2">✕</button>
+                                        <button onClick={() => setLocalWorkoutTypes(localWorkoutTypes.filter(x => x !== t))} className="text-red-500 text-xs mr-2">✕</button>
                                     </div>
                                 ))}
                             </div>
@@ -533,12 +575,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div className="grid grid-cols-2 gap-4">
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">סוג</label>
                                 <select className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold" value={attendanceSession.type} onChange={e=>setAttendanceSession({...attendanceSession, type: e.target.value})}>
-                                    {props.workoutTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                    {localWorkoutTypes.map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                             </div>
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">מיקום</label>
                                 <select className="w-full bg-gray-800 border border-white/10 p-5 rounded-3xl text-white font-bold" value={attendanceSession.location} onChange={e=>setAttendanceSession({...attendanceSession, location: e.target.value})}>
-                                    {props.locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
+                                    {localLocations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}
                                 </select>
                             </div>
                         </div>
