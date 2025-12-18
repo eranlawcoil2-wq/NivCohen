@@ -66,76 +66,12 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     </a>
 );
 
-interface InstallPromptOverlayProps {
-    isAdmin: boolean;
-    deferredPrompt: any;
-}
-
-const InstallPromptOverlay: React.FC<InstallPromptOverlayProps> = ({ isAdmin, deferredPrompt }) => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const [dismissed, setDismissed] = useState(localStorage.getItem('niv_pwa_dismissed') === 'true');
-
-    if (isStandalone || dismissed) return null;
-
-    const handleDismiss = () => {
-        setDismissed(true);
-        localStorage.setItem('niv_pwa_dismissed', 'true');
-    };
-
-    const triggerInstall = async () => {
-        if (deferredPrompt) {
-            deferredPrompt.prompt();
-            await deferredPrompt.userChoice;
-            handleDismiss();
-        } else if (!isIOS) {
-            alert('כדי להתקין: לחץ על שלוש הנקודות בדפדפן ובחר "התקן אפליקציה"');
-        }
-    };
-
-    return (
-        <div className="fixed inset-x-0 bottom-0 z-[150] p-6 install-overlay-animation">
-            <div className={`relative bg-gray-900 border-2 rounded-[40px] p-6 shadow-3xl text-right flex flex-col items-center gap-4 ${isAdmin ? 'border-red-500' : 'border-brand-primary'}`} dir="rtl">
-                <button onClick={handleDismiss} className="absolute top-4 left-4 text-gray-500 hover:text-white text-2xl transition-colors">✕</button>
-                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-brand-black text-2xl font-black ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>NIV</div>
-                <div className="text-center">
-                    <h4 className="text-white font-black text-xl mb-1">
-                        הורד את אפליקציית ה{isAdmin ? 'ניהול' : 'לו"ז'}
-                    </h4>
-                    <p className="text-gray-400 text-sm">לגישה מהירה ישירות ממסך הבית</p>
-                </div>
-                
-                {isIOS ? (
-                    <div className="bg-gray-800/50 p-4 rounded-3xl w-full text-sm text-gray-300 flex flex-col gap-3">
-                        <div className="flex items-center gap-3">
-                            <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">1</span>
-                            <span>לחץ שיתוף (ריבוע עם חץ)</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">2</span>
-                            <span>בחר "הוסף למסך הבית"</span>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex gap-4 w-full">
-                        <Button onClick={triggerInstall} className={`flex-1 py-4 rounded-3xl ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>הורד אפליקציה 🚀</Button>
-                        <button onClick={handleDismiss} className="px-6 text-gray-500 font-bold">לא עכשיו</button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   const [currentView, setCurrentView] = useState<'landing' | 'work' | 'admin'>(() => {
     const params = new URLSearchParams(window.location.search);
-    const mode = params.get('mode');
-    if (mode === 'admin') return 'admin';
-    if (mode === 'work') return 'work';
-    return 'landing';
+    return (params.get('mode') as any) || 'landing';
   });
 
   const isAdminMode = currentView === 'admin';
@@ -189,9 +125,9 @@ const App: React.FC = () => {
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const stats = useMemo(() => {
-    if (!currentUser) return { monthly: 0, record: 0, streak: 0 };
-    const phone = normalizePhone(currentUser.phone);
+  const getStatsForUser = useCallback((user: User) => {
+    if (!user) return { monthly: 0, record: 0, streak: 0 };
+    const phone = normalizePhone(user.phone);
     const now = new Date();
     const attendedSessions = sessions.filter(s => (s.attendedPhoneNumbers || []).includes(phone));
     const monthlyCount = attendedSessions.filter(s => {
@@ -214,8 +150,10 @@ const App: React.FC = () => {
         else break;
         if (check.getFullYear() < 2024) break;
     }
-    return { monthly: monthlyCount, record: Math.max(currentUser.monthlyRecord || 0, monthlyCount), streak };
-  }, [currentUser, sessions]);
+    return { monthly: monthlyCount, record: Math.max(user.monthlyRecord || 0, monthlyCount), streak };
+  }, [sessions]);
+
+  const stats = useMemo(() => currentUser ? getStatsForUser(currentUser) : { monthly: 0, record: 0, streak: 0 }, [currentUser, getStatsForUser]);
 
   const monthLeader = useMemo(() => {
     const now = new Date();
@@ -258,6 +196,7 @@ const App: React.FC = () => {
 
   const handleRegisterClick = async (sid: string) => {
       if (!currentUserPhone) { document.getElementById('login-modal')?.classList.remove('hidden'); return; }
+      if (currentUser?.isRestricted) { alert('חשבונך מוגבל. פנה למאמן.'); return; }
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
       const phone = normalizePhone(currentUserPhone);
@@ -362,6 +301,7 @@ const App: React.FC = () => {
                 onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
                 onDuplicateSession={async s => { const n = {...s, id: Date.now().toString(), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; setSessions(p=>[...p, n]); await dataService.addSession(n); }}
                 onAddToCalendar={downloadICS}
+                getStatsForUser={getStatsForUser}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
@@ -417,7 +357,7 @@ const App: React.FC = () => {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="max-h-32 overflow-y-auto p-3 bg-gray-900 rounded-xl text-xs text-gray-300 italic border border-white/5">{appConfig.healthDeclarationTemplate}</div>
+                                <div className="max-h-32 overflow-y-auto p-3 bg-gray-900 rounded-xl text-xs text-gray-300 italic border border-white/5 no-scrollbar">{appConfig.healthDeclarationTemplate}</div>
                                 {appConfig.healthDeclarationDownloadUrl && <a href={appConfig.healthDeclarationDownloadUrl} target="_blank" className="text-xs text-brand-primary underline block text-center">להורדת טופס להדפסה 📄</a>}
                                 <div className="flex gap-2">
                                     <input type="text" id="sign-id" placeholder="מספר ת.ז." className="flex-1 bg-gray-900 p-4 rounded-2xl text-white outline-none border border-white/10" />
@@ -425,8 +365,11 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        <div className="mt-4 pt-4 border-t border-white/5">
-                            <label className="text-[10px] text-gray-500 font-black block mb-2">צירוף קובץ חתום</label>
+                        <div className="mt-4 pt-4 border-t border-white/5 flex flex-col gap-2">
+                            <label className="text-[10px] text-gray-500 font-black block">צירוף קובץ חתום</label>
+                            {currentUser.healthDeclarationFile && (
+                                <a href={currentUser.healthDeclarationFile} download="health-declaration" className="text-xs text-brand-primary underline mb-2 block">הורדת הקובץ הקיים 📥</a>
+                            )}
                             <input type="file" className="text-xs text-gray-500" onChange={async (e) => { const f = e.target.files?.[0]; if (f) { const r = new FileReader(); r.onloadend = () => handleUpdateProfile({...currentUser, healthDeclarationFile: r.result as string}); r.readAsDataURL(f); }}} />
                         </div>
                     </div>
@@ -449,16 +392,14 @@ const App: React.FC = () => {
                     <button onClick={() => setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                 </div>
                 <div className="space-y-6">
-                    {viewingSession.description && <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-4 rounded-l-2xl"><p className="text-white text-sm font-bold">{viewingSession.description}</p></div>}
-                    {weatherData[viewingSession.date]?.hourly && (
-                        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 border-b border-white/5">
-                            {Object.entries(weatherData[viewingSession.date].hourly || {}).map(([hour, data]: [string, any]) => (
-                                <div key={hour} className={`flex flex-col items-center p-3 rounded-2xl min-w-[60px] ${hour === viewingSession.time.split(':')[0] ? 'bg-brand-primary/20 border border-brand-primary/30 shadow-lg' : 'bg-gray-800 opacity-60'}`}>
-                                    <span className="text-[10px] text-gray-500 font-black">{hour}:00</span>
-                                    <span className="text-2xl my-1">{getWeatherIcon(data.weatherCode)}</span>
-                                    <span className="text-xs font-black text-white">{Math.round(data.temp)}°</span>
-                                </div>
-                            ))}
+                    {viewingSession.description && <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-4 rounded-l-2xl"><p className="text-white text-sm font-bold leading-tight">{viewingSession.description}</p></div>}
+                    {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
+                        <div className="flex justify-center border-b border-white/5 pb-4">
+                            <div className="bg-brand-primary/20 border border-brand-primary/30 p-4 rounded-3xl shadow-xl flex flex-col items-center min-w-[100px]">
+                                <span className="text-[10px] text-gray-400 font-black uppercase mb-1">מזג אוויר בזמן האימון</span>
+                                <span className="text-5xl my-2">{getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}</span>
+                                <span className="text-2xl font-black text-white">{Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°</span>
+                            </div>
                         </div>
                     )}
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
@@ -486,8 +427,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <InstallPromptOverlay isAdmin={isAdminMode} deferredPrompt={deferredPrompt} />
-      {isLanding && <WhatsAppButton phone={appConfig.coachPhone} />}
+      <WhatsAppButton phone={appConfig.coachPhone} />
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
               <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
