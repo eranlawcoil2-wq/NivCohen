@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, TrainingSession, PaymentStatus, LocationDef, AppConfig, WeatherInfo, Quote } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
@@ -90,6 +90,7 @@ const App: React.FC = () => {
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
@@ -116,7 +117,12 @@ const App: React.FC = () => {
       let newUrl = window.location.origin;
       if (view === 'admin') newUrl += '/?mode=admin';
       else if (view === 'work') newUrl += '/?mode=work';
-      window.history.pushState({}, '', newUrl);
+      
+      try {
+          window.history.pushState({}, '', newUrl);
+      } catch (e) {
+          console.warn("History pushState failed, likely due to preview environment constraints.");
+      }
   };
 
   useEffect(() => {
@@ -194,11 +200,37 @@ const App: React.FC = () => {
 
   useEffect(() => { refreshData(); }, [refreshData]);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  useEffect(() => {
+      if (!isAdminMode && !isLanding && sessions.length > 0 && !hasScrolledToToday) {
+          setTimeout(() => {
+            const el = document.getElementById(`day-${todayStr}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                setHasScrolledToToday(true);
+            }
+          }, 500);
+      }
+  }, [sessions, todayStr, isAdminMode, isLanding, hasScrolledToToday]);
+
   const handleRegisterClick = async (sid: string) => {
       if (!currentUserPhone) { document.getElementById('login-modal')?.classList.remove('hidden'); return; }
       if (currentUser?.isRestricted) { alert('חשבונך מוגבל. פנה למאמן.'); return; }
+      
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
+
+      // Check if session is finished (1.5 hours after start)
+      const now = new Date();
+      const sessionStart = new Date(`${session.date}T${session.time}`);
+      const diffMs = sessionStart.getTime() - now.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      if (diffHours <= -1.5) {
+          alert('לא ניתן להירשם או לבטל אימון שהסתיים');
+          return;
+      }
+
       const phone = normalizePhone(currentUserPhone);
       let updated = { ...session };
       if (session.registeredPhoneNumbers.includes(phone)) {
@@ -210,8 +242,6 @@ const App: React.FC = () => {
       setSessions(prev => prev.map(s => s.id === sid ? updated : s));
       await dataService.updateSession(updated);
   };
-
-  const todayStr = new Date().toISOString().split('T')[0];
 
   if (isLanding) {
     return (
@@ -311,13 +341,13 @@ const App: React.FC = () => {
                   const ds = d.toISOString().split('T')[0];
                   const daySessions = sessions.filter(s => s.date === ds && !s.isHidden).sort((a,b)=>a.time.localeCompare(b.time));
                   return (
-                      <div key={ds} className="relative">
+                      <div key={ds} id={`day-${ds}`} className="relative scroll-mt-40">
                           <div className="sticky top-[140px] z-30 bg-brand-black/90 py-3 border-b-2 border-brand-primary/20 mb-6 flex justify-between items-end px-2">
                              <h2 className={`text-4xl sm:text-5xl font-black italic uppercase tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'}`}>{d.toLocaleDateString('he-IL',{weekday:'long'})}</h2>
                              <p className={`text-4xl sm:text-5xl font-black italic tracking-tighter ${ds === todayStr ? 'text-brand-primary' : 'text-gray-500'} opacity-30`}>{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
+                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[ds]} onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}/>)}
                               {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                           </div>
                       </div>

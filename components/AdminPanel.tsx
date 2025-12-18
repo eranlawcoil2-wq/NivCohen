@@ -127,7 +127,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   }, [weekOffset]);
 
   const filteredUsers = useMemo(() => {
-      let filtered = props.users.filter(u => u.fullName.includes(searchTerm) || u.phone.includes(searchTerm));
+      let filtered = props.users.filter(u => u.fullName.includes(searchTerm) || u.phone.includes(searchTerm) || u.email?.includes(searchTerm));
       const usersWithStats = filtered.map(u => ({ ...u, stats: props.getStatsForUser(u) }));
       return usersWithStats.sort((a, b) => {
           switch(sortBy) {
@@ -218,7 +218,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 date: newDateStr,
                 registeredPhoneNumbers: [],
                 attendedPhoneNumbers: [],
-                waitingList: []
+                waitingList: [],
+                isCancelled: false, // Don't copy cancellations
+                manualHasStarted: false
             };
             await dataService.addSession(newSession);
         }
@@ -315,6 +317,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                              <div>
                                 <h3 className="text-white font-black text-xl italic" style={{ color: u.userColor }}>{u.fullName}</h3>
                                 <p className="text-xs text-gray-500 font-mono tracking-widest">{u.phone}</p>
+                                <p className="text-[10px] text-gray-600 italic truncate max-w-[200px]">{u.email || 'אין אימייל'}</p>
                              </div>
                           </div>
                           <div className="grid grid-cols-3 gap-8 text-center w-full sm:w-auto sm:mr-10 border-t sm:border-t-0 sm:border-r border-white/5 pt-4 sm:pt-0 sm:pr-10">
@@ -328,7 +331,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             </div>
         )}
 
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && (activeTab === 'settings' && (
             <div className="space-y-10">
                 <div className="flex gap-2 p-1 bg-gray-900 rounded-2xl overflow-x-auto no-scrollbar">
                     {(['general', 'infrastructure', 'quotes', 'connections'] as const).map(s => (
@@ -429,7 +432,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה ללו"ז מתאמנים</Button>
                 </div>
             </div>
-        )}
+        ))}
       </div>
 
       {attendanceSession && (
@@ -520,15 +523,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                         <div className="grid grid-cols-3 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isZoom" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isZoomSession} onChange={e=>setAttendanceSession({...attendanceSession, isZoomSession: e.target.checked})} />
+                                <input type="checkbox" id="isZoom" className="w-4 h-4 accent-blue-500" checked={attendanceSession.isZoomSession || false} onChange={e=>setAttendanceSession({...attendanceSession, isZoomSession: e.target.checked})} />
                                 <label htmlFor="isZoom" className="text-blue-400 text-[9px] font-black uppercase">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isHidden" className="w-4 h-4 accent-orange-500" checked={attendanceSession.isHidden} onChange={e=>setAttendanceSession({...attendanceSession, isHidden: e.target.checked})} />
+                                <input type="checkbox" id="isHidden" className="w-4 h-4 accent-orange-500" checked={attendanceSession.isHidden || false} onChange={e=>setAttendanceSession({...attendanceSession, isHidden: e.target.checked})} />
                                 <label htmlFor="isHidden" className="text-orange-400 text-[9px] font-black uppercase">נסתר 👁️‍🗨️</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isCancelled" className="w-4 h-4 accent-red-500" checked={attendanceSession.isCancelled} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
+                                <input type="checkbox" id="isCancelled" className="w-4 h-4 accent-red-500" checked={attendanceSession.isCancelled || false} onChange={e=>setAttendanceSession({...attendanceSession, isCancelled: e.target.checked})} />
                                 <label htmlFor="isCancelled" className="text-red-500 text-[9px] font-black uppercase">מבוטל ❌</label>
                             </div>
                         </div>
@@ -541,7 +544,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         )}
 
                         <div className="flex items-center gap-3 bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20">
-                            <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
+                            <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted || false} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
                             <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase">אימון מתקיים ✓</label>
                         </div>
                       </div>
@@ -577,6 +580,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </select>
                       </div>
                   </div>
+                  <div>
+                      <label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">אימייל</label>
+                      <input className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold font-mono" value={editingUser.email || ''} onChange={e=>setEditingUser({...editingUser, email: e.target.value})} />
+                  </div>
                   <div className="bg-gray-800/50 p-6 rounded-[35px] border border-white/5">
                       <h4 className="text-blue-400 font-black uppercase italic mb-4">הצהרת בריאות 📋</h4>
                       {editingUser.healthDeclarationDate ? (
@@ -592,7 +599,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       )}
                   </div>
                   <div className="flex items-center gap-3 bg-red-900/10 p-4 rounded-2xl border border-red-500/20">
-                      <input type="checkbox" id="restrictUser" className="w-6 h-6 accent-red-500" checked={editingUser.isRestricted} onChange={e=>setEditingUser({...editingUser, isRestricted: e.target.checked})} />
+                      <input type="checkbox" id="restrictUser" className="w-6 h-6 accent-red-500" checked={editingUser.isRestricted || false} onChange={e=>setEditingUser({...editingUser, isRestricted: e.target.checked})} />
                       <label htmlFor="restrictUser" className="text-red-500 text-sm font-black uppercase italic">מתאמן חסום להרשמה ⛔</label>
                   </div>
               </div>
