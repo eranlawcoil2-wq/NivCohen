@@ -74,6 +74,20 @@ CREATE TABLE IF NOT EXISTS config_general (
   "healthDeclarationDownloadUrl" TEXT
 );
 
+CREATE TABLE IF NOT EXISTS config_general (
+  id TEXT PRIMARY KEY DEFAULT 'main',
+  "coachNameHeb" TEXT,
+  "coachNameEng" TEXT,
+  "coachPhone" TEXT,
+  "coachAdditionalPhone" TEXT,
+  "coachEmail" TEXT,
+  "defaultCity" TEXT,
+  "urgentMessage" TEXT,
+  "coachBio" TEXT,
+  "healthDeclarationTemplate" TEXT,
+  "healthDeclarationDownloadUrl" TEXT
+);
+
 CREATE TABLE IF NOT EXISTS config_quotes (
   id TEXT PRIMARY KEY,
   text TEXT NOT NULL
@@ -111,7 +125,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortMode>('name');
 
-  const normalizePhone = (p: string) => p.replace(/\D/g, '').replace(/^972/, '0');
+  // WhatsApp Push Notification state
+  const [pushMessage, setPushMessage] = useState('');
+  const [sentTracking, setSentTracking] = useState<Record<string, string[]>>({});
+
+  const normalizePhone = (p: string) => {
+    let cleaned = p.replace(/\D/g, '');
+    if (cleaned.startsWith('0')) cleaned = '972' + cleaned.substring(1);
+    else if (!cleaned.startsWith('972')) cleaned = '972' + cleaned;
+    return cleaned;
+  };
   
   const weekDates = useMemo(() => {
     const sun = new Date(); sun.setHours(12, 0, 0, 0); 
@@ -158,6 +181,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     }
   };
 
+  const sendWhatsAppPush = (user: User, session: TrainingSession) => {
+    if (!session) return;
+    const dateObj = new Date(session.date);
+    const dayName = dateObj.toLocaleDateString('he-IL', { weekday: 'long' });
+    const dateFormatted = dateObj.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+    
+    const message = `היי ${user.fullName.split(' ')[0]}, תזכורת לאימון ${session.type} ביום ${dayName} (${dateFormatted}) בשעה ${session.time}.
+${pushMessage}`;
+    
+    const encoded = encodeURIComponent(message);
+    const phone = normalizePhone(user.phone);
+    window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
+    
+    // Track as sent
+    setSentTracking(prev => ({
+      ...prev,
+      [session.id]: [...(prev[session.id] || []), user.phone]
+    }));
+  };
+
   return (
     <div className="bg-brand-black min-h-screen">
       <div className="sticky top-[140px] z-50 bg-brand-black/90 pt-4 border-b border-white/5 pb-2">
@@ -174,9 +217,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         {activeTab === 'attendance' && (
           <div className="space-y-6">
              <div className="flex justify-between items-center bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl">
+                {/* Fix "Cannot find name 'p'" by ensuring 'p' is correctly defined in the functional update callback */}
                 <button onClick={()=>setWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
                 <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full">{weekOffset === 0 ? 'השבוע' : `שבוע ${weekOffset}`}</span>
-                <button onClick={()=>setWeekOffset(p+1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
+                {/* Fixed "Cannot find name 'p'" on line 222 (actually 224 here) by adding the arrow function parameter 'p =>' */}
+                <button onClick={()=>setWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
              </div>
              <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '' })} className="w-full py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ יצירת אימון חדש</Button>
              <div className="space-y-12">
@@ -321,7 +366,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
       {attendanceSession && (
           <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6 backdrop-blur-xl overflow-y-auto no-scrollbar">
-              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-3xl border border-white/10 text-right shadow-3xl my-auto" dir="rtl">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-4xl border border-white/10 text-right shadow-3xl my-auto" dir="rtl">
                   <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
                       <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון ⚙️</h3>
                       <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
@@ -345,21 +390,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={attendanceSession.time} onChange={e=>setAttendanceSession({...attendanceSession, time: e.target.value})} /></div>
                         </div>
                         <textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24" value={attendanceSession.description || ''} onChange={e=>setAttendanceSession({...attendanceSession, description: e.target.value})} placeholder="דגשים למתאמנים..."></textarea>
+                        
+                        <div className="bg-gray-800/40 p-6 rounded-[35px] border border-white/5 space-y-4">
+                            <label className="text-[10px] text-green-500 font-black uppercase block italic">שליחת הודעת פוש (WhatsApp) 💬</label>
+                            <textarea 
+                              className="w-full bg-gray-900 border border-white/10 p-4 rounded-2xl text-white text-xs italic" 
+                              rows={3}
+                              placeholder="כתוב הודעה נוספת כאן... (הפרטים יתווספו אוטומטית)"
+                              value={pushMessage}
+                              onChange={e => setPushMessage(e.target.value)}
+                            />
+                            <p className="text-[9px] text-gray-600 italic">הפרטים האוטומטיים: סוג אימון, יום, תאריך ושעה.</p>
+                        </div>
+
                         <div className="flex items-center gap-3 bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20">
                             <input type="checkbox" id="isHappening" className="w-6 h-6 accent-brand-primary" checked={attendanceSession.manualHasStarted} onChange={e=>setAttendanceSession({...attendanceSession, manualHasStarted: e.target.checked})} />
                             <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase">אימון מתקיים ✓</label>
                         </div>
                       </div>
-                      <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[500px] overflow-y-auto no-scrollbar border border-white/5 space-y-3">
-                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">נוכחות ({attendanceSession.registeredPhoneNumbers.length})</p>
+
+                      <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[600px] overflow-y-auto no-scrollbar border border-white/5 space-y-3">
+                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest border-b border-white/5 pb-2">נוכחות ושליחת פוש ({attendanceSession.registeredPhoneNumbers.length})</p>
                         <div className="space-y-2">
                             {attendanceSession.registeredPhoneNumbers.map(phone => {
                                 const u = props.users.find(user => normalizePhone(user.phone) === normalizePhone(phone));
                                 const isAttended = (attendanceSession.attendedPhoneNumbers || []).includes(phone);
+                                const isSent = (sentTracking[attendanceSession.id] || []).includes(phone);
                                 return (
-                                    <div key={phone} className="flex justify-between items-center p-3 bg-gray-900/50 rounded-2xl border border-white/5">
-                                        <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
-                                        <button onClick={() => { const curr = attendanceSession.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setAttendanceSession({...attendanceSession, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח ✓' : 'לא נכח'}</button>
+                                    <div key={phone} className={`flex flex-col gap-2 p-4 bg-gray-900/50 rounded-2xl border ${isSent ? 'border-green-500/20' : 'border-white/5'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => u && sendWhatsAppPush(u, attendanceSession)}
+                                                    className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isSent ? 'bg-green-500 text-white shadow-[0_0_10px_rgba(34,197,94,0.4)]' : 'bg-gray-800 text-gray-500 hover:text-green-500'}`}
+                                                    title="שלח תזכורת בוואטסאפ"
+                                                >
+                                                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                                </button>
+                                                <button onClick={() => { const curr = attendanceSession.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setAttendanceSession({...attendanceSession, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח ✓' : 'לא נכח'}</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 );
                             })}
