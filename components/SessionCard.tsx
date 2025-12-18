@@ -80,7 +80,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   // Get trainee names for personal training sessions in admin mode
   const traineeNames = isAdmin && isPersonal 
     ? session.registeredPhoneNumbers.map(phone => {
-        const u = allUsers.find(user => user.phone.replace(/\D/g, '').endsWith(phone.replace(/\D/g, '').slice(-9)));
+        // Find user by normalized phone match
+        const u = allUsers.find(user => {
+            const up = user.phone.replace(/\D/g, '');
+            const sp = phone.replace(/\D/g, '');
+            return up === sp || up.endsWith(sp.slice(-9)) || sp.endsWith(up.slice(-9));
+        });
         return u ? (u.displayName || u.fullName.split(' ')[0]) : phone;
       }).join(', ')
     : '';
@@ -114,7 +119,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         {isAdmin && isPersonal && traineeNames && (
             <div className="bg-blue-500/10 border-r-2 border-blue-500 p-2 rounded-l-lg mb-3">
                 <p className="text-blue-400 text-[9px] font-black uppercase mb-1">מתאמנים:</p>
-                <p className="text-white text-xs font-bold truncate">{traineeNames}</p>
+                <p className="text-white text-[10px] font-bold truncate">{traineeNames}</p>
             </div>
         )}
 

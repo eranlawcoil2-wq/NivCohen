@@ -79,7 +79,7 @@ const App: React.FC = () => {
   const isAdminMode = currentView === 'admin';
   const isLanding = currentView === 'landing';
   const isChampMode = currentView === 'CHAMP';
-  
+
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => localStorage.getItem('niv_admin_auth') === 'true');
   const [showUrgent, setShowUrgent] = useState(true);
   const [workoutTypes, setWorkoutTypes] = useState<string[]>([]);
@@ -128,7 +128,7 @@ const App: React.FC = () => {
               else if (view === 'CHAMP') newUrl += '?mode=CHAMP';
               window.history.pushState({}, '', newUrl);
           } catch (e) {
-              console.warn("History pushState failed, using local state navigation only.");
+              console.warn("History API navigation failed, continuing with view state only.");
           }
       }
   };
