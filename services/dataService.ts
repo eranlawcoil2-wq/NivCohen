@@ -65,11 +65,13 @@ export const dataService = {
       const { data, error } = await supabase.from('sessions').select('*');
       if (!error && data) return data.map((s: any) => ({ 
           ...s, 
+          registeredPhoneNumbers: s.registeredPhoneNumbers || [],
           waitingList: s.waitingList || [],
-          isPersonalTraining: !!s.isPersonalTraining,
-          isZoomSession: !!s.isZoomSession,
-          isCancelled: !!s.isCancelled,
-          manualHasStarted: !!s.manualHasStarted
+          attendedPhoneNumbers: s.attendedPhoneNumbers || [],
+          isPersonalTraining: Boolean(s.isPersonalTraining),
+          isZoomSession: Boolean(s.isZoomSession),
+          isCancelled: Boolean(s.isCancelled),
+          manualHasStarted: Boolean(s.manualHasStarted)
       })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
@@ -80,10 +82,10 @@ export const dataService = {
         ...session,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         waitingList: session.waitingList || [],
-        isPersonalTraining: !!session.isPersonalTraining,
-        isZoomSession: !!session.isZoomSession,
-        isCancelled: !!session.isCancelled,
-        manualHasStarted: !!session.manualHasStarted
+        isPersonalTraining: Boolean(session.isPersonalTraining),
+        isZoomSession: Boolean(session.isZoomSession),
+        isCancelled: Boolean(session.isCancelled),
+        manualHasStarted: Boolean(session.manualHasStarted)
     };
     if (supabase) await supabase.from('sessions').insert([data]);
     else {
@@ -97,14 +99,17 @@ export const dataService = {
     const data = {
         ...rest,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
+        attendedPhoneNumbers: session.attendedPhoneNumbers || [],
         waitingList: session.waitingList || [],
-        isPersonalTraining: !!session.isPersonalTraining,
-        isZoomSession: !!session.isZoomSession,
-        isCancelled: !!session.isCancelled,
-        manualHasStarted: !!session.manualHasStarted
+        isPersonalTraining: Boolean(session.isPersonalTraining),
+        isZoomSession: Boolean(session.isZoomSession),
+        isCancelled: Boolean(session.isCancelled),
+        manualHasStarted: Boolean(session.manualHasStarted)
     };
-    if (supabase) await supabase.from('sessions').update(data).eq('id', id);
-    else {
+    if (supabase) {
+        const { error } = await supabase.from('sessions').update(data).eq('id', id);
+        if (error) console.error("Supabase Session Update Error:", error);
+    } else {
       const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
       localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.map(s => s.id === id ? {id, ...data} : s)));
     }
@@ -157,7 +162,6 @@ export const dataService = {
       localStorage.setItem('niv_app_config', JSON.stringify(config));
   },
 
-  // Added missing getQuotes method to resolve error in App.tsx
   getQuotes: async (): Promise<Quote[]> => {
     if (supabase) {
       const { data, error } = await supabase.from('quotes').select('*');
@@ -166,7 +170,6 @@ export const dataService = {
     return safeJsonParse<Quote[]>('niv_app_quotes', []);
   },
 
-  // Added missing saveQuotes method for potential quote management
   saveQuotes: async (quotes: Quote[]): Promise<void> => {
     if (supabase) await supabase.from('quotes').upsert(quotes);
     localStorage.setItem('niv_app_quotes', JSON.stringify(quotes));
