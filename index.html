@@ -7,14 +7,17 @@
     
     <script>
       (function() {
-        const path = window.location.pathname.toUpperCase();
-        const isAdmin = path.includes('/ADMIN');
-        const isWork = path.includes('/WORK');
+        const params = new URLSearchParams(window.location.search);
+        const mode = params.get('mode');
+        const isAdmin = mode === 'admin';
+        const isWork = mode === 'work';
 
-        // Theme Configuration: Red for Coach/Admin, Lime for Trainees/Work
+        // Theme Configuration: Red for Coach/Admin, Lime for Trainees
         const themeColor = isAdmin ? '#EF4444' : '#A3E635'; 
         const appLabel = isAdmin ? 'ניהול אימונים' : 'ניב כהן - כושר';
-        const startUrl = isAdmin ? '/ADMIN' : (isWork ? '/WORK' : '/');
+        
+        // start_url must include the query parameter to ensure the installed app opens the correct view
+        const startUrl = isAdmin ? '/?mode=admin' : (isWork ? '/?mode=work' : '/');
         
         // Dynamic Icon: "NIV" on color background
         const svgIcon = `data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22${encodeURIComponent(themeColor)}%22/><text x=%2250%22 y=%2262%22 font-family=%22Heebo, sans-serif%22 font-weight=%22900%22 font-size=%2240%22 text-anchor=%22middle%22 fill=%22%23121212%22>NIV</text></svg>`;
@@ -47,7 +50,7 @@
         const manifestURL = URL.createObjectURL(blob);
         addLink('manifest', manifestURL);
 
-        document.title = isAdmin ? `NIV COHEN | ADMIN` : `NIV COHEN | ${isWork ? 'WORKOUTS' : 'HOME'}`;
+        document.title = isAdmin ? `ניהול | ניב כהן` : `ניב כהן | כושר`;
 
         const metaTheme = document.createElement('meta');
         metaTheme.name = 'theme-color';
@@ -81,6 +84,14 @@
         100% { transform: translateY(0); }
       }
       .install-badge { animation: float-badge 3s ease-in-out infinite; }
+      
+      .ios-prompt-animation {
+        animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes slideUp {
+        from { transform: translateY(100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
     </style>
     <script>
       tailwind.config = {
@@ -101,18 +112,18 @@
       }
     </script>
     <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@^19.2.3",
-        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-        "react/": "https://esm.sh/react@^19.2.3/",
-        "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
-        "vite": "https://esm.sh/vite@^7.3.0",
-        "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.3"
-      }
-    }
-    </script>
+{
+  "imports": {
+    "react": "https://esm.sh/react@^18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0",
+    "vite": "https://esm.sh/vite@^5.2.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^4.2.1",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.88.0"
+  }
+}
+</script>
 </head>
   <body>
     <div id="root"></div>

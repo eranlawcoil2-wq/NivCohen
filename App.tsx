@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { User, TrainingSession, PaymentStatus, WorkoutType, WeatherLocation, LocationDef, AppConfig, WeatherInfo, Quote } from './types';
+import { User, TrainingSession, PaymentStatus, LocationDef, AppConfig, WeatherInfo, Quote } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
-import { getWeatherForDates, getWeatherIcon } from './services/weatherService';
+import { getWeatherForDates } from './services/weatherService';
 import { dataService } from './services/dataService';
 
 const normalizePhone = (phone: string): string => {
@@ -30,44 +30,70 @@ const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     </a>
 );
 
-interface InstallButtonProps {
+interface InstallPromptProps {
     isAdmin: boolean;
     deferredPrompt: any;
-    onInstalled: () => void;
 }
 
-const InstallButton: React.FC<InstallButtonProps> = ({ isAdmin, deferredPrompt, onInstalled }) => {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredPrompt }) => {
+    const [visible, setVisible] = useState(false);
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 
-    if (isStandalone) return null;
+    useEffect(() => {
+        // Only show if not installed and we are in a relevant view
+        if (!isStandalone) {
+            const timer = setTimeout(() => setVisible(true), 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [isStandalone]);
 
-    const handleInstall = async () => {
+    if (!visible || isStandalone) return null;
+
+    const triggerInstall = async () => {
         if (deferredPrompt) {
             deferredPrompt.prompt();
-            const { outcome } = await deferredPrompt.userChoice;
-            if (outcome === 'accepted') onInstalled();
+            await deferredPrompt.userChoice;
+            setVisible(false);
         } else if (isIOS) {
-            alert('כדי להתקין את האפליקציה:\n1. לחץ על כפתור השיתוף (מרובע עם חץ למעלה).\n2. בחר ב-"הוספה למסך הבית".');
+            // High-end instruction modal for iOS
+            setVisible(true);
         } else {
-            alert('כדי להתקין:\nלחץ על שלוש הנקודות בדפדפן ובחר ב-"התקן אפליקציה".');
+            alert('כדי להתקין: לחץ על שלוש הנקודות בדפדפן ובחר "התקן אפליקציה"');
+            setVisible(false);
         }
     };
 
     return (
-        <div className="fixed bottom-24 right-6 z-[100] flex flex-col items-end">
-            <div className="install-badge mb-2 bg-gray-900 border border-white/20 text-white text-[10px] font-black py-1 px-3 rounded-xl shadow-2xl whitespace-nowrap">
-                {isAdmin ? 'התקן אפליקציית ניהול 🛠️' : 'התקן לגישה מהירה ⚡'}
+        <div className="fixed inset-x-0 bottom-0 z-[150] p-6 ios-prompt-animation">
+            <div className={`bg-gray-900 border-2 rounded-[40px] p-6 shadow-3xl text-right flex flex-col items-center gap-4 ${isAdmin ? 'border-red-500' : 'border-brand-primary'}`} dir="rtl">
+                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-brand-black text-2xl font-black ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>NIV</div>
+                <div className="text-center">
+                    <h4 className="text-white font-black text-xl mb-1">הורד את האפליקציה למסך הבית</h4>
+                    <p className="text-gray-400 text-sm">לגישה מהירה ונוחה ללו"ז האימונים שלך</p>
+                </div>
+                
+                {isIOS ? (
+                    <div className="bg-gray-800/50 p-4 rounded-3xl w-full text-sm text-gray-300 flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                            <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">1</span>
+                            <span>לחץ על כפתור השיתוף בתחתית הדפדפן (ריבוע עם חץ)</span>
+                            <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="bg-gray-700 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white">2</span>
+                            <span>גלול מטה ובחר ב-"הוסף למסך הבית"</span>
+                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                        </div>
+                        <button onClick={() => setVisible(false)} className="mt-2 text-brand-primary font-bold text-center w-full py-2">הבנתי, תודה</button>
+                    </div>
+                ) : (
+                    <div className="flex gap-4 w-full">
+                        <Button onClick={triggerInstall} className={`flex-1 py-4 rounded-3xl ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>התקן עכשיו 🚀</Button>
+                        <button onClick={() => setVisible(false)} className="px-6 text-gray-500 font-bold">לא עכשיו</button>
+                    </div>
+                )}
             </div>
-            <button 
-                onClick={handleInstall}
-                className={`p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 active:scale-90 border-4 border-brand-black ${isAdmin ? 'bg-red-500 text-white shadow-red-500/40' : 'bg-brand-primary text-black shadow-brand-primary/40'}`}
-                title="התקן אפליקציה"
-            >
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-            </button>
         </div>
     );
 };
@@ -77,9 +103,10 @@ const App: React.FC = () => {
   const [sessions, setSessions] = useState<TrainingSession[]>([]);
   
   const getInitialView = () => {
-    const path = window.location.pathname.toUpperCase();
-    if (path.includes('/ADMIN')) return 'admin';
-    if (path.includes('/WORK')) return 'work';
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    if (mode === 'admin') return 'admin';
+    if (mode === 'work') return 'work';
     return 'landing';
   };
 
@@ -92,7 +119,7 @@ const App: React.FC = () => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>({
-      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0502264663', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
+      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0500000000', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
   });
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(localStorage.getItem('niv_app_current_phone'));
   const [quote, setQuote] = useState('');
@@ -112,8 +139,11 @@ const App: React.FC = () => {
           }
       }
       setCurrentView(view);
-      const path = view === 'landing' ? '/' : `/${view.toUpperCase()}`;
-      window.history.pushState({}, '', path);
+      let newUrl = window.location.origin;
+      if (view === 'admin') newUrl += '/?mode=admin';
+      else if (view === 'work') newUrl += '/?mode=work';
+      
+      window.history.pushState({}, '', newUrl);
   };
 
   useEffect(() => {
@@ -259,8 +289,8 @@ const App: React.FC = () => {
                 <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
             <Button onClick={() => navigateTo('work')} className="py-8 rounded-[45px] text-2xl font-black italic uppercase">כניסה ללו"ז אימונים ⚡</Button>
+            <button onClick={() => navigateTo('admin')} className="text-gray-700 text-xs font-bold hover:text-red-500 transition-colors mt-10">ניהול מאמן</button>
         </div>
-        <InstallButton isAdmin={isAdminMode} deferredPrompt={deferredPrompt} onInstalled={() => setDeferredPrompt(null)} />
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
     );
@@ -270,7 +300,7 @@ const App: React.FC = () => {
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
           <div className="flex justify-between items-center mb-6">
-              <div onClick={() => navigateTo(isAdminMode ? 'work' : 'admin')} className="cursor-pointer group">
+              <div onClick={() => navigateTo('landing')} className="cursor-pointer group">
                   <h1 className="text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
@@ -392,7 +422,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      <InstallButton isAdmin={isAdminMode} deferredPrompt={deferredPrompt} onInstalled={() => setDeferredPrompt(null)} />
+      <InstallPromptOverlay isAdmin={isAdminMode} deferredPrompt={deferredPrompt} />
       <WhatsAppButton phone={appConfig.coachPhone} />
       
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
