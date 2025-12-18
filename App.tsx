@@ -121,9 +121,19 @@ const App: React.FC = () => {
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
+  const handleUpdateProfile = async (updated: User) => {
+      setUsers(prev => prev.map(u => u.id === updated.id ? updated : u));
+      if (updated.phone !== currentUserPhone) {
+          setCurrentUserPhone(updated.phone);
+          localStorage.setItem('niv_app_current_phone', updated.phone);
+      }
+      await dataService.updateUser(updated);
+  };
+
   const navigateTo = (view: 'landing' | 'work' | 'admin') => {
       if (view === 'admin' && !isAdminAuthenticated) {
           const pass = prompt('קוד גישה למאמן:');
@@ -288,29 +298,13 @@ const App: React.FC = () => {
             </div>
             
             <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
-                <h2 className="text-brand-primary font-black text-3xl sm:text-4xl mb-6 italic">מי זה ניב כהן? 🦁</h2>
-                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90">
-                    <p>
-                        נעים מאוד, אני ניב. אני מאמין שכושר הוא לא רק מטרה, אלא דרך חיים של התמדה וחוסן. 
-                    </p>
-                    <p>
-                        בנס ציונה, תחת כיפת השמיים ובאוויר הפתוח, אני מעביר אימונים אישיים וקבוצתיים שנועדו להוציא מכם את המקסימום. האווירה הדינמית של האימון הקבוצתי נותנת כוח, אבל אני יודע שלכל אחד יש את המכשולים האישיים שלו.
-                    </p>
-                    <p className="text-brand-primary italic">
-                        "השיטה שלי משלבת את הכוח של הקבוצה עם דיוק של אימון אישי."
-                    </p>
-                    <p>
-                        אני מעודד את המתאמנים שלי לשלב מדי פעם אימון אישי נקודתי לחיזוק החולשות הספציפיות - זה מה שיוצר את ההתקדמות המהותית והופך אתכם לגרסה הטובה ביותר של עצמכם.
-                    </p>
+                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
+                    {appConfig.coachBio || 'ברוכים הבאים לעולם של התמדה וחוסן.'}
                 </div>
             </div>
 
-            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
+            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block cursor-pointer active:scale-95 transition-transform" onClick={() => navigateTo('work')}>
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-8">
-                <Button onClick={() => navigateTo('work')} className="py-6 px-12 rounded-[40px] text-xl font-black italic uppercase shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
             </div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
@@ -344,9 +338,9 @@ const App: React.FC = () => {
               <div className="flex items-center gap-4">
                   <button onClick={() => setCurrentView('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>
                   {currentUser && !isAdminMode && (
-                      <div className="text-right">
-                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">פרופיל אישי</p>
-                          <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
+                      <div className="text-right cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
+                          <p className="text-white font-black italic text-sm group-hover:text-brand-primary transition-colors" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                       </div>
                   )}
               </div>
@@ -407,6 +401,81 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/* Trainee Profile Modal */}
+      {showProfile && currentUser && (
+          <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center p-6 backdrop-blur-2xl overflow-y-auto no-scrollbar">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 text-right shadow-3xl my-auto" dir="rtl">
+                <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
+                    <h3 className="text-3xl font-black text-white italic uppercase">פרופיל אישי 👤</h3>
+                    <button onClick={()=>setShowProfile(false)} className="text-gray-500 text-4xl">✕</button>
+                </div>
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black mb-1 block">שם מלא</label>
+                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.fullName} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black mb-1 block">כינוי</label>
+                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black mb-1 block">טלפון</label>
+                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold font-mono" value={currentUser.phone} onChange={e => handleUpdateProfile({...currentUser, phone: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-gray-500 font-black mb-1 block">אימייל</label>
+                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.email} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} />
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[10px] text-gray-500 font-black mb-1 block">צבע כינוי</label>
+                        <input type="color" className="w-full h-12 bg-gray-800 rounded-2xl p-2 cursor-pointer border-none" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
+                    </div>
+
+                    <div className="bg-gray-800/50 p-6 rounded-[40px] border border-white/5">
+                        <h4 className="text-brand-primary font-black uppercase italic mb-4">הצהרת בריאות 📋</h4>
+                        {currentUser.healthDeclarationDate ? (
+                            <div className="bg-brand-primary/10 border border-brand-primary/20 p-4 rounded-2xl">
+                                <p className="text-white font-bold text-sm">הצהרה חתומה ✓</p>
+                                <p className="text-gray-400 text-xs mt-1">נחתמה בתאריך: {new Date(currentUser.healthDeclarationDate).toLocaleDateString('he-IL')}</p>
+                                <p className="text-gray-400 text-xs">ת.ז.: {currentUser.healthDeclarationId}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="max-h-32 overflow-y-auto p-3 bg-gray-900 rounded-xl text-xs text-gray-300 leading-relaxed italic border border-white/5 no-scrollbar">
+                                    {appConfig.healthDeclarationTemplate}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input type="text" id="sign-id" placeholder="הכנס מספר ת.ז." className="flex-1 bg-gray-900 p-4 rounded-2xl text-white text-sm outline-none border border-white/10" />
+                                    <Button onClick={() => {
+                                        const idVal = (document.getElementById('sign-id') as HTMLInputElement).value;
+                                        if (idVal.length < 5) return alert('ת.ז. לא תקינה');
+                                        handleUpdateProfile({...currentUser, healthDeclarationDate: new Date().toISOString(), healthDeclarationId: idVal});
+                                    }} className="px-6 rounded-2xl">חתום ✍️</Button>
+                                </div>
+                            </div>
+                        )}
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                            <label className="text-[10px] text-gray-500 font-black block mb-2">צירוף קובץ (אופציונלי)</label>
+                            <input type="file" className="text-xs text-gray-500 file:bg-gray-800 file:text-white file:border-none file:px-4 file:py-2 file:rounded-xl cursor-pointer" onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => handleUpdateProfile({...currentUser, healthDeclarationFile: reader.result as string});
+                                    reader.readAsDataURL(file);
+                                }
+                            }} />
+                        </div>
+                    </div>
+                </div>
+                <Button onClick={() => setShowProfile(false)} className="w-full mt-8 py-6 rounded-[40px] bg-white text-brand-black">סגור ועדכן ✓</Button>
+              </div>
+          </div>
+      )}
+
       {viewingSession && !isAdminMode && (
         <div className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4 backdrop-blur-2xl">
             <div className="bg-gray-900 p-8 rounded-[50px] w-full max-w-lg border border-white/10 text-right shadow-3xl overflow-y-auto no-scrollbar max-h-[90vh]" dir="rtl">
@@ -414,7 +483,10 @@ const App: React.FC = () => {
                     <div>
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
                         <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest">{viewingSession.time}</p>
-                        <p className="text-gray-500 text-sm font-black uppercase mt-1">📍 {viewingSession.location}</p>
+                        <p className="text-gray-500 text-sm font-black uppercase mt-1">
+                            {new Date(viewingSession.date).toLocaleDateString('he-IL', {weekday: 'long', day: 'numeric', month: 'numeric'})}
+                        </p>
+                        <p className="text-gray-500 text-xs font-black uppercase mt-1 italic tracking-widest opacity-80">📍 {viewingSession.location}</p>
                     </div>
                     <button onClick={() => setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                 </div>

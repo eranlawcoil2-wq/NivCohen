@@ -66,7 +66,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       if (text) {
           const q = { id: Date.now().toString(), text };
           await dataService.addQuote(q);
-          window.location.reload(); // Quick refresh to update props
+          window.location.reload(); 
       }
   };
 
@@ -157,10 +157,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                 {settingsSection === 'general' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">הודעות מערכת ⚙️</h3>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">הגדרות אתר ⚙️</h3>
                         <div className="space-y-3">
                             <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר (משפט דחיפה)</label>
                             <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={props.appConfig.urgentMessage || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה שתופיע למעלה באדום..." />
+                        </div>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (דף נחיתה)</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold italic shadow-inner outline-none focus:border-brand-primary h-48" value={props.appConfig.coachBio || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, coachBio: e.target.value})} placeholder="ספר על עצמך כאן..." />
+                        </div>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-blue-400 font-black uppercase block">נוסח הצהרת בריאות</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold italic shadow-inner outline-none focus:border-blue-500 h-48" value={props.appConfig.healthDeclarationTemplate || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, healthDeclarationTemplate: e.target.value})} placeholder="כתוב כאן את נוסח ההצהרה שיופיע למתאמנים לחתימה..." />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>

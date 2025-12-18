@@ -89,4 +89,6 @@ export interface AppConfig {
   coachEmail: string;
   defaultCity: string;
   urgentMessage?: string; // New field for urgent announcements
+  coachBio?: string; // New field for dynamic landing page content
+  healthDeclarationTemplate?: string; // New field for health declaration text
 }

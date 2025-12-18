@@ -1,3 +1,4 @@
+
 import { supabase } from './supabaseClient';
 import { User, TrainingSession, LocationDef, WorkoutType, AppConfig, Quote } from '../types';
 import { INITIAL_USERS, INITIAL_SESSIONS } from '../constants';
@@ -18,7 +19,6 @@ function safeJsonParse<T>(key: string, fallback: T): T {
 
 const DEFAULT_TYPES = Object.values(WorkoutType);
 
-// UPDATED DEFAULTS to match user preference (Ness Ziona)
 const DEFAULT_LOCATIONS: LocationDef[] = [
     { id: '1', name: 'כיכר הפרפר, נס ציונה', address: 'כיכר הפרפר, נס ציונה', color: '#A3E635' },
     { id: '2', name: 'סטודיו נס ציונה', address: 'נס ציונה', color: '#3B82F6' }
@@ -28,9 +28,11 @@ const DEFAULT_CONFIG: AppConfig = {
     coachNameHeb: 'ניב כהן',
     coachNameEng: 'NIV COHEN',
     coachPhone: '0500000000',
-    coachAdditionalPhone: 'admin', // Default password set to 'admin'
+    coachAdditionalPhone: 'admin',
     coachEmail: '',
-    defaultCity: 'נס ציונה'
+    defaultCity: 'נס ציונה',
+    coachBio: 'נעים מאוד, אני ניב. אני מאמין שכושר הוא לא רק מטרה, אלא דרך חיים של התמדה וחוסן.\n\nבנס ציונה, תחת כיפת השמיים ובאוויר הפתוח, אני מעביר אימונים אישיים וקבוצתיים שנועדו להוציא מכם את המקסימום.\n\nהשיטה שלי משלבת את הכוח של הקבוצה עם דיוק של אימון אישי.',
+    healthDeclarationTemplate: 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר לי לבצע פעילות גופנית מאומצת. אני מתחייב להודיע למאמן על כל שינוי במצבי הבריאותי. האימון מתבצע באחריותי המלאה.'
 };
 
 export const dataService = {
@@ -39,10 +41,8 @@ export const dataService = {
     if (supabase) {
       const { data, error } = await supabase.from('users').select('*');
       if (error) throw error;
-      // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo users.
       if (data) return data as User[];
     }
-    // Local mode fallback
     return safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
   },
 
@@ -82,10 +82,9 @@ export const dataService = {
     if (supabase) {
       const { data, error } = await supabase.from('sessions').select('*');
       if (error) throw error;
-      // If connected to cloud, return cloud data (even if empty). Do NOT fallback to demo sessions.
       if (data) return data.map((s: any) => ({
           ...s,
-          waitingList: s.waitingList || [] // Ensure waitingList exists
+          waitingList: s.waitingList || []
       })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
@@ -93,12 +92,9 @@ export const dataService = {
 
   addSession: async (session: TrainingSession): Promise<void> => {
     if (supabase) {
-      // NOTE: We do NOT force attendedPhoneNumbers to [] here. 
-      // We want it to be undefined/null so AdminPanel knows it hasn't been marked yet.
       const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is
           waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').insert([safeSession]);
@@ -114,7 +110,6 @@ export const dataService = {
        const safeSession = {
           ...session,
           registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-          // attendedPhoneNumbers: session.attendedPhoneNumbers, // Leave as is
           waitingList: session.waitingList || []
       };
       const { error } = await supabase.from('sessions').update(safeSession).eq('id', session.id);
@@ -142,8 +137,6 @@ export const dataService = {
        const { data, error } = await supabase.from('config_locations').select('*');
        if (!error && data) return data as LocationDef[];
     }
-    
-    // Local storage fallback
     return safeJsonParse<LocationDef[]>('niv_app_locations', DEFAULT_LOCATIONS);
   },
   
