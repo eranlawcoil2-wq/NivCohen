@@ -5,7 +5,7 @@ import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
-import { getWeatherForDates } from './services/weatherService';
+import { getWeatherForDates, getWeatherIcon } from './services/weatherService';
 import { dataService } from './services/dataService';
 
 const normalizePhone = (phone: string): string => {
@@ -38,15 +38,20 @@ interface InstallPromptProps {
 const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredPrompt }) => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const [dismissed, setDismissed] = useState(false);
+    const [dismissed, setDismissed] = useState(localStorage.getItem('niv_pwa_dismissed') === 'true');
 
     if (isStandalone || dismissed) return null;
+
+    const handleDismiss = () => {
+        setDismissed(true);
+        localStorage.setItem('niv_pwa_dismissed', 'true');
+    };
 
     const triggerInstall = async () => {
         if (deferredPrompt) {
             deferredPrompt.prompt();
             await deferredPrompt.userChoice;
-            setDismissed(true);
+            handleDismiss();
         } else if (!isIOS) {
             alert('כדי להתקין: לחץ על שלוש הנקודות בדפדפן ובחר "התקן אפליקציה"');
         }
@@ -75,12 +80,12 @@ const InstallPromptOverlay: React.FC<InstallPromptProps> = ({ isAdmin, deferredP
                             <span>בחר "הוסף למסך הבית"</span>
                             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
                         </div>
-                        <button onClick={() => setDismissed(true)} className="text-brand-primary font-bold text-center w-full py-2">הבנתי</button>
+                        <button onClick={handleDismiss} className="text-brand-primary font-bold text-center w-full py-2">הבנתי, תודה</button>
                     </div>
                 ) : (
                     <div className="flex gap-4 w-full">
                         <Button onClick={triggerInstall} className={`flex-1 py-4 rounded-3xl ${isAdmin ? 'bg-red-500' : 'bg-brand-primary'}`}>הורד אפליקציה 🚀</Button>
-                        <button onClick={() => setDismissed(true)} className="px-6 text-gray-500 font-bold">לא עכשיו</button>
+                        <button onClick={handleDismiss} className="px-6 text-gray-500 font-bold">לא עכשיו</button>
                     </div>
                 )}
             </div>
@@ -280,7 +285,6 @@ const App: React.FC = () => {
             <div className="bg-gray-900/60 backdrop-blur-2xl p-10 rounded-[60px] border border-white/5 shadow-2xl">
                 <p className="text-2xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
-            {/* Landing page buttons removed as per user request */}
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
@@ -289,6 +293,17 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
+      {/* Urgent Message Banner */}
+      {!isAdminMode && appConfig.urgentMessage && (
+          <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[60] relative overflow-hidden">
+              <div className="animate-pulse flex items-center justify-center gap-2">
+                  <span>📢</span>
+                  <span>{appConfig.urgentMessage}</span>
+                  <span>📢</span>
+              </div>
+          </div>
+      )}
+
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-50 ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'}`}>
           <div className="flex justify-between items-center mb-6">
               <div 
@@ -310,7 +325,7 @@ const App: React.FC = () => {
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">החודש</p><p className="text-brand-primary font-black text-3xl leading-none">{stats.monthly}</p></div>
                   <div className="bg-gray-800/40 p-4 rounded-2xl text-center"><p className="text-[9px] text-gray-500 uppercase mb-1">שיא</p><p className="text-white font-black text-3xl leading-none">{stats.record}</p></div>
                   <div className="bg-orange-500/10 p-4 rounded-2xl text-center"><p className="text-[9px] text-orange-500 uppercase mb-1">רצף 🔥</p><p className="text-orange-400 font-black text-3xl leading-none">{stats.streak}</p></div>
-                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg font-bold leading-none truncate w-full">{monthLeader.name}</p></div>
+                  <div className="bg-brand-primary/10 p-4 rounded-2xl text-center overflow-hidden"><p className="text-[9px] text-brand-primary uppercase mb-1">אלוף 🏆</p><p className="text-white font-black text-lg font-bold leading-none truncate w-full">{(monthLeader.name as string)}</p></div>
               </div>
           )}
       </header>
@@ -337,7 +352,7 @@ const App: React.FC = () => {
             <div className="space-y-16 pb-20">
               {Array.from({length:7}, (_,i) => {
                   const d = new Date();
-                  d.setHours(12, 0, 0, 0); // Normalized noon for TZ safety
+                  d.setHours(12, 0, 0, 0);
                   const dayOfWeek = d.getDay(); 
                   d.setDate(d.getDate() - dayOfWeek + i);
                   const dateStr = d.toISOString().split('T')[0];
@@ -351,7 +366,7 @@ const App: React.FC = () => {
                              <p className="text-[10px] font-black text-gray-700 uppercase">{d.toLocaleDateString('he-IL',{day:'numeric', month:'numeric'})}</p>
                           </div>
                           <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]}/>)}
+                              {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={users} isRegistered={!!currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone))} onRegisterClick={handleRegisterClick} onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)} locations={locations} weather={weatherData[s.date]} onWazeClick={navigateToLocation} onAddToCalendar={addToCalendar}/>)}
                               {daySessions.length === 0 && <p className="text-gray-700 text-[9px] uppercase font-black tracking-[0.2em] col-span-full text-center py-8 italic border-2 border-dashed border-gray-900 rounded-[40px]">מנוחה וחידוש כוחות</p>}
                           </div>
                       </div>
@@ -369,21 +384,29 @@ const App: React.FC = () => {
                         <h3 className="text-4xl font-black text-white italic leading-none">{viewingSession.type}</h3>
                         <p className="text-brand-primary font-black text-2xl mt-2 italic font-mono tracking-widest">{viewingSession.time}</p>
                     </div>
-                    <button onClick={() => setViewingSession(null)} className="text-gray-500 text-3xl hover:text-white transition-colors">✕</button>
+                    <button onClick={() => setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                 </div>
                 <div className="space-y-6">
-                    {viewingSession.description && (
-                        <div className="p-5 bg-brand-primary/10 border border-brand-primary/20 rounded-[30px]">
-                            <p className="text-white text-sm font-bold leading-relaxed">{viewingSession.description}</p>
+                    {weatherData[viewingSession.date]?.hourly && (
+                        <div className="flex gap-4 overflow-x-auto no-scrollbar py-2 border-b border-white/5">
+                            {Object.entries(weatherData[viewingSession.date].hourly || {}).map(([hour, data]: [string, any]) => (
+                                <div key={hour} className={`flex flex-col items-center p-2 rounded-2xl min-w-[50px] ${hour === viewingSession.time.split(':')[0] ? 'bg-brand-primary/20 border border-brand-primary/30' : 'bg-gray-800'}`}>
+                                    <span className="text-[10px] text-gray-500 font-black">{hour}:00</span>
+                                    <span className="text-xl">{getWeatherIcon(data.weatherCode)}</span>
+                                    <span className="text-xs font-black text-white">{Math.round(data.temp)}°</span>
+                                </div>
+                            ))}
                         </div>
                     )}
+
                     {viewingSession.isZoomSession && viewingSession.zoomLink && (
                         <a href={viewingSession.zoomLink} target="_blank" rel="noreferrer" className="block p-5 bg-blue-600/10 border border-blue-500/20 rounded-[30px] text-blue-400 text-center font-black italic">
                              כנס לאימון זום 🎥
                         </a>
                     )}
+                    
                     <div className="bg-gray-800 p-6 rounded-[35px] border border-white/5">
-                        <p className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">נרשמו ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
+                        <p className="text-[10px] font-black text-gray-500 uppercase mb-3 tracking-widest">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</p>
                         <div className="flex flex-wrap gap-2">
                             {viewingSession.registeredPhoneNumbers.length > 0 ? viewingSession.registeredPhoneNumbers.map(phone => {
                                 const t = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
@@ -396,14 +419,7 @@ const App: React.FC = () => {
                             }) : <p className="text-gray-600 text-xs italic">עדיין אין נרשמים...</p>}
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Button onClick={() => navigateToLocation(viewingSession.location)} className="py-5 rounded-[30px] bg-blue-600/20 text-blue-400 border border-blue-500/20 flex items-center justify-center gap-2">
-                            <span>🚙</span> Waze
-                        </Button>
-                        <Button onClick={() => addToCalendar(viewingSession)} className="py-5 rounded-[30px] bg-brand-primary/20 text-brand-primary border border-brand-primary/20 flex items-center justify-center gap-2">
-                            <span>📅</span> ליומן
-                        </Button>
-                    </div>
+
                     <Button 
                         onClick={() => { handleRegisterClick(viewingSession.id); setViewingSession(null); }} 
                         className={`w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl ${viewingSession.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone || '')) ? 'bg-red-500 shadow-red-500/20' : 'bg-brand-primary shadow-brand-primary/20'}`}
@@ -416,14 +432,11 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Direct installation overlay as requested */}
       <InstallPromptOverlay isAdmin={isAdminMode} deferredPrompt={deferredPrompt} />
-      
-      {/* WhatsApp button only on Landing page as requested */}
       {isLanding && <WhatsAppButton phone={appConfig.coachPhone} />}
       
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
-          <div className="bg-gray-900 p-12 rounded-[60px] w-full max-w-sm border border-gray-800 text-center shadow-3xl">
+          <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
               <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
               <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-5xl font-mono outline-none border border-gray-700 focus:border-brand-primary" />
               <Button onClick={() => { 

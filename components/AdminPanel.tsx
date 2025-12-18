@@ -3,6 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { User, TrainingSession, WeatherLocation, PaymentLink, LocationDef, AppConfig, Quote, WeatherInfo, PaymentStatus } from '../types';
 import { Button } from './Button';
 import { SessionCard } from './SessionCard';
+import { dataService } from '../services/dataService';
 
 interface AdminPanelProps {
   users: User[]; sessions: TrainingSession[]; primaryColor: string; workoutTypes: string[]; locations: LocationDef[];
@@ -20,6 +21,7 @@ interface AdminPanelProps {
 
 export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings'>('attendance');
+  const [settingsSection, setSettingsSection] = useState<'general' | 'locations' | 'types' | 'quotes' | 'connections'>('general');
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -30,7 +32,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   
   const weekDates = useMemo(() => {
     const sun = new Date();
-    sun.setHours(12, 0, 0, 0); // Normalized to noon to avoid TZ issues
+    sun.setHours(12, 0, 0, 0); 
     sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
     return Array.from({length:7}, (_, i) => { 
         const d = new Date(sun); 
@@ -43,6 +45,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       const filtered = [...props.users].filter(u => u.fullName.includes(searchTerm) || u.phone.includes(searchTerm));
       return filtered.sort((a,b) => sortBy === 'name' ? a.fullName.localeCompare(b.fullName) : 0);
   }, [props.users, searchTerm, sortBy]);
+
+  const handleAddLocation = () => {
+      const name = prompt('שם המיקום (לדוגמה: פארק הירקון):');
+      const address = prompt('כתובת לוייז:');
+      if (name && address) {
+          props.onUpdateLocations([...props.locations, { id: Date.now().toString(), name, address }]);
+      }
+  };
+
+  const handleAddWorkoutType = () => {
+      const type = prompt('סוג אימון חדש:');
+      if (type) {
+          props.onUpdateWorkoutTypes([...props.workoutTypes, type]);
+      }
+  };
+
+  const handleAddQuote = async () => {
+      const text = prompt('משפט מוטיבציה חדש:');
+      if (text) {
+          const q = { id: Date.now().toString(), text };
+          await dataService.addQuote(q);
+          window.location.reload(); // Quick refresh to update props
+      }
+  };
 
   return (
     <div className="bg-brand-black min-h-screen">
@@ -87,7 +113,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 weather={props.weatherData?.[s.date]} 
                               />
                             ))}
-                            {daySessions.length === 0 && <p className="text-gray-800 text-[8px] uppercase font-black col-span-full py-4 italic">אין אימונים מתוכננים</p>}
+                            {daySessions.length === 0 && <p className="text-gray-800 text-[8px] uppercase font-black col-span-full py-4 italic text-center">אין אימונים מתוכננים</p>}
                           </div>
                       </div>
                   );
@@ -104,9 +130,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                        <div key={u.id} className="bg-gray-800/40 p-6 rounded-[40px] border border-white/5 flex justify-between items-center hover:border-red-500/30 transition-colors cursor-pointer shadow-xl" onClick={()=>setEditingUser(u)}>
                           <div className="flex items-center gap-4">
                              <div className="w-12 h-12 rounded-full bg-gray-900 border border-white/10 flex items-center justify-center font-black text-red-500" style={{ color: u.userColor }}>{u.fullName.charAt(0)}</div>
-                             <div><p className="text-white font-black italic" style={{ color: u.userColor }}>{u.fullName}</p><p className="text-[10px] text-gray-500 font-mono">{u.phone}</p></div>
+                             <div>
+                                <p className="text-white font-black italic" style={{ color: u.userColor }}>{u.fullName}</p>
+                                <p className="text-[10px] text-gray-500 font-mono">{u.phone}</p>
+                             </div>
                           </div>
-                          <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${u.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 text-green-500 border border-green-500/20' : 'bg-red-500/20 text-red-500 border border-red-500/20'}`}>{u.paymentStatus === PaymentStatus.PAID ? 'שולם' : 'חוב'}</span>
+                          <div className="flex flex-col items-end gap-1">
+                             <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest ${u.paymentStatus === PaymentStatus.PAID ? 'bg-green-500/20 text-green-500 border border-green-500/20' : 'bg-red-500/20 text-red-500 border border-red-500/20'}`}>{u.paymentStatus === PaymentStatus.PAID ? 'שולם' : 'חוב'}</span>
+                             {u.healthDeclarationDate && <span className="text-[9px] text-blue-400 font-black uppercase">הצהרת בריאות ✓</span>}
+                          </div>
                        </div>
                     ))}
                 </div>
@@ -115,13 +147,97 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
         {activeTab === 'settings' && (
             <div className="space-y-10">
-                <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                    <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">הודעות מערכת ⚙️</h3>
-                    <div className="space-y-3">
-                        <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
-                        <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={props.appConfig.urgentMessage || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, urgentMessage: e.target.value})} placeholder="הודעה דחופה באתר..." />
-                    </div>
+                <div className="flex gap-2 p-1 bg-gray-900 rounded-2xl">
+                    {(['general', 'locations', 'types', 'quotes', 'connections'] as const).map(s => (
+                        <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2 text-[9px] font-black uppercase rounded-xl transition-all ${settingsSection === s ? 'bg-gray-800 text-white' : 'text-gray-600'}`}>
+                            {s === 'general' ? 'כללי' : s === 'locations' ? 'מיקומים' : s === 'types' ? 'אימונים' : s === 'quotes' ? 'מוטיבציה' : 'חיבורים'}
+                        </button>
+                    ))}
                 </div>
+
+                {settingsSection === 'general' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">הודעות מערכת ⚙️</h3>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר (משפט דחיפה)</label>
+                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={props.appConfig.urgentMessage || ''} onChange={e=>props.onUpdateAppConfig({...props.appConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה שתופיע למעלה באדום..." />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-black uppercase block mb-1">שם מאמן (עברית)</label>
+                                <input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={props.appConfig.coachNameHeb} onChange={e=>props.onUpdateAppConfig({...props.appConfig, coachNameHeb: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-500 font-black uppercase block mb-1">טלפון מאמן</label>
+                                <input className="w-full bg-gray-800 border border-white/10 p-4 rounded-2xl text-white font-bold" value={props.appConfig.coachPhone} onChange={e=>props.onUpdateAppConfig({...props.appConfig, coachPhone: e.target.value})} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'locations' && (
+                    <div className="space-y-4">
+                        <Button onClick={handleAddLocation} className="w-full py-4 rounded-2xl bg-gray-800 text-white">+ הוסף מיקום חדש</Button>
+                        <div className="grid gap-2">
+                            {props.locations.map(loc => (
+                                <div key={loc.id} className="bg-gray-800/40 p-5 rounded-3xl flex justify-between items-center border border-white/5">
+                                    <div>
+                                        <p className="text-white font-bold">{loc.name}</p>
+                                        <p className="text-[10px] text-gray-500">{loc.address}</p>
+                                    </div>
+                                    <button onClick={async () => { if(confirm('למחוק?')) { await dataService.deleteLocation(loc.id); props.onUpdateLocations(props.locations.filter(l => l.id !== loc.id)); }}} className="text-red-500 text-sm">🗑️</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'types' && (
+                    <div className="space-y-4">
+                        <Button onClick={handleAddWorkoutType} className="w-full py-4 rounded-2xl bg-gray-800 text-white">+ הוסף סוג אימון חדש</Button>
+                        <div className="grid grid-cols-2 gap-2">
+                            {props.workoutTypes.map(t => (
+                                <div key={t} className="bg-gray-800/40 p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                                    <span className="text-white text-sm font-bold">{t}</span>
+                                    <button onClick={async () => { if(confirm('למחוק?')) { await dataService.deleteWorkoutType(t); props.onUpdateWorkoutTypes(props.workoutTypes.filter(x => x !== t)); }}} className="text-red-500 text-sm">🗑️</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'quotes' && (
+                    <div className="space-y-4">
+                        <Button onClick={handleAddQuote} className="w-full py-4 rounded-2xl bg-gray-800 text-white">+ הוסף משפט מוטיבציה</Button>
+                        <div className="space-y-2">
+                            {props.quotes.map(q => (
+                                <div key={q.id} className="bg-gray-800/40 p-4 rounded-2xl flex justify-between items-center border border-white/5">
+                                    <p className="text-white text-xs italic">"{q.text}"</p>
+                                    <button onClick={async () => { if(confirm('למחוק?')) { await dataService.deleteQuote(q.id); window.location.reload(); }}} className="text-red-500 text-sm">🗑️</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'connections' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[40px] border border-white/5 space-y-6">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים וסנכרון 🔌</h3>
+                        <div className="space-y-4">
+                            <div className="p-4 bg-gray-900/50 rounded-2xl border border-white/5">
+                                <label className="text-[10px] text-blue-400 font-black uppercase block mb-2">Supabase URL</label>
+                                <p className="text-[10px] text-gray-500 mb-2">כתובת שרת מסד הנתונים לסנכרון בזמן אמת.</p>
+                                <input className="w-full bg-gray-800 p-3 rounded-xl text-white text-xs font-mono" defaultValue="https://xjqlluobnzpgpttprmio.supabase.co" readOnly />
+                            </div>
+                            <div className="p-4 bg-gray-900/50 rounded-2xl border border-white/5">
+                                <label className="text-[10px] text-blue-400 font-black uppercase block mb-2">Gemini API Key</label>
+                                <p className="text-[10px] text-gray-500 mb-2">מפתח עבור בינה מלאכותית ליצירת תיאורים ומשפטים.</p>
+                                <input className="w-full bg-gray-800 p-3 rounded-xl text-white text-xs font-mono" defaultValue="••••••••••••••••" readOnly />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-6 rounded-[40px] font-black italic uppercase">חזרה ללו"ז מתאמנים</Button>
             </div>
         )}
@@ -178,7 +294,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <label htmlFor="isHappening" className="text-brand-primary text-sm font-black uppercase italic">אימון מתקיים ✓ (יוצג בירוק)</label>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={()=>setAttendanceSession({...attendanceSession, isCancelled: !attendanceSession.isCancelled})} className={`flex-1 py-4 rounded-3xl font-black text-xs uppercase transition-all ${attendanceSession.isCancelled ? 'bg-red-500 text-white shadow-lg' : 'bg-transparent text-red-500 border border-red-500/30'}`}>{attendanceSession.isCancelled ? 'מבוטל ✗' : 'בטל אימון'}</button>
+                            <button onClick={()=>setAttendanceSession({...attendanceSession, isCancelled: !attendanceSession.isCancelled})} className={`flex-1 py-4 rounded-3xl font-black text-xs uppercase transition-all ${attendanceSession.isCancelled ? 'bg-red-600 text-white shadow-lg' : 'bg-transparent text-red-500 border border-red-500/30'}`}>{attendanceSession.isCancelled ? 'מבוטל ✗' : 'בטל אימון'}</button>
                             <button onClick={()=>setAttendanceSession({...attendanceSession, isHidden: !attendanceSession.isHidden})} className={`flex-1 py-4 rounded-3xl font-black text-xs uppercase transition-all ${attendanceSession.isHidden ? 'bg-gray-700 text-white shadow-lg' : 'bg-transparent text-gray-500 border border-white/10'}`}>{attendanceSession.isHidden ? 'מוסתר 👁️‍🗨️' : 'הסתר'}</button>
                         </div>
                       </div>
@@ -239,6 +355,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </select>
                       </div>
                   </div>
+                  {editingUser.healthDeclarationDate && (
+                      <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
+                          <p className="text-blue-400 text-sm font-bold">הצהרת בריאות חתומה מתאריך: {editingUser.healthDeclarationDate}</p>
+                          <p className="text-gray-500 text-xs">תעודת זהות: {editingUser.healthDeclarationId || 'לא הוזן'}</p>
+                      </div>
+                  )}
               </div>
               <div className="mt-12 flex gap-4">
                   <Button onClick={()=>{props.onUpdateUser(editingUser); setEditingUser(null);}} className="flex-1 bg-red-600 py-7 rounded-[45px] text-xl font-black italic uppercase shadow-2xl">שמור מתאמן ✓</Button>

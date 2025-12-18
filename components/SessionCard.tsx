@@ -13,6 +13,7 @@ interface SessionCardProps {
   onViewDetails: (sessionId: string) => void;
   onDuplicate?: (session: TrainingSession) => void;
   onAddToCalendar?: (session: TrainingSession) => void;
+  onWazeClick?: (location: string) => void;
   locations?: LocationDef[];
   isAdmin?: boolean; 
 }
@@ -26,6 +27,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   onViewDetails,
   onDuplicate,
   onAddToCalendar,
+  onWazeClick,
   locations = [],
   isAdmin = false
 }) => {
@@ -37,7 +39,6 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const sessionHour = session.time.split(':')[0];
   const hourlyWeather = weather?.hourly?.[sessionHour];
   
-  // Automated "Happening" logic: 3 hours before start
   let isHappening = false;
   if (!isCancelled) {
       if (session.manualHasStarted) {
@@ -47,7 +48,6 @@ export const SessionCard: React.FC<SessionCardProps> = ({
           const sessionStart = new Date(`${session.date}T${session.time}`);
           const diffMs = sessionStart.getTime() - now.getTime();
           const diffHours = diffMs / (1000 * 60 * 60);
-          // If within 3 hours before and hasn't ended (assuming 1.5h duration)
           if (diffHours <= 3 && diffHours > -1.5) {
               isHappening = true;
           }
@@ -61,7 +61,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   else if (isZoom) borderColor = '#3B82F6';
 
   const statusBg = isCancelled 
-    ? 'bg-red-500' 
+    ? 'bg-red-600 border-2 border-white shadow-[0_0_15px_rgba(239,68,68,0.8)]' 
     : (isHappening && isZoom 
         ? 'bg-gradient-to-r from-brand-primary to-blue-500' 
         : (isHappening ? 'bg-brand-primary' : (isZoom ? 'bg-blue-500' : 'bg-gray-700')));
@@ -73,12 +73,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   return (
     <div 
       onClick={() => onViewDetails(session.id)}
-      className={`relative rounded-[30px] sm:rounded-[40px] p-4 sm:p-8 border-2 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-2xl ${isCancelled ? 'opacity-40 grayscale' : 'bg-gray-800/80 backdrop-blur-sm'}`}
+      className={`relative rounded-[30px] sm:rounded-[40px] p-4 sm:p-8 border-2 transition-all hover:scale-[1.03] active:scale-95 cursor-pointer flex flex-col justify-between h-full shadow-2xl ${isCancelled ? 'opacity-50' : 'bg-gray-800/80 backdrop-blur-sm'}`}
       style={{ borderColor: borderColor }}
     >
-      <div className="absolute -top-2.5 -left-1 flex gap-1 z-10">
-         <div className={`${statusBg} text-black text-[9px] sm:text-[13px] font-black px-3 sm:px-5 py-1 sm:py-2 rounded-full shadow-xl flex items-center gap-1.5 uppercase italic tracking-tighter`}>
-            {isHappening && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
+      <div className="absolute -top-3 -left-1 flex gap-1 z-20">
+         <div className={`${statusBg} text-white sm:text-black text-[10px] sm:text-[13px] font-black px-3 sm:px-5 py-1.5 sm:py-2 rounded-full shadow-2xl flex items-center gap-1.5 uppercase italic tracking-tighter`}>
+            {isHappening && !isCancelled && <span className="w-1.5 h-1.5 bg-black rounded-full animate-ping"></span>}
             {statusLabel}
          </div>
       </div>
@@ -96,9 +96,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         <h3 className={`font-black text-xs sm:text-lg leading-tight uppercase italic mb-1 tracking-tight transition-colors duration-500 ${isCancelled ? 'text-gray-600' : (isZoom && !isHappening ? 'text-blue-400' : (isHappening ? 'text-brand-primary' : 'text-white'))}`}>{session.type}</h3>
         <p className={`text-[8px] sm:text-[12px] font-black truncate mb-3 sm:mb-6 uppercase tracking-tighter transition-colors duration-500 ${isCancelled ? 'text-gray-700' : 'text-gray-500'}`}>📍 {session.location.split(',')[0]}</p>
         
-        {!isAdmin && session.description && !isCancelled && (
+        {session.description && !isCancelled && (
             <div className="bg-brand-primary/10 border-r-2 sm:border-r-4 border-brand-primary p-2 sm:p-3 rounded-l-xl mb-3 sm:mb-6">
-                <p className="text-white text-[9px] sm:text-xs font-bold leading-tight line-clamp-2">{session.description}</p>
+                <p className="text-white text-[9px] sm:text-xs font-bold leading-tight">{session.description}</p>
             </div>
         )}
       </div>
@@ -110,9 +110,25 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         </div>
         
         {!isAdmin ? (
-            <Button size="sm" variant={isRegistered ? 'outline' : 'primary'} className={`w-full text-[9px] sm:text-[12px] py-2 sm:py-5 font-black italic uppercase rounded-2xl sm:rounded-[30px] shadow-xl ${isCancelled ? 'bg-gray-700 border-transparent text-gray-500' : ''}`} onClick={(e) => { e.stopPropagation(); onRegisterClick(session.id); }} disabled={isCancelled || (isFull && !isRegistered)}>
-               {isRegistered ? 'ביטול' : (isFull ? 'מלא' : 'הרשם')}
-            </Button>
+            <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onWazeClick?.(session.location); }}
+                        className="py-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/20 text-[8px] sm:text-[10px] font-black uppercase italic flex items-center justify-center gap-1"
+                    >
+                        <span>🚙</span> Waze
+                    </button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onAddToCalendar?.(session); }}
+                        className="py-2 rounded-xl bg-gray-700 text-white text-[8px] sm:text-[10px] font-black uppercase italic flex items-center justify-center gap-1"
+                    >
+                        <span>📅</span> יומן
+                    </button>
+                </div>
+                <Button size="sm" variant={isRegistered ? 'outline' : 'primary'} className={`w-full text-[9px] sm:text-[12px] py-2 sm:py-5 font-black italic uppercase rounded-2xl sm:rounded-[30px] shadow-xl ${isCancelled ? 'bg-gray-700 border-transparent text-gray-500' : ''}`} onClick={(e) => { e.stopPropagation(); onRegisterClick(session.id); }} disabled={isCancelled || (isFull && !isRegistered)}>
+                {isRegistered ? 'ביטול' : (isFull ? 'מלא' : 'הרשם')}
+                </Button>
+            </div>
         ) : (
             <div className="space-y-2">
                 <Button onClick={(e)=>{e.stopPropagation(); onViewDetails(session.id);}} className="w-full py-2 sm:py-4 bg-white text-brand-black text-[9px] sm:text-[12px] uppercase font-black italic rounded-2xl sm:rounded-[30px] shadow-lg">ניהול ⚙️</Button>
