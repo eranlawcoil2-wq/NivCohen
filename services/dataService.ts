@@ -68,13 +68,18 @@ export const dataService = {
           registeredPhoneNumbers: s.registeredPhoneNumbers || [],
           waitingList: s.waitingList || [],
           attendedPhoneNumbers: s.attendedPhoneNumbers || [],
-          isPersonalTraining: Boolean(s.isPersonalTraining),
-          isZoomSession: Boolean(s.isZoomSession),
-          isCancelled: Boolean(s.isCancelled),
-          manualHasStarted: Boolean(s.manualHasStarted)
+          isPersonalTraining: !!s.isPersonalTraining,
+          isZoomSession: !!s.isZoomSession,
+          isCancelled: !!s.isCancelled,
+          manualHasStarted: !!s.manualHasStarted
       })) as TrainingSession[];
     }
-    return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
+    return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS).map(s => ({
+        ...s,
+        isPersonalTraining: !!s.isPersonalTraining,
+        isCancelled: !!s.isCancelled,
+        manualHasStarted: !!s.manualHasStarted
+    }));
   },
 
   addSession: async (session: TrainingSession): Promise<void> => {
@@ -82,10 +87,10 @@ export const dataService = {
         ...session,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         waitingList: session.waitingList || [],
-        isPersonalTraining: Boolean(session.isPersonalTraining),
-        isZoomSession: Boolean(session.isZoomSession),
-        isCancelled: Boolean(session.isCancelled),
-        manualHasStarted: Boolean(session.manualHasStarted)
+        isPersonalTraining: !!session.isPersonalTraining,
+        isZoomSession: !!session.isZoomSession,
+        isCancelled: !!session.isCancelled,
+        manualHasStarted: !!session.manualHasStarted
     };
     if (supabase) await supabase.from('sessions').insert([data]);
     else {
@@ -101,10 +106,10 @@ export const dataService = {
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
         waitingList: session.waitingList || [],
-        isPersonalTraining: Boolean(session.isPersonalTraining),
-        isZoomSession: Boolean(session.isZoomSession),
-        isCancelled: Boolean(session.isCancelled),
-        manualHasStarted: Boolean(session.manualHasStarted)
+        isPersonalTraining: !!session.isPersonalTraining,
+        isZoomSession: !!session.isZoomSession,
+        isCancelled: !!session.isCancelled,
+        manualHasStarted: !!session.manualHasStarted
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
