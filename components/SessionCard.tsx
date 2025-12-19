@@ -51,7 +51,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       if (session.manualHasStarted) {
           isHappening = true;
       } else {
-          if (diffHours <= 3 && diffHours > -1.5) {
+          // Changed from 3 hours to 0.5 hours (30 mins) for "Happening" status
+          if (diffHours <= 0.5 && diffHours > -1.5) {
               isHappening = true;
           }
       }

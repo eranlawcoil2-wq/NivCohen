@@ -5,7 +5,7 @@ import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
-import { getWeatherForDates, getWeatherIcon } from './services/weatherService';
+import { getWeatherForDates, getCityCoordinates } from './services/weatherService';
 import { dataService } from './services/dataService';
 
 const normalizePhone = (phone: string): string => {
@@ -203,11 +203,13 @@ const App: React.FC = () => {
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
           if (q.length > 0) setQuote(q[Math.floor(Math.random() * q.length)].text);
           else getMotivationQuote().then(setQuote);
+          
+          const coords = await getCityCoordinates(config.defaultCity || 'נס ציונה');
           const dates = Array.from({length: 14}, (_, i) => {
             const d = new Date(); d.setDate(d.getDate() - 3 + i);
             return d.toISOString().split('T')[0];
           });
-          getWeatherForDates(dates).then(setWeatherData);
+          getWeatherForDates(dates, coords?.lat || 31.93, coords?.lon || 34.80).then(setWeatherData);
       } catch (e) { console.error(e); }
   }, []);
 
@@ -268,12 +270,9 @@ const App: React.FC = () => {
             </svg>
         </div>
         <div className="z-10 max-w-2xl space-y-12 py-12">
-            <div className="select-none cursor-pointer" onClick={() => navigateTo('work')}>
-                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter hover:text-brand-primary transition-colors">NIV COHEN</h1>
+            <div>
+                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
-                <div className="mt-8">
-                    <Button className="px-12 py-6 rounded-full text-2xl shadow-2xl shadow-brand-primary/20">כניסה ללו"ז אימונים ⚡</Button>
-                </div>
             </div>
             
             <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
@@ -394,6 +393,15 @@ const App: React.FC = () => {
                       </div>
                   );
               })}
+
+              <div className="flex justify-between items-center bg-gray-800/40 p-6 rounded-[40px] border border-white/5 shadow-2xl mt-12 mb-20">
+                <button onClick={() => { setTraineeWeekOffset(p => p - 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-white text-3xl p-4 hover:text-brand-primary transition-colors">←</button>
+                <div className="flex flex-col items-center">
+                    <span className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em] mb-2">נווט בין שבועות</span>
+                    <span className="text-brand-primary font-black uppercase tracking-[0.2em] bg-brand-primary/10 px-6 py-2 rounded-full border border-brand-primary/20">{traineeWeekOffset === 0 ? 'השבוע' : traineeWeekOffset === 1 ? 'שבוע הבא' : traineeWeekOffset === -1 ? 'שבוע שעבר' : `שבוע ${traineeWeekOffset}`}</span>
+                </div>
+                <button onClick={() => { setTraineeWeekOffset(p => p + 1); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="text-white text-3xl p-4 hover:text-brand-primary transition-colors">→</button>
+              </div>
             </div>
         )}
       </main>
