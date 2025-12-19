@@ -40,13 +40,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [showGroupSessions, setShowGroupSessions] = useState(true);
   const [showPersonalTraining, setShowPersonalTraining] = useState(true);
 
-  const [isEditing, setIsEditing] = useState(false);
-
+  // States for settings
   const [localAppConfig, setLocalAppConfig] = useState<AppConfig>(props.appConfig);
   const [localLocations, setLocalLocations] = useState<LocationDef[]>(props.locations);
   const [localWorkoutTypes, setLocalWorkoutTypes] = useState<string[]>(props.workoutTypes);
   const [localQuotes, setLocalQuotes] = useState<Quote[]>(props.quotes);
   const [sessionDraft, setSessionDraft] = useState<TrainingSession | null>(null);
+
+  // Update local state when props change ONLY if not actively editing
+  useEffect(() => {
+    if (activeTab !== 'settings') {
+      setLocalAppConfig(props.appConfig);
+      setLocalLocations(props.locations);
+      setLocalWorkoutTypes(props.workoutTypes);
+      setLocalQuotes(props.quotes);
+    }
+  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, activeTab]);
 
   useEffect(() => {
     if (attendanceSession) {
@@ -61,15 +70,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       });
     } else setSessionDraft(null);
   }, [attendanceSession]);
-
-  useEffect(() => {
-    if (!isEditing) {
-      setLocalAppConfig(props.appConfig);
-      setLocalLocations(props.locations);
-      setLocalWorkoutTypes(props.workoutTypes);
-      setLocalQuotes(props.quotes);
-    }
-  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, isEditing, activeTab]);
 
   const normalizePhone = (p: string) => {
     if (!p) return '';
@@ -120,20 +120,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         return;
     }
 
-    const targetSunday = new Date(targetSundayStr);
-    if (isNaN(targetSunday.getTime())) {
-        alert('תאריך לא תקין');
-        return;
-    }
-
-    const currentSunday = new Date(weekDates[0]);
-    const timeDiff = targetSunday.getTime() - currentSunday.getTime();
-    const daysDiff = Math.round(timeDiff / (1000 * 3600 * 24));
-
     setSaveIndicator('משכפל שבוע...');
     setIsSaving(true);
     
     try {
+        const targetSunday = new Date(targetSundayStr);
+        const currentSunday = new Date(weekDates[0]);
+        const timeDiff = targetSunday.getTime() - currentSunday.getTime();
+        const daysDiff = Math.round(timeDiff / (1000 * 3600 * 24));
+
         for (const s of sessionsToCopy) {
             const oldDate = new Date(s.date);
             const newDate = new Date(oldDate);
@@ -160,13 +155,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     }
   };
 
-  const handleGenerateAIQuote = async () => {
-    setSaveIndicator('ה-AI חושב על משפט...');
-    const q = await getMotivationQuote();
-    setLocalQuotes([...localQuotes, { id: Date.now().toString(), text: q }]);
-    setSaveIndicator(null);
-  };
-
   const handleSaveAllSettings = async () => {
     setSaveIndicator('שומר הגדרות...');
     setIsSaving(true);
@@ -182,7 +170,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       props.onUpdateLocations(localLocations);
       props.onUpdateWorkoutTypes(localWorkoutTypes);
       
-      setIsEditing(false);
       setSaveIndicator('הכל נשמר בהצלחה ✓');
       setTimeout(() => setSaveIndicator(null), 3000);
     } catch (e) { 
@@ -198,90 +185,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   };
 
   const fullSqlScript = `
--- 1. טבלת מתאמנים
-CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    "fullName" TEXT NOT NULL,
-    "displayName" TEXT,
-    phone TEXT NOT NULL,
-    email TEXT,
-    "startDate" TEXT,
-    "paymentStatus" TEXT,
-    "userColor" TEXT,
-    "monthlyRecord" INTEGER,
-    "isRestricted" BOOLEAN DEFAULT FALSE,
-    "healthDeclarationDate" TEXT,
-    "healthDeclarationId" TEXT
-);
+-- סקריפט SQL מעודכן ל-Supabase
+-- הרץ את זה כדי לוודא שכל העמודות החדשות קיימות
 
--- 2. טבלת אימונים
-CREATE TABLE IF NOT EXISTS sessions (
-    id TEXT PRIMARY KEY,
-    type TEXT NOT NULL,
-    date TEXT NOT NULL,
-    time TEXT NOT NULL,
-    location TEXT NOT NULL,
-    "maxCapacity" INTEGER NOT NULL,
-    description TEXT,
-    "registeredPhoneNumbers" JSONB DEFAULT '[]'::jsonb,
-    "attendedPhoneNumbers" JSONB DEFAULT '[]'::jsonb,
-    "isZoomSession" BOOLEAN DEFAULT FALSE,
-    "isCancelled" BOOLEAN DEFAULT FALSE,
-    "manualHasStarted" BOOLEAN DEFAULT FALSE,
-    "isPersonalTraining" BOOLEAN DEFAULT FALSE
-);
-
--- וודא שהעמודות החדשות קיימות (הרצת ALTER בטוחה)
 DO $$ 
 BEGIN
-    BEGIN
+    -- הוספת עמודות אם הן חסרות
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='isPersonalTraining') THEN
         ALTER TABLE sessions ADD COLUMN "isPersonalTraining" BOOLEAN DEFAULT FALSE;
-    EXCEPTION
-        WHEN duplicate_column THEN null;
-    END;
-    BEGIN
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='manualHasStarted') THEN
         ALTER TABLE sessions ADD COLUMN "manualHasStarted" BOOLEAN DEFAULT FALSE;
-    EXCEPTION
-        WHEN duplicate_column THEN null;
-    END;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sessions' AND column_name='isZoomSession') THEN
+        ALTER TABLE sessions ADD COLUMN "isZoomSession" BOOLEAN DEFAULT FALSE;
+    END IF;
 END $$;
-
--- 3. הגדרות כלליות
-CREATE TABLE IF NOT EXISTS config_general (
-    id TEXT PRIMARY KEY DEFAULT 'main',
-    "coachNameHeb" TEXT,
-    "coachNameEng" TEXT,
-    "coachPhone" TEXT,
-    "coachBio" TEXT,
-    "urgentMessage" TEXT,
-    "defaultCity" TEXT,
-    "healthDeclarationTemplate" TEXT
-);
-
--- 4. מיקומים
-CREATE TABLE IF NOT EXISTS config_locations (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    address TEXT NOT NULL,
-    color TEXT
-);
-
--- 5. סוגי אימונים
-CREATE TABLE IF NOT EXISTS config_workout_types (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL
-);
-
--- 6. משפטי מוטיבציה
-CREATE TABLE IF NOT EXISTS quotes (
-    id TEXT PRIMARY KEY,
-    text TEXT NOT NULL
-);
   `;
 
   return (
     <div className="bg-brand-black min-h-screen">
-      {/* ... Navigation UI Remains Same ... */}
       <div className="fixed top-[130px] left-0 right-0 z-[60] bg-brand-black/90 pt-4 border-b border-white/5 pb-4 backdrop-blur-xl px-4">
         <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex gap-2">
@@ -294,7 +219,7 @@ CREATE TABLE IF NOT EXISTS quotes (
             {activeTab === 'settings' && (
                 <div className="flex gap-2 p-1 bg-gray-900/60 rounded-2xl overflow-x-auto no-scrollbar border border-white/5">
                     {(['views', 'connections', 'quotes', 'infrastructure', 'general'] as const).map(s => (
-                        <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2.5 px-4 text-[11px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${settingsSection === s ? 'bg-gray-800 text-white shadow-lg' : 'text-gray-600'}`}>
+                        <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2.5 px-4 text-[11px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${settingsSection === s ? 'bg-gray-800 text-white shadow-lg border border-white/10' : 'text-gray-600'}`}>
                             {s === 'general' ? 'מידע כללי' : s === 'infrastructure' ? 'מיקומים' : s === 'quotes' ? 'מוטיבציה' : s === 'connections' ? 'חיבורים' : 'תצוגות'}
                         </button>
                     ))}
@@ -326,17 +251,13 @@ CREATE TABLE IF NOT EXISTS quotes (
              </div>
 
              {showDuplicationOptions && (
-                 <div className="bg-gray-900 p-6 rounded-[40px] border border-red-500/30 shadow-2xl animate-install-overlay-animation">
+                 <div className="bg-gray-900 p-6 rounded-[40px] border border-red-500/30 shadow-2xl">
                      <h4 className="text-white font-black uppercase italic mb-4 text-center">לאן לשכפל את השבוע הזה?</h4>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                          <Button onClick={() => performDuplication(new Date(new Date(weekDates[0]).getTime() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0])} className="py-4 bg-red-600" isLoading={isSaving}>לשבוע הבא ⏩</Button>
                          <div className="flex flex-col gap-2">
                              <label className="text-[10px] text-gray-500 font-black uppercase">בחר יום ראשון (תאריך יעד):</label>
-                             <input 
-                                type="date" 
-                                className="bg-gray-800 p-4 rounded-2xl text-white font-bold border border-white/10"
-                                onChange={(e) => { if(e.target.value) performDuplication(e.target.value); }}
-                             />
+                             <input type="date" className="bg-gray-800 p-4 rounded-2xl text-white font-bold border border-white/10" onChange={(e) => { if(e.target.value) performDuplication(e.target.value); }} />
                          </div>
                      </div>
                      <button onClick={() => setShowDuplicationOptions(false)} className="w-full text-center text-gray-500 text-xs font-black mt-4 uppercase">ביטול ✕</button>
@@ -361,74 +282,119 @@ CREATE TABLE IF NOT EXISTS quotes (
                   );
               })}
              </div>
-             {/* ... */}
           </div>
-        )}
-
-        {activeTab === 'users' && (
-            <div className="space-y-6">
-                {/* ... Users List Remains Same ... */}
-                <div className="flex flex-col sm:flex-row gap-4 items-center">
-                    <input type="text" placeholder="חיפוש מתאמן..." className="flex-1 bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
-                    <div className="flex gap-2 p-2 bg-gray-900/60 rounded-[30px] border border-white/5">
-                        {(['monthly', 'record', 'streak'] as const).map(sort => (
-                            <button key={sort} onClick={() => setUserSortBy(sort)} className={`px-4 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${userSortBy === sort ? 'bg-red-600 text-white' : 'text-gray-500'}`}>
-                                {sort === 'monthly' ? 'נוכחות' : sort === 'record' ? 'שיא' : 'רצף'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                <div className="grid gap-4">
-                    {sortedUsers.map(u => {
-                       const uStats = props.getStatsForUser(u);
-                       return (
-                       <div key={u.id} onClick={() => setEditingUser(u)} className="bg-gray-800/40 p-6 rounded-[50px] border border-white/5 flex flex-col sm:flex-row justify-between items-center shadow-2xl hover:border-red-500/50 cursor-pointer transition-all">
-                          <div className="flex items-center gap-6">
-                             <div className="w-16 h-16 rounded-full bg-gray-900 border-2 border-white/10 flex items-center justify-center font-black text-2xl text-brand-primary shrink-0" style={{ color: u.userColor }}>{u.fullName.charAt(0)}</div>
-                             <div className="truncate max-w-[150px] sm:max-w-none">
-                                <h3 className="text-white font-black text-xl italic truncate" style={{ color: u.userColor }}>{u.fullName}</h3>
-                                <p className="text-xs text-gray-500 font-mono tracking-widest">{u.phone}</p>
-                                {u.isRestricted && <span className="text-red-500 text-[9px] font-black uppercase">חסום 🚫</span>}
-                             </div>
-                          </div>
-                          <div className="grid grid-cols-3 gap-8 text-center mt-4 sm:mt-0">
-                             <div><p className="text-[10px] text-gray-500 font-black uppercase mb-1">החודש</p><p className="text-3xl font-black text-brand-primary">{uStats.monthly}</p></div>
-                             <div><p className="text-[10px] text-gray-500 font-black uppercase mb-1">שיא</p><p className="text-3xl font-black text-white">{uStats.record}</p></div>
-                             <div><p className="text-[10px] text-gray-500 font-black uppercase mb-1">רצף</p><p className="text-3xl font-black text-orange-400">{uStats.streak}</p></div>
-                          </div>
-                       </div>
-                    )})}
-                </div>
-            </div>
         )}
 
         {activeTab === 'settings' && (
             <div className="space-y-10 mt-6">
-                {/* ... General/Infra Settings Remain Same ... */}
-                {settingsSection === 'connections' && (
+                {settingsSection === 'general' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ואינטגרציות 🔌</h3>
-                        <div className="space-y-6">
-                            <div className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-brand-primary font-black text-sm uppercase">Supabase (מסד נתונים) 🗄️</h4>
-                                    <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
-                                </div>
-                                <p className="text-gray-400 text-xs leading-relaxed">הנתונים שלך נשמרים בענן Supabase. וודא שהרצת את סקריפט ה-SQL המעודכן כדי שהעמודות "מתקיים" ו"אישי" יעבדו.</p>
-                                <div className="bg-black/40 p-4 rounded-xl space-y-3">
-                                    <p className="text-[10px] text-brand-primary font-black uppercase">סקריפט SQL מעודכן (להרצה ב-SQL Editor):</p>
-                                    <textarea readOnly value={fullSqlScript} className="w-full bg-gray-900 text-gray-400 text-[8px] font-mono p-2 h-32 rounded border border-white/5 outline-none" />
-                                    <Button onClick={() => copyToClipboard(fullSqlScript)} size="sm" variant="secondary" className="text-[10px]">העתק סקריפט 📋</Button>
-                                </div>
-                            </div>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 👤</h3>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
+                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic outline-none" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה דחופה..." />
+                        </div>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} placeholder="ספר על עצמך..." />
+                        </div>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-purple-400 font-black uppercase block">נוסח הצהרת בריאות</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed text-sm" value={localAppConfig.healthDeclarationTemplate || ''} onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} />
                         </div>
                     </div>
                 )}
-                {/* ... Views tab ... */}
+                
+                {settingsSection === 'infrastructure' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4 shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-white font-black uppercase italic">מיקומים 📍</h4>
+                            <Button onClick={() => { const n = prompt('שם המיקום:'); if(n) setLocalLocations([...localLocations, {id: Date.now().toString(), name: n, address: n, color: '#A3E635'}]); }} size="sm" variant="secondary">הוסף מיקום</Button>
+                        </div>
+                        <div className="grid gap-4">
+                            {localLocations.map(loc => (
+                                <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[35px] space-y-2 border border-white/5 flex justify-between items-center">
+                                    <input className="bg-transparent text-white font-black italic flex-1" value={loc.name} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, name: e.target.value, address: e.target.value} : l))} />
+                                    <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500 mr-4">✕</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'quotes' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-white font-black uppercase italic">מוטיבציה ⚡</h3>
+                            <Button onClick={() => { const q = prompt('הכנס משפט:'); if(q) setLocalQuotes([...localQuotes, {id: Date.now().toString(), text: q}]); }} size="sm" variant="secondary">הוסף</Button>
+                        </div>
+                        <div className="grid gap-3">
+                            {localQuotes.map(q => (
+                                <div key={q.id} className="bg-gray-900/50 p-4 rounded-[20px] border border-white/5 flex justify-between items-center">
+                                    <p className="text-white text-sm">"{q.text}"</p>
+                                    <button onClick={() => setLocalQuotes(localQuotes.filter(x => x.id !== q.id))} className="text-red-500">✕</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'connections' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic">חיבורים 🔌</h3>
+                        <div className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 space-y-4">
+                            <p className="text-gray-400 text-xs">סקריפט SQL לתיקון בסיס הנתונים (להרצה ב-Supabase):</p>
+                            <textarea readOnly value={fullSqlScript} className="w-full bg-gray-900 text-gray-500 text-[10px] font-mono p-4 h-32 rounded-2xl border border-white/5 outline-none" />
+                            <Button onClick={() => copyToClipboard(fullSqlScript)} size="sm" variant="secondary">העתק סקריפט 📋</Button>
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'views' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic">קישורי תצוגה 🔗</h3>
+                        <div className="grid gap-4">
+                            {[
+                                { title: 'דף ראשי', url: window.location.origin + '/' },
+                                { title: 'לו"ז מתאמנים', url: window.location.origin + '/?mode=work' },
+                                { title: 'תצוגת CHAMP', url: window.location.origin + '/?mode=CHAMP' }
+                            ].map(view => (
+                                <div key={view.title} className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 flex justify-between items-center">
+                                    <span className="text-white text-sm font-black">{view.title}</span>
+                                    <button onClick={() => copyToClipboard(view.url)} className="text-brand-primary">📋</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
-                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600" isLoading={isSaving}>שמירה ✅</Button>
-                    <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה ללו"ז</Button>
+                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic bg-red-600" isLoading={isSaving}>שמירת הגדרות ✅</Button>
+                    <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black text-sm uppercase opacity-60">חזרה ללו"ז</Button>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'users' && (
+            <div className="space-y-6">
+                <input type="text" placeholder="חיפוש מתאמן..." className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
+                <div className="grid gap-4">
+                    {sortedUsers.map(u => (
+                       <div key={u.id} onClick={() => setEditingUser(u)} className="bg-gray-800/40 p-6 rounded-[50px] border border-white/5 flex justify-between items-center shadow-2xl hover:border-red-500/50 cursor-pointer transition-all">
+                          <div className="flex items-center gap-6">
+                             <div className="w-16 h-16 rounded-full bg-gray-900 border-2 border-white/10 flex items-center justify-center font-black text-2xl text-brand-primary">{u.fullName.charAt(0)}</div>
+                             <div>
+                                <h3 className="text-white font-black text-xl italic">{u.fullName}</h3>
+                                <p className="text-xs text-gray-500 font-mono">{u.phone}</p>
+                             </div>
+                          </div>
+                          <div className="text-center">
+                             <p className="text-[10px] text-gray-500 font-black uppercase">החודש</p>
+                             <p className="text-3xl font-black text-brand-primary">{props.getStatsForUser(u).monthly}</p>
+                          </div>
+                       </div>
+                    ))}
                 </div>
             </div>
         )}
@@ -436,56 +402,40 @@ CREATE TABLE IF NOT EXISTS quotes (
 
       {sessionDraft && (
           <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6 backdrop-blur-xl overflow-y-auto no-scrollbar">
-              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-4xl border border-white/10 text-right shadow-3xl my-auto" dir="rtl">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-4xl border border-white/10 text-right shadow-3xl" dir="rtl">
                   <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
                       <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון ⚙️</h3>
                       <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                      <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[600px] overflow-y-auto no-scrollbar border border-white/5 space-y-4">
-                        <div className="flex justify-between items-center border-b border-white/5 pb-2">
-                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">נוכחות ({sessionDraft.registeredPhoneNumbers.length})</p>
-                        </div>
+                      <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[500px] overflow-y-auto no-scrollbar border border-white/5 space-y-4">
+                        <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">נוכחות ({sessionDraft.registeredPhoneNumbers.length})</p>
                         <div className="relative">
-                            <input type="text" placeholder="הוספת מתאמן..." className="w-full bg-gray-900 p-4 rounded-2xl text-white text-xs border border-white/5 outline-none focus:border-brand-primary" value={traineeSearch} onChange={(e) => setTraineeSearch(e.target.value)} />
+                            <input type="text" placeholder="הוספת מתאמן..." className="w-full bg-gray-900 p-4 rounded-2xl text-white text-xs border border-white/5 outline-none" value={traineeSearch} onChange={(e) => setTraineeSearch(e.target.value)} />
                             {traineeSuggestions.length > 0 && (
-                                <div className="absolute top-full left-0 right-0 z-[210] bg-gray-900 border border-white/10 rounded-2xl mt-1 overflow-hidden shadow-2xl">
+                                <div className="absolute top-full left-0 right-0 z-[210] bg-gray-900 border border-white/10 rounded-2xl mt-1 overflow-hidden">
                                     {traineeSuggestions.map(u => (
-                                        <button key={u.id} className="w-full p-4 text-right hover:bg-gray-800 transition-colors flex justify-between items-center group" onClick={() => { 
+                                        <button key={u.id} className="w-full p-4 text-right hover:bg-gray-800 text-white text-sm font-bold" onClick={() => { 
                                             const phone = normalizePhone(u.phone); 
                                             if (!sessionDraft.registeredPhoneNumbers.includes(phone)) {
-                                                const newRegistered = [...sessionDraft.registeredPhoneNumbers, phone];
-                                                const newAttended = [...(sessionDraft.attendedPhoneNumbers || []), phone];
-                                                setSessionDraft({ ...sessionDraft, registeredPhoneNumbers: newRegistered, attendedPhoneNumbers: newAttended }); 
+                                                setSessionDraft({ ...sessionDraft, registeredPhoneNumbers: [...sessionDraft.registeredPhoneNumbers, phone], attendedPhoneNumbers: [...(sessionDraft.attendedPhoneNumbers || []), phone] }); 
                                             }
                                             setTraineeSearch(''); 
-                                        }}>
-                                            <span className="text-white text-sm font-bold">{u.fullName}</span>
-                                            <span className="text-brand-primary font-black">+ הוסף</span>
-                                        </button>
+                                        }}>{u.fullName}</button>
                                     ))}
                                 </div>
                             )}
                         </div>
                         <div className="space-y-2">
-                            {sessionDraft.registeredPhoneNumbers.map(phone => {
-                                const u = props.users.find(user => normalizePhone(user.phone) === normalizePhone(phone));
-                                const isAttended = (sessionDraft.attendedPhoneNumbers || []).includes(phone);
-                                return (
-                                    <div key={phone} className="flex justify-between items-center p-4 rounded-2xl bg-gray-900/50 border border-white/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-white text-sm font-bold">{u ? (u.displayName || u.fullName) : phone}</span>
-                                            <span className="text-[10px] text-gray-500 font-mono">{phone}</span>
-                                        </div>
-                                        <div className="flex gap-2 items-center">
-                                            <button onClick={() => { 
-                                                if (!sessionDraft) return;
-                                                const curr = sessionDraft.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setSessionDraft({...sessionDraft, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-brand-primary text-black' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח' : 'לא נכח'}</button>
-                                            <button onClick={() => setSessionDraft({...sessionDraft, registeredPhoneNumbers: sessionDraft.registeredPhoneNumbers.filter(p => p !== phone), attendedPhoneNumbers: (sessionDraft.attendedPhoneNumbers || []).filter(p => p !== phone)})} className="text-red-500 p-2">✕</button>
-                                        </div>
+                            {sessionDraft.registeredPhoneNumbers.map(phone => (
+                                <div key={phone} className="flex justify-between items-center p-4 rounded-2xl bg-gray-900/50 border border-white/5">
+                                    <span className="text-white text-sm font-bold">{props.users.find(u => normalizePhone(u.phone) === normalizePhone(phone))?.fullName || phone}</span>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { const curr = sessionDraft.attendedPhoneNumbers || []; const isAttended = curr.includes(phone); const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setSessionDraft({...sessionDraft, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${(sessionDraft.attendedPhoneNumbers || []).includes(phone) ? 'bg-brand-primary text-black' : 'bg-gray-800 text-gray-500'}`}>{(sessionDraft.attendedPhoneNumbers || []).includes(phone) ? 'נכח' : 'לא נכח'}</button>
+                                        <button onClick={() => setSessionDraft({...sessionDraft, registeredPhoneNumbers: sessionDraft.registeredPhoneNumbers.filter(p => p !== phone)})} className="text-red-500">✕</button>
                                     </div>
-                                );
-                            })}
+                                </div>
+                            ))}
                         </div>
                       </div>
                       <div className="space-y-5">
@@ -497,20 +447,24 @@ CREATE TABLE IF NOT EXISTS quotes (
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">תאריך</label><input type="date" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.date} onChange={e=>setSessionDraft({...sessionDraft, date: e.target.value})} /></div>
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.time} onChange={e=>setSessionDraft({...sessionDraft, time: e.target.value})} /></div>
                         </div>
-                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">דגשים למתאמנים</label><textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24 text-sm" value={sessionDraft.description || ''} onChange={e=>setSessionDraft({...sessionDraft, description: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">דגשים</label><textarea className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold h-24" value={sessionDraft.description || ''} onChange={e=>setSessionDraft({...sessionDraft, description: e.target.value})} /></div>
                         
                         <div className="grid grid-cols-2 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={!!sessionDraft.isPersonalTraining} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
-                                <label htmlFor="isPersonalDraft" className="text-purple-400 text-[10px] font-black uppercase cursor-pointer">אישי 🏆</label>
+                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500" checked={!!sessionDraft.isPersonalTraining} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
+                                <label htmlFor="isPersonalDraft" className="text-purple-400 text-[10px] font-black uppercase">אישי 🏆</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
-                                <label htmlFor="isCancelledDraft" className="text-red-500 text-[10px] font-black uppercase cursor-pointer">מבוטל ❌</label>
+                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500" checked={!!sessionDraft.isZoomSession} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: e.target.checked})} />
+                                <label htmlFor="isZoomDraft" className="text-blue-500 text-[10px] font-black uppercase">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={!!sessionDraft.manualHasStarted} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
-                                <label htmlFor="isHappeningDraft" className="text-brand-primary text-[10px] font-black uppercase cursor-pointer">מתקיים ✓</label>
+                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
+                                <label htmlFor="isCancelledDraft" className="text-red-500 text-[10px] font-black uppercase">מבוטל ❌</label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary" checked={!!sessionDraft.manualHasStarted} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
+                                <label htmlFor="isHappeningDraft" className="text-brand-primary text-[10px] font-black uppercase">מתקיים ✓</label>
                             </div>
                         </div>
                       </div>
@@ -519,29 +473,13 @@ CREATE TABLE IF NOT EXISTS quotes (
                       <Button onClick={async ()=>{ 
                           if (!sessionDraft || isSaving) return;
                           setIsSaving(true);
-                          setSaveIndicator('שומר...');
                           try {
-                            const finalSession = {
-                              ...sessionDraft,
-                              isPersonalTraining: !!sessionDraft.isPersonalTraining,
-                              isCancelled: !!sessionDraft.isCancelled,
-                              manualHasStarted: !!sessionDraft.manualHasStarted
-                            };
-                            await props.onUpdateSession(finalSession); 
+                            await props.onUpdateSession(sessionDraft); 
                             setSaveSuccess(true);
-                            setTimeout(() => {
-                                setAttendanceSession(null); 
-                                setSaveSuccess(false);
-                            }, 800);
-                          } catch (err) {
-                            setSaveIndicator('שגיאה ⚠️');
-                          } finally {
-                            setIsSaving(false);
-                          }
-                      }} className={`flex-1 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl transition-all ${saveSuccess ? 'bg-green-600' : 'bg-red-600'}`} isLoading={isSaving}>
-                        {saveSuccess ? 'נשמר בהצלחה! ✓' : 'שמור שינויים ✓'}
-                      </Button>
-                      <Button onClick={async ()=>{if(confirm('מחיקת אימון?')){ await props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]" disabled={isSaving}>מחק 🗑️</Button>
+                            setTimeout(() => { setAttendanceSession(null); setSaveSuccess(false); }, 800);
+                          } finally { setIsSaving(false); }
+                      }} className={`flex-1 py-8 rounded-[45px] text-2xl font-black italic shadow-2xl ${saveSuccess ? 'bg-green-600' : 'bg-red-600'}`} isLoading={isSaving}>{saveSuccess ? 'נשמר! ✓' : 'שמור אימון ✓'}</Button>
+                      <Button onClick={async ()=>{if(confirm('מחיקה?')){ await props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]">מחק 🗑️</Button>
                   </div>
               </div>
           </div>
