@@ -237,14 +237,16 @@ const App: React.FC = () => {
               });
               getWeatherForDates(dates, coords.lat, coords.lon).then(setWeatherData).catch(() => {});
           }
-      } catch (e) {}
+      } catch (e) {
+          console.error("Refresh failed:", e);
+      }
   }, [quote]);
 
   useEffect(() => {
     refreshData();
     const interval = setInterval(refreshData, 10000); 
     return () => clearInterval(interval);
-  }, [refreshData, currentView]); // Added currentView to trigger refresh on entry
+  }, [refreshData, currentView]); 
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -294,6 +296,7 @@ const App: React.FC = () => {
       setCurrentUserPhone(np);
       localStorage.setItem('niv_app_current_phone', np);
       document.getElementById('login-modal')?.classList.add('hidden');
+      refreshData();
     } else {
       if (!isNewUserLogin) {
         setIsNewUserLogin(true);
@@ -316,6 +319,7 @@ const App: React.FC = () => {
         setCurrentUserPhone(np);
         localStorage.setItem('niv_app_current_phone', np);
         document.getElementById('login-modal')?.classList.add('hidden');
+        refreshData();
       }
     }
   };
@@ -348,6 +352,10 @@ const App: React.FC = () => {
             <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
+            
+            <div className="pt-8">
+               <Button onClick={() => navigateTo('work')} className="py-8 px-16 rounded-[40px] text-2xl font-black italic shadow-2xl animate-bounce">כניסה ללו"ז 🚀</Button>
+            </div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
@@ -377,12 +385,14 @@ const App: React.FC = () => {
                       </div>
                   )}
               </div>
-              <div className="text-center">
+              <div className="text-center" onClick={() => navigateTo('landing')}>
                   <h1 className="text-3xl sm:text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">NIV COHEN</h1>
                   <p className="text-[10px] sm:text-[12px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
                   {isChampMode && <p className="text-[8px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
               </div>
-              <div className="w-20"></div> 
+              <div className="w-20 flex justify-end">
+                 {isAdminMode && <button onClick={() => navigateTo('work')} className="bg-gray-800 text-white p-2 rounded-xl text-[10px] font-black uppercase italic border border-white/10">לו"ז</button>}
+              </div> 
           </div>
           {currentUser && !isAdminMode && !isChampMode && (
               <div className="grid grid-cols-4 gap-2">

@@ -37,13 +37,19 @@ export const dataService = {
   },
 
   addUser: async (user: User): Promise<void> => {
-    if (supabase) await supabase.from('users').insert([user]);
+    if (supabase) {
+        const { error } = await supabase.from('users').insert([user]);
+        if (error) throw error;
+    }
     const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
     localStorage.setItem('niv_app_users', JSON.stringify([...users, user]));
   },
 
   updateUser: async (user: User): Promise<void> => {
-    if (supabase) await supabase.from('users').update(user).eq('id', user.id);
+    if (supabase) {
+        const { error } = await supabase.from('users').update(user).eq('id', user.id);
+        if (error) throw error;
+    }
     const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
     localStorage.setItem('niv_app_users', JSON.stringify(users.map(u => u.id === user.id ? user : u)));
   },
@@ -59,9 +65,8 @@ export const dataService = {
       const { data, error } = await supabase.from('sessions').select('*');
       if (!error && data) return data.map((s: any) => ({ 
           ...s, 
-          registeredPhoneNumbers: s.registeredPhoneNumbers || [],
-          waitingList: s.waitingList || [],
-          attendedPhoneNumbers: s.attendedPhoneNumbers || [],
+          registeredPhoneNumbers: Array.isArray(s.registeredPhoneNumbers) ? s.registeredPhoneNumbers : [],
+          attendedPhoneNumbers: Array.isArray(s.attendedPhoneNumbers) ? s.attendedPhoneNumbers : [],
           isPersonalTraining: Boolean(s.isPersonalTraining),
           isZoomSession: Boolean(s.isZoomSession),
           isCancelled: Boolean(s.isCancelled),
@@ -81,7 +86,6 @@ export const dataService = {
     const data = {
         ...session,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
-        waitingList: session.waitingList || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
         isPersonalTraining: Boolean(session.isPersonalTraining),
         isZoomSession: Boolean(session.isZoomSession),
@@ -90,7 +94,10 @@ export const dataService = {
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').insert([data]);
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase Insert Error:", error);
+            throw error;
+        }
     }
     const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
     localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, data]));
@@ -102,7 +109,6 @@ export const dataService = {
         ...rest,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
-        waitingList: session.waitingList || [],
         isPersonalTraining: Boolean(session.isPersonalTraining),
         isZoomSession: Boolean(session.isZoomSession),
         isCancelled: Boolean(session.isCancelled),
@@ -111,7 +117,7 @@ export const dataService = {
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
         if (error) {
-            console.error("Supabase Update Session Error:", error);
+            console.error("Supabase Update Error:", error);
             throw error;
         }
     }

@@ -129,7 +129,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     setSaveIndicator('משכפל שבוע...');
     
     try {
-        const duplicationPromises = sessionsToCopy.map(async s => {
+        // Sequential creation for maximum reliability
+        for (const s of sessionsToCopy) {
             const oldDate = new Date(s.date);
             const newDate = new Date(oldDate);
             newDate.setDate(oldDate.getDate() + daysDiff);
@@ -143,12 +144,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 isCancelled: false,
                 manualHasStarted: false
             };
-            return props.onAddSession(newSession);
-        });
-
-        await Promise.all(duplicationPromises);
+            await props.onAddSession(newSession);
+        }
         setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
     } catch (err) {
+        console.error("Duplication error:", err);
         setSaveIndicator('שגיאה בשכפול ⚠️');
     } finally {
         setShowDuplicationOptions(false);
@@ -189,6 +189,73 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       navigator.clipboard.writeText(text);
       alert('הלינק הועתק! 📋');
   };
+
+  const fullSqlScript = `
+-- 1. טבלת מתאמנים
+CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    "fullName" TEXT NOT NULL,
+    "displayName" TEXT,
+    phone TEXT NOT NULL,
+    email TEXT,
+    "startDate" TEXT,
+    "paymentStatus" TEXT,
+    "userColor" TEXT,
+    "monthlyRecord" INTEGER,
+    "isRestricted" BOOLEAN DEFAULT FALSE,
+    "healthDeclarationDate" TEXT,
+    "healthDeclarationId" TEXT
+);
+
+-- 2. טבלת אימונים
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    date TEXT NOT NULL,
+    time TEXT NOT NULL,
+    location TEXT NOT NULL,
+    "maxCapacity" INTEGER NOT NULL,
+    description TEXT,
+    "registeredPhoneNumbers" JSONB DEFAULT '[]'::jsonb,
+    "attendedPhoneNumbers" JSONB DEFAULT '[]'::jsonb,
+    "isZoomSession" BOOLEAN DEFAULT FALSE,
+    "isCancelled" BOOLEAN DEFAULT FALSE,
+    "manualHasStarted" BOOLEAN DEFAULT FALSE,
+    "isPersonalTraining" BOOLEAN DEFAULT FALSE
+);
+
+-- 3. הגדרות כלליות
+CREATE TABLE IF NOT EXISTS config_general (
+    id TEXT PRIMARY KEY DEFAULT 'main',
+    "coachNameHeb" TEXT,
+    "coachNameEng" TEXT,
+    "coachPhone" TEXT,
+    "coachBio" TEXT,
+    "urgentMessage" TEXT,
+    "defaultCity" TEXT,
+    "healthDeclarationTemplate" TEXT
+);
+
+-- 4. מיקומים
+CREATE TABLE IF NOT EXISTS config_locations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    address TEXT NOT NULL,
+    color TEXT
+);
+
+-- 5. סוגי אימונים
+CREATE TABLE IF NOT EXISTS config_workout_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL
+);
+
+-- 6. משפטי מוטיבציה
+CREATE TABLE IF NOT EXISTS quotes (
+    id TEXT PRIMARY KEY,
+    text TEXT NOT NULL
+);
+  `;
 
   return (
     <div className="bg-brand-black min-h-screen">
@@ -397,11 +464,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     <h4 className="text-brand-primary font-black text-sm uppercase">Supabase (מסד נתונים) 🗄️</h4>
                                     <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
                                 </div>
-                                <p className="text-gray-400 text-xs leading-relaxed">מסד הנתונים שומר את כל המתאמנים, האימונים וההגדרות שלך בענן. הנתונים מסונכרנים בזמן אמת לכל המכשירים.</p>
-                                <div className="space-y-2 border-t border-white/5 pt-4">
-                                    <p className="text-[10px] text-gray-500 uppercase font-black italic">פרטי חיבור פעילים:</p>
-                                    <p className="text-[9px] text-gray-600 font-mono">Project URL: https://xjqlluobnzpgpttprmio.supabase.co</p>
-                                    <p className="text-[9px] text-gray-600 font-mono">API Key: ********** (מפתח Anon פעיל)</p>
+                                <p className="text-gray-400 text-xs leading-relaxed">הנתונים שלך נשמרים בענן Supabase. אם משהו לא נשמר כראוי, ייתכן שטבלאות חסרות במסד הנתונים.</p>
+                                <div className="bg-black/40 p-4 rounded-xl space-y-3">
+                                    <p className="text-[10px] text-brand-primary font-black uppercase">סקריפט הגדרה ראשונית (SQL):</p>
+                                    <p className="text-[9px] text-gray-500 italic">העתק והרץ את הסקריפט הבא ב-SQL Editor של Supabase כדי לוודא שכל השדות קיימים:</p>
+                                    <textarea readOnly value={fullSqlScript} className="w-full bg-gray-900 text-gray-400 text-[8px] font-mono p-2 h-32 rounded border border-white/5 outline-none" />
+                                    <Button onClick={() => copyToClipboard(fullSqlScript)} size="sm" variant="secondary" className="text-[10px]">העתק סקריפט 📋</Button>
                                 </div>
                             </div>
 
@@ -411,14 +479,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
                                 </div>
                                 <p className="text-gray-400 text-xs leading-relaxed">ה-AI אחראי על ייצור משפטי מוטיבציה ותיאורי אימונים. המפתח מוזן בצורה מאובטחת בסביבת העבודה.</p>
-                            </div>
-
-                            <div className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h4 className="text-brand-primary font-black text-sm uppercase">WhatsApp Direct API 📱</h4>
-                                    <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
-                                </div>
-                                <p className="text-gray-400 text-xs leading-relaxed">חיבור המאפשר שליחת הודעות וואטסאפ מובנות למתאמנים בלחיצת כפתור (ללא צורך באישור Meta).</p>
                             </div>
                         </div>
                     </div>
@@ -568,7 +628,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           };
                           
                           try {
-                            // Manual await to ensure DB is updated before local state
                             await props.onUpdateSession(finalSession); 
                             setAttendanceSession(null); 
                           } catch (err) {
