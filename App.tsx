@@ -55,6 +55,8 @@ const downloadICS = (session: TrainingSession) => {
     document.body.removeChild(link);
 };
 
+const PRESET_COLORS = ['#A3E635', '#3B82F6', '#A855F7', '#F97316', '#06B6D4', '#EC4899'];
+
 const WhatsAppButton: React.FC<{ phone: string }> = ({ phone }) => (
     <a 
         href={`https://wa.me/${phone.replace(/\D/g, '')}`} 
@@ -78,7 +80,8 @@ const App: React.FC = () => {
     if (mode === 'CHAMP') return 'CHAMP';
     if (mode === 'admin') return 'admin';
     if (mode === 'work') return 'work';
-    return 'landing';
+    const savedPhone = localStorage.getItem('niv_app_current_phone');
+    return savedPhone ? 'work' : 'landing';
   });
 
   const isAdminMode = currentView === 'admin';
@@ -105,9 +108,10 @@ const App: React.FC = () => {
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showInstallGuide, setShowInstallGuide] = useState(false);
-  
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallOverlay, setShowInstallOverlay] = useState(false);
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
+  const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
   const isSyncingRef = useRef(false);
 
@@ -184,18 +188,31 @@ const App: React.FC = () => {
   }, [quote]);
 
   useEffect(() => {
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
-    if (!isStandalone && !localStorage.getItem('niv_install_guide_seen')) {
-        setShowInstallGuide(true);
-    }
-
+    const handler = (e: any) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+        if (!localStorage.getItem('niv_install_guide_seen')) {
+            setShowInstallOverlay(true);
+        }
+    };
+    window.addEventListener('beforeinstallprompt', handler);
     refreshData();
     const interval = setInterval(() => { if (!isSyncingRef.current) refreshData(); }, 30000); 
-    return () => clearInterval(interval);
-  }, [refreshData]);
+    if (localStorage.getItem('niv_app_current_phone') && currentView === 'landing') {
+        setCurrentView('work');
+    }
+    return () => {
+        window.removeEventListener('beforeinstallprompt', handler);
+        clearInterval(interval);
+    };
+  }, [refreshData, currentView]);
 
   const handleRegisterClick = async (sid: string) => {
-      if (!currentUserPhone) { document.getElementById('login-modal')?.classList.remove('hidden'); return; }
+      if (!currentUserPhone) { 
+          setPendingSessionId(sid);
+          document.getElementById('login-modal')?.classList.remove('hidden'); 
+          return; 
+      }
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
       isSyncingRef.current = true;
@@ -221,21 +238,46 @@ const App: React.FC = () => {
     if (loginPhoneInput.length < 9) return;
     const np = normalizePhone(loginPhoneInput);
     const existingUser = users.find(u => normalizePhone(u.phone) === np);
+    let finalUser: User | null = null;
     if (existingUser) {
-      setCurrentUserPhone(np);
-      localStorage.setItem('niv_app_current_phone', np);
-      document.getElementById('login-modal')?.classList.add('hidden');
+      finalUser = existingUser;
     } else {
-      if (!isNewUserLogin) setIsNewUserLogin(true);
-      else {
+      if (!isNewUserLogin) {
+          setIsNewUserLogin(true);
+          return;
+      } else {
         const newUser: User = { id: Date.now().toString(), fullName: loginNameInput, phone: np, email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PENDING };
         await dataService.addUser(newUser);
         setUsers(prev => [...prev, newUser]);
-        setCurrentUserPhone(np);
-        localStorage.setItem('niv_app_current_phone', np);
-        document.getElementById('login-modal')?.classList.add('hidden');
+        finalUser = newUser;
       }
     }
+    if (finalUser) {
+        const phone = normalizePhone(finalUser.phone);
+        setCurrentUserPhone(phone);
+        localStorage.setItem('niv_app_current_phone', phone);
+        document.getElementById('login-modal')?.classList.add('hidden');
+        if (pendingSessionId) {
+            handleRegisterClick(pendingSessionId);
+            setPendingSessionId(null);
+        }
+    }
+  };
+
+  const handleInstallClick = async () => {
+      if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === 'accepted') {
+              setDeferredPrompt(null);
+              setShowInstallOverlay(false);
+              localStorage.setItem('niv_install_guide_seen', 'true');
+          }
+      } else {
+          setShowInstallOverlay(false);
+          localStorage.setItem('niv_install_guide_seen', 'true');
+          alert('כדי להוסיף למסך הבית באייפון, לחצו על כפתור השיתוף ואז על "הוספה למסך הבית" 📱');
+      }
   };
 
   const handleSignHealth = async () => {
@@ -271,7 +313,7 @@ const App: React.FC = () => {
 
   if (isLanding) {
     return (
-      <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
+      <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden cursor-pointer" onClick={() => navigateTo('work')}>
         <div className="absolute inset-0 z-0 flex items-center justify-center opacity-10 pointer-events-none">
             <svg viewBox="0 0 100 100" className="w-[85vw] h-[85vw] text-white">
                 <path fill="currentColor" d="M48 0 L52 0 L52 10 L48 10 Z" />
@@ -286,22 +328,18 @@ const App: React.FC = () => {
                 <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             </div>
-            
             {appConfig.coachBio && (
                 <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
-                    <h2 className="text-brand-primary font-black text-3xl mb-6 italic">קצת עלי...</h2>
                     <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
                         {appConfig.coachBio}
                     </div>
                 </div>
             )}
-
-            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
+            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block cursor-pointer hover:bg-gray-800 transition-all">
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
-            
             <div className="pt-8">
-               <Button onClick={() => navigateTo('work')} className="py-8 px-16 rounded-[40px] text-2xl font-black italic shadow-2xl animate-bounce">כניסה ללו"ז 🚀</Button>
+               <p className="text-gray-500 font-black uppercase tracking-widest text-xs animate-pulse">לחץ בכל מקום לכניסה ללו"ז</p>
             </div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
@@ -439,81 +477,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Trainee View Participants Modal */}
-      {viewingSession && !isAdminMode && (
-          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
-              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-lg border border-white/10 shadow-3xl text-right" dir="rtl">
-                  <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-5">
-                      <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">פרטי אימון 👟</h3>
-                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
-                  </div>
-                  
-                  <div className="space-y-6">
-                      <div className="bg-gray-800/40 p-6 rounded-[35px] border border-white/5">
-                          <p className="text-brand-primary text-3xl font-black italic">{viewingSession.time} - {viewingSession.type}</p>
-                          <p className="text-gray-400 text-sm font-bold mt-2">📍 {viewingSession.location}</p>
-                      </div>
-
-                      <div className="space-y-4">
-                          <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em]">רשומים לאימון ({viewingSession.registeredPhoneNumbers.length})</p>
-                          <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto no-scrollbar p-1">
-                              {viewingSession.registeredPhoneNumbers.map(phone => {
-                                  const trainee = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
-                                  return (
-                                      <div key={phone} className="bg-gray-900 border border-white/5 p-4 rounded-2xl flex items-center gap-3">
-                                          <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-black text-xs">
-                                              {trainee?.fullName?.charAt(0) || '👤'}
-                                          </div>
-                                          <span className="text-white text-xs font-bold truncate">
-                                              {trainee ? (trainee.displayName || trainee.fullName.split(' ')[0]) : 'מתאמן/ת'}
-                                          </span>
-                                      </div>
-                                  );
-                              })}
-                              {viewingSession.registeredPhoneNumbers.length === 0 && (
-                                  <p className="text-gray-600 text-xs col-span-2 text-center py-4">היה הראשון להירשם! 💪</p>
-                              )}
-                          </div>
-                      </div>
-
-                      <Button onClick={()=>setViewingSession(null)} className="w-full py-6 rounded-[30px] font-black italic uppercase bg-gray-800 text-white">סגור</Button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* PWA Install Guide Overlay */}
-      {showInstallGuide && (
-          <div className="fixed inset-0 bg-black/90 z-[1000] flex flex-col items-center justify-end p-6 backdrop-blur-md">
-              <div className="bg-gray-900 w-full max-w-md p-8 rounded-[50px] border border-brand-primary/30 shadow-3xl text-right animate-install-overlay-animation" dir="rtl">
-                  <div className="flex justify-center mb-6">
-                      <div className="w-20 h-20 bg-brand-primary rounded-3xl flex items-center justify-center text-black font-black text-2xl shadow-2xl">NIV</div>
-                  </div>
-                  <h3 className="text-2xl font-black text-white italic text-center mb-4 uppercase">הוספה למסך הבית ⚡</h3>
-                  <p className="text-gray-400 text-center mb-8 leading-relaxed">כדי שתוכלו להזמין אימונים בקלות ובמהירות, הוסיפו את האפליקציה למסך הבית שלכם.</p>
-                  
-                  <div className="space-y-6 mb-8">
-                      <div className="flex items-center gap-4 bg-gray-800 p-4 rounded-2xl border border-white/5">
-                          <span className="text-3xl">📱</span>
-                          <div className="text-sm">
-                              <p className="text-white font-black mb-1">למשתמשי אייפון (iPhone):</p>
-                              <p className="text-gray-500 font-bold">לחצו על כפתור השיתוף (מרובע עם חץ למעלה) ואז על "הוספה למסך הבית".</p>
-                          </div>
-                      </div>
-                      <div className="flex items-center gap-4 bg-gray-800 p-4 rounded-2xl border border-white/5">
-                          <span className="text-3xl">🤖</span>
-                          <div className="text-sm">
-                              <p className="text-white font-black mb-1">למשתמשי אנדרואיד (Android):</p>
-                              <p className="text-gray-500 font-bold">לחצו על שלוש הנקודות למעלה בדפדפן כרום ואז על "התקן אפליקציה".</p>
-                          </div>
-                      </div>
-                  </div>
-
-                  <Button onClick={() => { setShowInstallGuide(false); localStorage.setItem('niv_install_guide_seen', 'true'); }} className="w-full py-6 rounded-[30px] text-lg font-black italic shadow-2xl bg-brand-primary text-black">הבנתי, תודה ✓</Button>
-              </div>
-          </div>
-      )}
-
       <div id="login-modal" className="hidden fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
           <div className="bg-gray-900 p-10 rounded-[60px] w-full max-w-md border border-white/10 shadow-3xl text-right" dir="rtl">
               <h3 className="text-3xl font-black text-brand-primary italic uppercase mb-8">התחברות ⚡</h3>
@@ -529,7 +492,7 @@ const App: React.FC = () => {
                       </div>
                   )}
                   <Button onClick={handleLoginSubmit} className="w-full py-6 rounded-[30px] text-xl font-black italic shadow-2xl bg-brand-primary text-black">המשך ✓</Button>
-                  <button onClick={() => document.getElementById('login-modal')?.classList.add('hidden')} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4">חזרה</button>
+                  <button onClick={() => { document.getElementById('login-modal')?.classList.add('hidden'); setPendingSessionId(null); }} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4">חזרה</button>
               </div>
           </div>
       </div>
@@ -541,18 +504,26 @@ const App: React.FC = () => {
                       <h3 className="text-3xl font-black text-white italic uppercase">פרופיל אישי 👤</h3>
                       <button onClick={()=>setShowProfile(false)} className="text-gray-500 text-4xl">✕</button>
                   </div>
-                  
                   <div className="space-y-10">
-                      <div className="flex items-center gap-6">
-                          <div className="w-24 h-24 rounded-full bg-gray-800 border-4 border-brand-primary/20 flex items-center justify-center text-4xl font-black text-brand-primary shadow-2xl">
+                      <div className="flex flex-col sm:flex-row items-center gap-6">
+                          <div className="w-24 h-24 rounded-full bg-gray-800 border-4 flex items-center justify-center text-4xl font-black shadow-2xl transition-colors" style={{ borderColor: (currentUser.userColor || '#A3E635') + '40', color: currentUser.userColor || '#A3E635' }}>
                               {currentUser.fullName.charAt(0)}
                           </div>
-                          <div>
-                              <h4 className="text-white text-3xl font-black italic">{currentUser.fullName}</h4>
-                              <p className="text-gray-500 font-mono text-lg">{currentUser.phone}</p>
+                          <div className="flex-1 space-y-4">
+                              <div className="space-y-1">
+                                <label className="text-[9px] text-gray-500 font-black uppercase">כינוי תצוגה</label>
+                                <input className="w-full bg-gray-800/50 p-4 rounded-2xl text-white font-black italic outline-none border border-white/5 focus:border-brand-primary" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} placeholder="בחר כינוי..." />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[9px] text-gray-500 font-black uppercase">בחר צבע פרופיל</label>
+                                <div className="flex gap-3">
+                                    {PRESET_COLORS.map(c => (
+                                        <button key={c} onClick={() => handleUpdateProfile({...currentUser, userColor: c})} className={`w-8 h-8 rounded-full border-2 transition-transform ${currentUser.userColor === c ? 'scale-125 border-white' : 'border-transparent opacity-60'}`} style={{ backgroundColor: c }} />
+                                    ))}
+                                </div>
+                              </div>
                           </div>
                       </div>
-
                       <div className="grid grid-cols-3 gap-4">
                           <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
                               <p className="text-[9px] text-gray-500 font-black uppercase mb-1">החודש</p>
@@ -567,7 +538,6 @@ const App: React.FC = () => {
                               <p className="text-3xl font-black text-orange-400">{stats.streak}</p>
                           </div>
                       </div>
-
                       <div className="space-y-4">
                           <h5 className="text-white font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">הצהרת בריאות 📝</h5>
                           {currentUser.healthDeclarationDate ? (
@@ -588,7 +558,6 @@ const App: React.FC = () => {
                               </div>
                           )}
                       </div>
-
                       <div className="pt-6 border-t border-white/5 flex gap-4">
                           <Button onClick={()=>{localStorage.removeItem('niv_app_current_phone'); window.location.reload();}} variant="outline" className="flex-1 rounded-[30px] text-xs font-black italic uppercase">התנתקות 🔌</Button>
                           <Button onClick={()=>setShowProfile(false)} className="flex-1 rounded-[30px] text-xs font-black italic uppercase">סגור</Button>
@@ -616,7 +585,6 @@ const App: React.FC = () => {
               </div>
           </div>
       )}
-
       <WhatsAppButton phone={appConfig.coachPhone} />
     </div>
   );

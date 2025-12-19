@@ -60,7 +60,7 @@ export interface TrainingSession {
   isZoomSession?: boolean;
   isHidden?: boolean;
   isCancelled?: boolean;
-  manualHasStarted?: boolean;
+  manualHasStarted?: boolean | null; // null = auto, true = forced ON, false = forced OFF
   isPersonalTraining?: boolean;
 }
 

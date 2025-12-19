@@ -43,13 +43,18 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const now = new Date();
   const sessionStart = new Date(`${session.date}T${session.time}`);
   const diffMs = sessionStart.getTime() - now.getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
+  const hoursUntil = diffMs / (1000 * 60 * 60);
 
-  const isFinished = !isCancelled && diffHours <= -1.5;
+  // A session is finished if it's 1.5 hours past start
+  const isFinished = !isCancelled && diffMs < -(1.5 * 60 * 60 * 1000);
   
-  // FIXED: isHappening now strictly follows the coach's manual toggle.
-  // This prevents the system from "forcing" the happening status based on time.
-  const isHappening = !!session.manualHasStarted && !isCancelled && !isFinished;
+  // Logic for Happening:
+  // 1. If coach explicitly set to true
+  // 2. If coach didn't explicitly set to false (null/undefined) AND it's 3 hours before (or 1.5h after)
+  const isHappening = !isCancelled && !isFinished && (
+    session.manualHasStarted === true || 
+    (session.manualHasStarted === null || session.manualHasStarted === undefined) && (hoursUntil <= 3 && hoursUntil > -1.5)
+  );
 
   let borderColor = isAdmin ? '#EF4444' : '#333';
   if (isCancelled) borderColor = '#EF4444';
