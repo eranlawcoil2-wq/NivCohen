@@ -67,24 +67,30 @@ export const dataService = {
           ...s, 
           registeredPhoneNumbers: Array.isArray(s.registeredPhoneNumbers) ? s.registeredPhoneNumbers : [],
           attendedPhoneNumbers: Array.isArray(s.attendedPhoneNumbers) ? s.attendedPhoneNumbers : [],
-          isPersonalTraining: Boolean(s.isPersonalTraining),
-          isZoomSession: Boolean(s.isZoomSession),
-          isCancelled: Boolean(s.isCancelled),
-          manualHasStarted: Boolean(s.manualHasStarted)
+          isPersonalTraining: !!s.isPersonalTraining,
+          isZoomSession: !!s.isZoomSession,
+          isCancelled: !!s.isCancelled,
+          manualHasStarted: !!s.manualHasStarted
       })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS).map(s => ({
         ...s,
-        isPersonalTraining: Boolean(s.isPersonalTraining),
-        isCancelled: Boolean(s.isCancelled),
-        manualHasStarted: Boolean(s.manualHasStarted),
-        isZoomSession: Boolean(s.isZoomSession)
+        isPersonalTraining: !!s.isPersonalTraining,
+        isCancelled: !!s.isCancelled,
+        manualHasStarted: !!s.manualHasStarted,
+        isZoomSession: !!s.isZoomSession
     }));
   },
 
   addSession: async (session: TrainingSession): Promise<void> => {
     const data = {
-        ...session,
+        id: session.id,
+        type: session.type,
+        date: session.date,
+        time: session.time,
+        location: session.location,
+        maxCapacity: Number(session.maxCapacity),
+        description: session.description || '',
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
         isPersonalTraining: !!session.isPersonalTraining,
@@ -94,7 +100,10 @@ export const dataService = {
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').insert([data]);
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase Add Error:", error);
+            throw error;
+        }
     }
     const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
     localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, data]));
@@ -103,7 +112,12 @@ export const dataService = {
   updateSession: async (session: TrainingSession): Promise<void> => {
     const { id, ...rest } = session;
     const data = {
-        ...rest,
+        type: session.type,
+        date: session.date,
+        time: session.time,
+        location: session.location,
+        maxCapacity: Number(session.maxCapacity),
+        description: session.description || '',
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
         isPersonalTraining: !!session.isPersonalTraining,
