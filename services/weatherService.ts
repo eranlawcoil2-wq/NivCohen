@@ -62,6 +62,7 @@ export const getWeatherForDates = async (dates: string[], lat: number = 31.93, l
 
     return weatherMap;
   } catch (error) {
+    console.warn("Weather fetch failed - using fallback UI");
     return {};
   }
 };

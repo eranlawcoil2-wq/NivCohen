@@ -11,8 +11,10 @@ interface AdminPanelProps {
   weatherLocation: WeatherLocation; weatherData?: Record<string, WeatherInfo>; paymentLinks: any[];
   streakGoal: number; appConfig: AppConfig; quotes: Quote[]; deferredPrompt?: any; onInstall?: () => void;
   onAddUser: (user: User) => void; onUpdateUser: (user: User) => void; onDeleteUser: (userId: string) => void; 
-  onAddSession: (session: TrainingSession) => void; onUpdateSession: (session: TrainingSession) => void; onDeleteSession: (id: string) => void;
-  onDuplicateSession?: (session: TrainingSession) => void;
+  onAddSession: (session: TrainingSession) => Promise<void>; 
+  onUpdateSession: (session: TrainingSession) => Promise<void>; 
+  onDeleteSession: (id: string) => Promise<void>;
+  onDuplicateSession?: (session: TrainingSession) => Promise<void>;
   onAddToCalendar?: (session: TrainingSession) => void;
   onColorChange: (color: string) => void; onUpdateWorkoutTypes: (types: string[]) => void; 
   onUpdateLocations: (locations: LocationDef[]) => void; onUpdateWeatherLocation: (location: WeatherLocation) => void;
@@ -125,26 +127,35 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const daysDiff = Math.round(timeDiff / (1000 * 3600 * 24));
 
     setSaveIndicator('משכפל שבוע...');
-    for (const s of sessionsToCopy) {
-        const oldDate = new Date(s.date);
-        const newDate = new Date(oldDate);
-        newDate.setDate(oldDate.getDate() + daysDiff);
+    
+    try {
+        // Collect all duplication promises to wait for ALL of them before UI sync
+        const duplicationPromises = sessionsToCopy.map(async s => {
+            const oldDate = new Date(s.date);
+            const newDate = new Date(oldDate);
+            newDate.setDate(oldDate.getDate() + daysDiff);
 
-        const newSession: TrainingSession = {
-            ...s,
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-            date: newDate.toISOString().split('T')[0],
-            registeredPhoneNumbers: [],
-            attendedPhoneNumbers: [],
-            isCancelled: false,
-            manualHasStarted: false
-        };
-        await dataService.addSession(newSession);
-        props.onAddSession(newSession);
+            const newSession: TrainingSession = {
+                ...s,
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+                date: newDate.toISOString().split('T')[0],
+                registeredPhoneNumbers: [],
+                attendedPhoneNumbers: [],
+                isCancelled: false,
+                manualHasStarted: false
+            };
+            return props.onAddSession(newSession);
+        });
+
+        await Promise.all(duplicationPromises);
+        setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
+    } catch (err) {
+        console.error("Duplication error:", err);
+        setSaveIndicator('שגיאה בשכפול ⚠️');
+    } finally {
+        setShowDuplicationOptions(false);
+        setTimeout(() => setSaveIndicator(null), 3000);
     }
-    setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
-    setShowDuplicationOptions(false);
-    setTimeout(() => setSaveIndicator(null), 3000);
   };
 
   const handleGenerateAIQuote = async () => {
@@ -559,14 +570,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             manualHasStarted: Boolean(sessionDraft.manualHasStarted)
                           };
                           
-                          // Ensure explicit persistence before local update
-                          await dataService.updateSession(finalSession);
-                          props.onUpdateSession(finalSession); 
-                          
-                          setAttendanceSession(null); 
-                          setSaveIndicator(null);
+                          try {
+                            await props.onUpdateSession(finalSession); 
+                            setAttendanceSession(null); 
+                          } catch (err) {
+                            console.error("Save error:", err);
+                            setSaveIndicator('שגיאה בשמירה ⚠️');
+                          } finally {
+                            setSaveIndicator(null);
+                          }
                       }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
-                      <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]">מחק 🗑️</Button>
+                      <Button onClick={async ()=>{if(confirm('מחיקת אימון?')){ await props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]">מחק 🗑️</Button>
                   </div>
               </div>
           </div>

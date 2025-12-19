@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { User, TrainingSession, PaymentStatus, LocationDef, AppConfig, WeatherInfo, Quote } from './types';
 import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
@@ -107,6 +107,9 @@ const App: React.FC = () => {
   const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
   
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
+
+  // CRITICAL: Lock polling during sensitive admin operations to prevent data overwrites
+  const isSyncingRef = useRef(false);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
@@ -218,6 +221,7 @@ const App: React.FC = () => {
   }, [sessions, users]);
 
   const refreshData = useCallback(async () => {
+      if (isSyncingRef.current) return; // Prevent polling from overriding manual local changes during sync
       try {
           const [u, s, locs, types, config, q] = await Promise.all([
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
@@ -237,9 +241,10 @@ const App: React.FC = () => {
       } catch (e) {}
   }, [quote]);
 
+  // Faster polling (10s) for "Push" like feeling while users are active
   useEffect(() => {
     refreshData();
-    const interval = setInterval(refreshData, 30000); 
+    const interval = setInterval(refreshData, 10000); 
     return () => clearInterval(interval);
   }, [refreshData]);
 
@@ -263,15 +268,6 @@ const App: React.FC = () => {
       
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
-
-      const now = new Date();
-      const sessionStart = new Date(`${session.date}T${session.time}`);
-      const diffMs = sessionStart.getTime() - now.getTime();
-      const diffHours = diffMs / (1000 * 60 * 60);
-      if (diffHours <= -1.5) {
-          alert('לא ניתן לבצע שינויים באימון שהסתיים.');
-          return;
-      }
 
       const phone = normalizePhone(currentUserPhone);
       let updated = { ...session };
@@ -407,16 +403,47 @@ const App: React.FC = () => {
                 locations={locations} weatherLocation={{name: appConfig.defaultCity, lat:0, lon:0}} paymentLinks={[]} streakGoal={3}
                 appConfig={appConfig} quotes={quotes} weatherData={weatherData} onAddUser={async u => { await dataService.addUser(u); setUsers(prev => [...prev, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(prev => prev.map(x=>x.id===u.id?u:x)); }}
-                onAddSession={async s => { await dataService.addSession(s); setSessions(prev => [...prev, s]); }}
+                onAddSession={async s => { 
+                    isSyncingRef.current = true;
+                    try {
+                        await dataService.addSession(s); 
+                        setSessions(prev => [...prev, s]); 
+                    } finally {
+                        isSyncingRef.current = false;
+                    }
+                }}
                 onUpdateSession={async s => { 
-                    setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
+                    isSyncingRef.current = true;
+                    try {
+                        await dataService.updateSession(s);
+                        setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
+                    } finally {
+                        isSyncingRef.current = false;
+                    }
                 }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
-                onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
+                onDeleteSession={async id => { 
+                    isSyncingRef.current = true;
+                    try {
+                        await dataService.deleteSession(id); 
+                        setSessions(prev => prev.filter(x=>x.id!==id)); 
+                    } finally {
+                        isSyncingRef.current = false;
+                    }
+                }}
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={async c => { setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
-                onDuplicateSession={async s => { const n = {...s, id: Date.now().toString() + Math.random().toString(36).substr(2, 5), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; setSessions(p=>[...p, n]); await dataService.addSession(n); }}
+                onDuplicateSession={async s => { 
+                    isSyncingRef.current = true;
+                    try {
+                        const n = {...s, id: Date.now().toString() + Math.random().toString(36).substr(2, 5), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; 
+                        await dataService.addSession(n); 
+                        setSessions(p=>[...p, n]); 
+                    } finally {
+                        isSyncingRef.current = false;
+                    }
+                }}
                 onAddToCalendar={downloadICS}
                 getStatsForUser={getStatsForUser}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}

@@ -88,7 +88,10 @@ export const dataService = {
         isCancelled: Boolean(session.isCancelled),
         manualHasStarted: Boolean(session.manualHasStarted)
     };
-    if (supabase) await supabase.from('sessions').insert([data]);
+    if (supabase) {
+        const { error } = await supabase.from('sessions').insert([data]);
+        if (error) throw error;
+    }
     const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
     localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, data]));
   },
@@ -107,7 +110,10 @@ export const dataService = {
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
-        if (error) console.error("Supabase Update Session Error:", error);
+        if (error) {
+            console.error("Supabase Update Session Error:", error);
+            throw error;
+        }
     }
     const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
     localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.map(s => s.id === id ? {id, ...data} : s)));
