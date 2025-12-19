@@ -153,20 +153,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   };
 
   const handleSaveAllSettings = async () => {
-    setSaveIndicator('שומר...');
+    setSaveIndicator('שומר הגדרות...');
     try {
+      // Direct call to dataService to ensure persistence
       await Promise.all([
           dataService.saveAppConfig(localAppConfig),
           dataService.saveLocations(localLocations),
           dataService.saveWorkoutTypes(localWorkoutTypes),
           dataService.saveQuotes(localQuotes)
       ]);
+      
+      // Update parent state for immediate UI feedback
       props.onUpdateAppConfig(localAppConfig);
       props.onUpdateLocations(localLocations);
       props.onUpdateWorkoutTypes(localWorkoutTypes);
-      setSaveIndicator('נשמר בהצלחה ✓');
+      
+      setSaveIndicator('הכל נשמר בהצלחה ✓');
       setTimeout(() => setSaveIndicator(null), 3000);
-    } catch (e) { setSaveIndicator('שגיאה בשמירה'); }
+    } catch (e) { 
+      console.error("Save error:", e);
+      setSaveIndicator('שגיאה בשמירה לשרת ⚠️'); 
+    }
   };
 
   return (
@@ -470,7 +477,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       </div>
                   </div>
                   <div className="mt-12 flex gap-4">
-                      <Button onClick={()=>{ 
+                      <Button onClick={async ()=>{ 
+                          if (!sessionDraft) return;
+                          setSaveIndicator('שומר אימון...');
                           const isNew = !props.sessions.find(s => s.id === sessionDraft.id);
                           const finalSession = {
                             ...sessionDraft,
@@ -481,6 +490,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           };
                           if (isNew) props.onAddSession(finalSession); else props.onUpdateSession(finalSession); 
                           setAttendanceSession(null); 
+                          setSaveIndicator(null);
                       }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
                       <Button onClick={()=>{if(confirm('מחיקת אימון?')){props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]">מחק 🗑️</Button>
                   </div>

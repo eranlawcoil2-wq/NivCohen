@@ -205,8 +205,8 @@ const App: React.FC = () => {
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
           ]);
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
-          if (q.length > 0) setQuote(q[Math.floor(Math.random() * q.length)].text);
-          else getMotivationQuote().then(setQuote);
+          if (q.length > 0 && !quote) setQuote(q[Math.floor(Math.random() * q.length)].text);
+          else if (!quote) getMotivationQuote().then(setQuote);
           
           const coords = await getCityCoordinates(config.defaultCity || 'נס ציונה');
           const dates = Array.from({length: 14}, (_, i) => {
@@ -214,10 +214,15 @@ const App: React.FC = () => {
             return d.toISOString().split('T')[0];
           });
           getWeatherForDates(dates, coords?.lat || 31.93, coords?.lon || 34.80).then(setWeatherData);
-      } catch (e) { console.error(e); }
-  }, []);
+      } catch (e) { console.error("Error refreshing data:", e); }
+  }, [quote]);
 
-  useEffect(() => { refreshData(); }, [refreshData]);
+  // Real-time Sync Polling
+  useEffect(() => {
+    refreshData();
+    const interval = setInterval(refreshData, 15000); // Sync every 15 seconds
+    return () => clearInterval(interval);
+  }, [refreshData]);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -386,7 +391,7 @@ const App: React.FC = () => {
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
-                onUpdateAppConfig={async c => { await dataService.saveAppConfig(c); setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
+                onUpdateAppConfig={async c => { setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
                 onDuplicateSession={async s => { const n = {...s, id: Date.now().toString() + Math.random().toString(36).substr(2, 5), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; setSessions(p=>[...p, n]); await dataService.addSession(n); }}
                 onAddToCalendar={downloadICS}
                 getStatsForUser={getStatsForUser}
