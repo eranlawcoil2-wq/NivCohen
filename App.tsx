@@ -227,15 +227,16 @@ const App: React.FC = () => {
           else if (!quote) getMotivationQuote().then(setQuote);
           
           const coords = await getCityCoordinates(config.defaultCity || 'נס ציונה');
-          const dates = Array.from({length: 14}, (_, i) => {
-            const d = new Date(); d.setDate(d.getDate() - 3 + i);
-            return d.toISOString().split('T')[0];
-          });
-          getWeatherForDates(dates, coords?.lat || 31.93, coords?.lon || 34.80).then(setWeatherData);
-      } catch (e) { console.error("Error refreshing data:", e); }
+          if (coords) {
+              const dates = Array.from({length: 14}, (_, i) => {
+                const d = new Date(); d.setDate(d.getDate() - 3 + i);
+                return d.toISOString().split('T')[0];
+              });
+              getWeatherForDates(dates, coords.lat, coords.lon).then(setWeatherData).catch(() => {});
+          }
+      } catch (e) {}
   }, [quote]);
 
-  // Use a longer interval to prevent race conditions during updates
   useEffect(() => {
     refreshData();
     const interval = setInterval(refreshData, 30000); 
@@ -283,7 +284,6 @@ const App: React.FC = () => {
           updated.attendedPhoneNumbers = [...(session.attendedPhoneNumbers || []), phone];
       }
       
-      // Update local state first for immediate UI response
       setSessions(prev => prev.map(s => s.id === sid ? updated : s));
       await dataService.updateSession(updated);
   };
@@ -407,12 +407,11 @@ const App: React.FC = () => {
                 locations={locations} weatherLocation={{name: appConfig.defaultCity, lat:0, lon:0}} paymentLinks={[]} streakGoal={3}
                 appConfig={appConfig} quotes={quotes} weatherData={weatherData} onAddUser={async u => { await dataService.addUser(u); setUsers(prev => [...prev, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(prev => prev.map(x=>x.id===u.id?u:x)); }}
-                onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
                 onAddSession={async s => { await dataService.addSession(s); setSessions(prev => [...prev, s]); }}
                 onUpdateSession={async s => { 
-                    // Update locally first for zero-lag UI
                     setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
                 }}
+                onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
@@ -444,10 +443,10 @@ const App: React.FC = () => {
                       daySessions = daySessions.filter(s => {
                           const isPersonal = !!s.isPersonalTraining;
                           const amRegistered = currentUserPhone && s.registeredPhoneNumbers.includes(normalizePhone(currentUserPhone));
-                          return isPersonal && amRegistered;
+                          return isPersonal && amRegistered && !s.isCancelled;
                       });
                   } else {
-                      daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining);
+                      daySessions = daySessions.filter(s => !s.isHidden && !s.isPersonalTraining && !s.isCancelled);
                   }
 
                   if (isChampMode && daySessions.length === 0) return null;
