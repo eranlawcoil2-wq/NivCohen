@@ -32,6 +32,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [traineeSearch, setTraineeSearch] = useState('');
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [userSortBy, setUserSortBy] = useState<'monthly' | 'record' | 'streak'>('monthly');
   const [showDuplicationOptions, setShowDuplicationOptions] = useState(false);
   
@@ -50,10 +51,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     if (attendanceSession) {
       setSessionDraft({ 
         ...attendanceSession, 
-        isPersonalTraining: Boolean(attendanceSession.isPersonalTraining),
-        isCancelled: Boolean(attendanceSession.isCancelled),
-        isZoomSession: Boolean(attendanceSession.isZoomSession),
-        manualHasStarted: Boolean(attendanceSession.manualHasStarted)
+        isPersonalTraining: !!attendanceSession.isPersonalTraining,
+        isCancelled: !!attendanceSession.isCancelled,
+        isZoomSession: !!attendanceSession.isZoomSession,
+        manualHasStarted: !!attendanceSession.manualHasStarted,
+        registeredPhoneNumbers: attendanceSession.registeredPhoneNumbers || [],
+        attendedPhoneNumbers: attendanceSession.attendedPhoneNumbers || []
       });
     } else setSessionDraft(null);
   }, [attendanceSession]);
@@ -127,9 +130,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const daysDiff = Math.round(timeDiff / (1000 * 3600 * 24));
 
     setSaveIndicator('משכפל שבוע...');
+    setIsSaving(true);
     
     try {
-        // Sequential creation for maximum reliability
         for (const s of sessionsToCopy) {
             const oldDate = new Date(s.date);
             const newDate = new Date(oldDate);
@@ -148,10 +151,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         }
         setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
     } catch (err) {
-        console.error("Duplication error:", err);
         setSaveIndicator('שגיאה בשכפול ⚠️');
     } finally {
         setShowDuplicationOptions(false);
+        setIsSaving(false);
         setTimeout(() => setSaveIndicator(null), 3000);
     }
   };
@@ -165,6 +168,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
   const handleSaveAllSettings = async () => {
     setSaveIndicator('שומר הגדרות...');
+    setIsSaving(true);
     try {
       await Promise.all([
           dataService.saveAppConfig(localAppConfig),
@@ -182,6 +186,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       setTimeout(() => setSaveIndicator(null), 3000);
     } catch (e) { 
       setSaveIndicator('שגיאה בשמירה לשרת ⚠️'); 
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -306,7 +312,7 @@ CREATE TABLE IF NOT EXISTS quotes (
                  <div className="bg-gray-900 p-6 rounded-[40px] border border-red-500/30 shadow-2xl animate-install-overlay-animation">
                      <h4 className="text-white font-black uppercase italic mb-4 text-center">לאן לשכפל את השבוע הזה?</h4>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                         <Button onClick={() => performDuplication(new Date(new Date(weekDates[0]).getTime() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0])} className="py-4 bg-red-600">לשבוע הבא ⏩</Button>
+                         <Button onClick={() => performDuplication(new Date(new Date(weekDates[0]).getTime() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0])} className="py-4 bg-red-600" isLoading={isSaving}>לשבוע הבא ⏩</Button>
                          <div className="flex flex-col gap-2">
                              <label className="text-[10px] text-gray-500 font-black uppercase">בחר יום ראשון (תאריך יעד):</label>
                              <input 
@@ -323,7 +329,7 @@ CREATE TABLE IF NOT EXISTS quotes (
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
-                  daySessions = daySessions.filter(s => Boolean(s.isPersonalTraining) ? showPersonalTraining : showGroupSessions);
+                  daySessions = daySessions.filter(s => !!s.isPersonalTraining ? showPersonalTraining : showGroupSessions);
                   if (daySessions.length === 0) return null;
                   return (
                       <div key={date}>
@@ -509,7 +515,7 @@ CREATE TABLE IF NOT EXISTS quotes (
 
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
-                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירה ✅</Button>
+                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600" isLoading={isSaving}>שמירה ✅</Button>
                     <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black italic text-sm uppercase opacity-60">חזרה ללו"ז</Button>
                 </div>
             </div>
@@ -597,19 +603,19 @@ CREATE TABLE IF NOT EXISTS quotes (
                         }} className="w-full bg-green-600 py-3 rounded-2xl text-xs flex items-center gap-2 justify-center">שלח פוש לקבוצה 📢 ✅</Button>
                         <div className="grid grid-cols-2 gap-2 p-4 bg-gray-800/20 rounded-3xl border border-white/5">
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={Boolean(sessionDraft.isPersonalTraining)} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
+                                <input type="checkbox" id="isPersonalDraft" className="w-6 h-6 accent-purple-500 cursor-pointer" checked={!!sessionDraft.isPersonalTraining} onChange={e=>setSessionDraft({...sessionDraft, isPersonalTraining: e.target.checked})} />
                                 <label htmlFor="isPersonalDraft" className="text-purple-400 text-[10px] font-black uppercase cursor-pointer">אישי 🏆</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500 cursor-pointer" checked={Boolean(sessionDraft.isZoomSession)} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: e.target.checked})} />
+                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500 cursor-pointer" checked={!!sessionDraft.isZoomSession} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: e.target.checked})} />
                                 <label htmlFor="isZoomDraft" className="text-blue-500 text-[10px] font-black uppercase cursor-pointer">זום 💻</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={Boolean(sessionDraft.isCancelled)} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
+                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500 cursor-pointer" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
                                 <label htmlFor="isCancelledDraft" className="text-red-500 text-[10px] font-black uppercase cursor-pointer">מבוטל ❌</label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={Boolean(sessionDraft.manualHasStarted)} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
+                                <input type="checkbox" id="isHappeningDraft" className="w-6 h-6 accent-brand-primary cursor-pointer" checked={!!sessionDraft.manualHasStarted} onChange={e=>setSessionDraft({...sessionDraft, manualHasStarted: e.target.checked})} />
                                 <label htmlFor="isHappeningDraft" className="text-brand-primary text-[10px] font-black uppercase cursor-pointer">מתקיים ✓</label>
                             </div>
                         </div>
@@ -617,26 +623,32 @@ CREATE TABLE IF NOT EXISTS quotes (
                   </div>
                   <div className="mt-12 flex gap-4">
                       <Button onClick={async ()=>{ 
-                          if (!sessionDraft) return;
+                          if (!sessionDraft || isSaving) return;
+                          setIsSaving(true);
                           setSaveIndicator('שומר אימון...');
-                          const finalSession = {
-                            ...sessionDraft,
-                            isPersonalTraining: Boolean(sessionDraft.isPersonalTraining),
-                            isZoomSession: Boolean(sessionDraft.isZoomSession),
-                            isCancelled: Boolean(sessionDraft.isCancelled),
-                            manualHasStarted: Boolean(sessionDraft.manualHasStarted)
-                          };
                           
                           try {
+                            const finalSession = {
+                              ...sessionDraft,
+                              isPersonalTraining: !!sessionDraft.isPersonalTraining,
+                              isZoomSession: !!sessionDraft.isZoomSession,
+                              isCancelled: !!sessionDraft.isCancelled,
+                              manualHasStarted: !!sessionDraft.manualHasStarted,
+                              registeredPhoneNumbers: sessionDraft.registeredPhoneNumbers || [],
+                              attendedPhoneNumbers: sessionDraft.attendedPhoneNumbers || []
+                            };
+                            
                             await props.onUpdateSession(finalSession); 
                             setAttendanceSession(null); 
                           } catch (err) {
+                            console.error("Save error:", err);
                             setSaveIndicator('שגיאה בשמירה ⚠️');
                           } finally {
+                            setIsSaving(false);
                             setSaveIndicator(null);
                           }
-                      }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
-                      <Button onClick={async ()=>{if(confirm('מחיקת אימון?')){ await props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]">מחק 🗑️</Button>
+                      }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl" isLoading={isSaving}>שמור שינויים ✓</Button>
+                      <Button onClick={async ()=>{if(confirm('מחיקת אימון?')){ await props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]" disabled={isSaving}>מחק 🗑️</Button>
                   </div>
               </div>
           </div>
@@ -676,8 +688,16 @@ CREATE TABLE IF NOT EXISTS quotes (
                       )}
 
                       <div className="mt-8 flex gap-4">
-                        <Button onClick={()=>{ props.onUpdateUser(editingUser); setEditingUser(null); }} className="flex-1 bg-red-600 py-6 rounded-[40px] text-xl font-black italic uppercase shadow-2xl">שמור ✓</Button>
-                        <Button onClick={()=>{if(confirm(`למחוק את ${editingUser.fullName}?`)){props.onDeleteUser(editingUser.id); setEditingUser(null);}}} variant="danger" className="px-8 rounded-[40px]">מחק 🗑️</Button>
+                        <Button onClick={async ()=>{ 
+                            setIsSaving(true);
+                            try {
+                                await props.onUpdateUser(editingUser); 
+                                setEditingUser(null); 
+                            } finally {
+                                setIsSaving(false);
+                            }
+                        }} className="flex-1 bg-red-600 py-6 rounded-[40px] text-xl font-black italic uppercase shadow-2xl" isLoading={isSaving}>שמור ✓</Button>
+                        <Button onClick={async ()=>{if(confirm(`למחוק את ${editingUser.fullName}?`)){props.onDeleteUser(editingUser.id); setEditingUser(null);}}} variant="danger" className="px-8 rounded-[40px]" disabled={isSaving}>מחק 🗑️</Button>
                       </div>
                   </div>
               </div>

@@ -87,17 +87,14 @@ export const dataService = {
         ...session,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
-        isPersonalTraining: Boolean(session.isPersonalTraining),
-        isZoomSession: Boolean(session.isZoomSession),
-        isCancelled: Boolean(session.isCancelled),
-        manualHasStarted: Boolean(session.manualHasStarted)
+        isPersonalTraining: !!session.isPersonalTraining,
+        isZoomSession: !!session.isZoomSession,
+        isCancelled: !!session.isCancelled,
+        manualHasStarted: !!session.manualHasStarted
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').insert([data]);
-        if (error) {
-            console.error("Supabase Insert Error:", error);
-            throw error;
-        }
+        if (error) throw error;
     }
     const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
     localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, data]));
@@ -109,15 +106,15 @@ export const dataService = {
         ...rest,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         attendedPhoneNumbers: session.attendedPhoneNumbers || [],
-        isPersonalTraining: Boolean(session.isPersonalTraining),
-        isZoomSession: Boolean(session.isZoomSession),
-        isCancelled: Boolean(session.isCancelled),
-        manualHasStarted: Boolean(session.manualHasStarted)
+        isPersonalTraining: !!session.isPersonalTraining,
+        isZoomSession: !!session.isZoomSession,
+        isCancelled: !!session.isCancelled,
+        manualHasStarted: !!session.manualHasStarted
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
         if (error) {
-            console.error("Supabase Update Error:", error);
+            console.error("Supabase Update Error Detail:", error);
             throw error;
         }
     }
