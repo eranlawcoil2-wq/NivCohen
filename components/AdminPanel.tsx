@@ -129,7 +129,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     setSaveIndicator('משכפל שבוע...');
     
     try {
-        // Collect all duplication promises to wait for ALL of them before UI sync
         const duplicationPromises = sessionsToCopy.map(async s => {
             const oldDate = new Date(s.date);
             const newDate = new Date(oldDate);
@@ -150,7 +149,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         await Promise.all(duplicationPromises);
         setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
     } catch (err) {
-        console.error("Duplication error:", err);
         setSaveIndicator('שגיאה בשכפול ⚠️');
     } finally {
         setShowDuplicationOptions(false);
@@ -183,7 +181,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       setSaveIndicator('הכל נשמר בהצלחה ✓');
       setTimeout(() => setSaveIndicator(null), 3000);
     } catch (e) { 
-      console.error("Save error:", e);
       setSaveIndicator('שגיאה בשמירה לשרת ⚠️'); 
     }
   };
@@ -224,6 +221,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     <button onClick={()=>setWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
                     <div className="flex flex-col items-center">
                         <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full">{weekOffset === 0 ? 'השבוע' : weekOffset === 1 ? 'שבוע הבא' : weekOffset === -1 ? 'שבוע שעבר' : `שבוע ${weekOffset}`}</span>
+                        <button onClick={() => setShowDuplicationOptions(true)} className="mt-2 text-[10px] font-black uppercase text-gray-500 border border-gray-700 px-3 py-1 rounded-full hover:border-red-500 hover:text-red-500 transition-all">שכפל שבוע 📑</button>
                     </div>
                     <button onClick={()=>setWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
                 </div>
@@ -233,9 +231,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 </div>
              </div>
 
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+             <div className="grid grid-cols-1">
                 <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ אימון חדש</Button>
-                <Button onClick={() => setShowDuplicationOptions(true)} variant="secondary" className="py-7 rounded-[45px] text-xl font-black italic border-dashed border-2 border-white/20">שכפל שבוע זה 📑</Button>
              </div>
 
              {showDuplicationOptions && (
@@ -571,10 +568,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           };
                           
                           try {
+                            // Manual await to ensure DB is updated before local state
                             await props.onUpdateSession(finalSession); 
                             setAttendanceSession(null); 
                           } catch (err) {
-                            console.error("Save error:", err);
                             setSaveIndicator('שגיאה בשמירה ⚠️');
                           } finally {
                             setSaveIndicator(null);

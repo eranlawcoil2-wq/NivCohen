@@ -108,7 +108,6 @@ const App: React.FC = () => {
   
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
 
-  // CRITICAL: Lock polling during sensitive admin operations to prevent data overwrites
   const isSyncingRef = useRef(false);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
@@ -221,7 +220,7 @@ const App: React.FC = () => {
   }, [sessions, users]);
 
   const refreshData = useCallback(async () => {
-      if (isSyncingRef.current) return; // Prevent polling from overriding manual local changes during sync
+      if (isSyncingRef.current) return; 
       try {
           const [u, s, locs, types, config, q] = await Promise.all([
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
@@ -241,12 +240,11 @@ const App: React.FC = () => {
       } catch (e) {}
   }, [quote]);
 
-  // Faster polling (10s) for "Push" like feeling while users are active
   useEffect(() => {
     refreshData();
     const interval = setInterval(refreshData, 10000); 
     return () => clearInterval(interval);
-  }, [refreshData]);
+  }, [refreshData, currentView]); // Added currentView to trigger refresh on entry
 
   const todayStr = new Date().toISOString().split('T')[0];
 
