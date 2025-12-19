@@ -93,7 +93,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       .filter(u => u.fullName.includes(searchTerm) || (u.displayName && u.displayName.includes(searchTerm)) || u.phone.includes(searchTerm))
       .sort((a, b) => {
         const statsA = props.getStatsForUser(a);
-        const statsB = props.getStatsForUser(b);
+        const statsB = props.getStatsForUser( b);
         return statsB[userSortBy] - statsA[userSortBy];
       });
   }, [props.users, searchTerm, userSortBy, props.getStatsForUser]);
@@ -110,7 +110,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const getWhatsAppMsg = (s: TrainingSession) => {
     const dateStr = new Date(s.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
     const dayName = new Date(s.date).toLocaleDateString('he-IL', { weekday: 'long' });
-    return `מתאמנים יקרים! תזכורת לאימון ${s.type} ביום ${dayName} (${dateStr}) בשעה ${s.time} ב${s.location}. ${s.description || ''} מחכה לראות אתכם! 💪⚡`;
+    return `פרטי האימון: ${s.type} | יום ${dayName} (${dateStr}) בשעה ${s.time} | מיקום: ${s.location}\n\nדגשים: ${s.description || 'אין דגשים מיוחדים'}\n\nמחכה לראות אתכם! 💪⚡`;
   };
 
   const handleWhatsAppSingle = (phone: string, session: TrainingSession) => {
@@ -121,11 +121,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const handleWhatsAppAll = (session: TrainingSession) => {
     if (session.registeredPhoneNumbers.length === 0) return alert('אין מתאמנים רשומים לאימון זה');
     const msg = encodeURIComponent(getWhatsAppMsg(session));
-    const phones = session.registeredPhoneNumbers.map(p => normalizePhone(p)).join(',');
-    // Note: Web version of WA doesn't support multiple recipients well in one URL, 
-    // but it's the best approach for a simple "broadcast" intent.
-    // Usually, coaches prefer doing it one by one or using a list. 
-    // Here we open a prompt with the list if browser doesn't support the bulk link.
     if (confirm(`לשלוח הודעה ל-${session.registeredPhoneNumbers.length} מתאמנים?`)) {
         window.open(`https://wa.me/?text=${msg}`, '_blank');
     }
@@ -313,12 +308,13 @@ END $$;
                             <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic outline-none" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה דחופה..." />
                         </div>
                         <div className="space-y-3">
-                            <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} placeholder="ספר על עצמך..." />
+                            <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (ביוגרפיה)</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-brand-primary transition-all outline-none" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} placeholder="ספר על עצמך... מה שכתוב כאן יופיע בדף הנחיתה" />
+                            <p className="text-[10px] text-gray-500 font-black text-left">מתעדכן בשמירת הגדרות הכללית למטה ⬇️</p>
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-purple-400 font-black uppercase block">נוסח הצהרת בריאות</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed text-sm" value={localAppConfig.healthDeclarationTemplate || ''} onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} />
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed text-sm outline-none focus:border-purple-500 transition-all" value={localAppConfig.healthDeclarationTemplate || ''} onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} />
                         </div>
                     </div>
                 )}

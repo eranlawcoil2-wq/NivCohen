@@ -184,7 +184,6 @@ const App: React.FC = () => {
   }, [quote]);
 
   useEffect(() => {
-    // Check if running in standalone mode
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
     if (!isStandalone && !localStorage.getItem('niv_install_guide_seen')) {
         setShowInstallGuide(true);
@@ -249,6 +248,11 @@ const App: React.FC = () => {
       await handleUpdateProfile(updated);
       setSigningHealth(false);
       setIdNumberInput('');
+  };
+
+  const handleUpdateAppConfig = async (newConfig: AppConfig) => {
+      setAppConfig(newConfig);
+      await dataService.saveAppConfig(newConfig);
   };
 
   const traineeWeekDates = useMemo(() => {
@@ -366,7 +370,7 @@ const App: React.FC = () => {
                 }}
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
-                onUpdateAppConfig={async c => { setAppConfig(c); }} onExitAdmin={() => navigateTo('work')}
+                onUpdateAppConfig={handleUpdateAppConfig} onExitAdmin={() => navigateTo('work')}
                 onDuplicateSession={async s => { 
                     isSyncingRef.current = true;
                     try {
@@ -427,6 +431,49 @@ const App: React.FC = () => {
             </div>
         )}
       </main>
+
+      {/* Trainee View Participants Modal */}
+      {viewingSession && !isAdminMode && (
+          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-lg border border-white/10 shadow-3xl text-right" dir="rtl">
+                  <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-5">
+                      <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">פרטי אימון 👟</h3>
+                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
+                  </div>
+                  
+                  <div className="space-y-6">
+                      <div className="bg-gray-800/40 p-6 rounded-[35px] border border-white/5">
+                          <p className="text-brand-primary text-3xl font-black italic">{viewingSession.time} - {viewingSession.type}</p>
+                          <p className="text-gray-400 text-sm font-bold mt-2">📍 {viewingSession.location}</p>
+                      </div>
+
+                      <div className="space-y-4">
+                          <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.3em]">רשומים לאימון ({viewingSession.registeredPhoneNumbers.length})</p>
+                          <div className="grid grid-cols-2 gap-3 max-h-[300px] overflow-y-auto no-scrollbar p-1">
+                              {viewingSession.registeredPhoneNumbers.map(phone => {
+                                  const trainee = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
+                                  return (
+                                      <div key={phone} className="bg-gray-900 border border-white/5 p-4 rounded-2xl flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-black text-xs">
+                                              {trainee?.fullName?.charAt(0) || '👤'}
+                                          </div>
+                                          <span className="text-white text-xs font-bold truncate">
+                                              {trainee ? (trainee.displayName || trainee.fullName.split(' ')[0]) : 'מתאמן/ת'}
+                                          </span>
+                                      </div>
+                                  );
+                              })}
+                              {viewingSession.registeredPhoneNumbers.length === 0 && (
+                                  <p className="text-gray-600 text-xs col-span-2 text-center py-4">היה הראשון להירשם! 💪</p>
+                              )}
+                          </div>
+                      </div>
+
+                      <Button onClick={()=>setViewingSession(null)} className="w-full py-6 rounded-[30px] font-black italic uppercase bg-gray-800 text-white">סגור</Button>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* PWA Install Guide Overlay */}
       {showInstallGuide && (
