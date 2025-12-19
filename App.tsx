@@ -251,8 +251,13 @@ const App: React.FC = () => {
   };
 
   const handleUpdateAppConfig = async (newConfig: AppConfig) => {
-      setAppConfig(newConfig);
-      await dataService.saveAppConfig(newConfig);
+      isSyncingRef.current = true;
+      try {
+        setAppConfig(newConfig);
+        await dataService.saveAppConfig(newConfig);
+      } finally {
+        isSyncingRef.current = false;
+      }
   };
 
   const traineeWeekDates = useMemo(() => {
@@ -282,12 +287,14 @@ const App: React.FC = () => {
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             </div>
             
-            <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
-                <h2 className="text-brand-primary font-black text-3xl mb-6 italic">קצת עלי...</h2>
-                <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
-                    {appConfig.coachBio || 'מאמן כושר מקצועי בנס ציונה.'}
+            {appConfig.coachBio && (
+                <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
+                    <h2 className="text-brand-primary font-black text-3xl mb-6 italic">קצת עלי...</h2>
+                    <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
+                        {appConfig.coachBio}
+                    </div>
                 </div>
-            </div>
+            )}
 
             <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>

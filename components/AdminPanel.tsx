@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, TrainingSession, WeatherLocation, LocationDef, AppConfig, Quote, WeatherInfo, PaymentStatus } from '../types';
 import { Button } from './Button';
 import { SessionCard } from './SessionCard';
@@ -19,7 +19,7 @@ interface AdminPanelProps {
   onColorChange: (color: string) => void; onUpdateWorkoutTypes: (types: string[]) => void; 
   onUpdateLocations: (locations: LocationDef[]) => void; onUpdateWeatherLocation: (location: WeatherLocation) => void;
   onAddPaymentLink: (link: any) => void; onDeletePaymentLink: (id: string) => void; onUpdateStreakGoal: (goal: number) => void;
-  onUpdateAppConfig: (config: AppConfig) => void; onExitAdmin: () => void;
+  onUpdateAppConfig: (config: AppConfig) => Promise<void>; onExitAdmin: () => void;
   getStatsForUser: (user: User) => { monthly: number; record: number; streak: number };
 }
 
@@ -47,15 +47,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [localQuotes, setLocalQuotes] = useState<Quote[]>(props.quotes);
   const [sessionDraft, setSessionDraft] = useState<TrainingSession | null>(null);
 
-  // Update local state when props change ONLY if not actively editing
+  const isInitialMount = useRef(true);
+
+  // Sync local state when external props change, but only if not in the middle of a save
   useEffect(() => {
-    if (activeTab !== 'settings') {
+    if (!isSaving) {
       setLocalAppConfig(props.appConfig);
       setLocalLocations(props.locations);
       setLocalWorkoutTypes(props.workoutTypes);
       setLocalQuotes(props.quotes);
     }
-  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, activeTab]);
+  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, isSaving]);
 
   useEffect(() => {
     if (attendanceSession) {
@@ -93,7 +95,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       .filter(u => u.fullName.includes(searchTerm) || (u.displayName && u.displayName.includes(searchTerm)) || u.phone.includes(searchTerm))
       .sort((a, b) => {
         const statsA = props.getStatsForUser(a);
-        const statsB = props.getStatsForUser( b);
+        const statsB = props.getStatsForUser(b);
         return statsB[userSortBy] - statsA[userSortBy];
       });
   }, [props.users, searchTerm, userSortBy, props.getStatsForUser]);
@@ -172,20 +174,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     setSaveIndicator('שומר הגדרות...');
     setIsSaving(true);
     try {
+      // Execute saves in parallel for efficiency
       await Promise.all([
-          dataService.saveAppConfig(localAppConfig),
+          props.onUpdateAppConfig(localAppConfig),
           dataService.saveLocations(localLocations),
           dataService.saveWorkoutTypes(localWorkoutTypes),
           dataService.saveQuotes(localQuotes)
       ]);
       
-      props.onUpdateAppConfig(localAppConfig);
       props.onUpdateLocations(localLocations);
       props.onUpdateWorkoutTypes(localWorkoutTypes);
       
       setSaveIndicator('הכל נשמר בהצלחה ✓');
       setTimeout(() => setSaveIndicator(null), 3000);
     } catch (e) { 
+      console.error("Save Error:", e);
       setSaveIndicator('שגיאה בשמירה לשרת ⚠️'); 
     } finally {
         setIsSaving(false);
@@ -309,7 +312,7 @@ END $$;
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (ביוגרפיה)</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-brand-primary transition-all outline-none" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} placeholder="ספר על עצמך... מה שכתוב כאן יופיע בדף הנחיתה" />
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-brand-primary transition-all outline-none" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} placeholder="ספר על עצמך... מה שכתוב כאן יופיע בדף הנחיתה תחת 'קצת עלי'" />
                             <p className="text-[10px] text-gray-500 font-black text-left">מתעדכן בשמירת הגדרות הכללית למטה ⬇️</p>
                         </div>
                         <div className="space-y-3">

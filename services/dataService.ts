@@ -170,15 +170,21 @@ export const dataService = {
 
   getAppConfig: async (): Promise<AppConfig> => {
       if (supabase) {
-          const { data, error } = await supabase.from('config_general').select('*').single();
+          const { data, error } = await supabase.from('config_general').select('*').limit(1).maybeSingle();
           if (!error && data) return data as AppConfig;
       }
       return safeJsonParse<AppConfig>('niv_app_config', DEFAULT_CONFIG);
   },
 
   saveAppConfig: async (config: AppConfig): Promise<void> => {
-      if (supabase) await supabase.from('config_general').upsert({ id: 'main', ...config });
       localStorage.setItem('niv_app_config', JSON.stringify(config));
+      if (supabase) {
+          const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
+          if (error) {
+              console.error("Supabase Config Save Error:", error);
+              throw error;
+          }
+      }
   },
 
   getQuotes: async (): Promise<Quote[]> => {
