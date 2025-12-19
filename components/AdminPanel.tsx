@@ -31,6 +31,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [traineeSearch, setTraineeSearch] = useState('');
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
   const [userSortBy, setUserSortBy] = useState<'monthly' | 'record' | 'streak'>('monthly');
+  const [showDuplicationOptions, setShowDuplicationOptions] = useState(false);
   
   const [showGroupSessions, setShowGroupSessions] = useState(true);
   const [showPersonalTraining, setShowPersonalTraining] = useState(true);
@@ -104,19 +105,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     return `מתאמנים יקרים! תזכורת לאימון ${s.type} ביום ${dayName} (${dateStr}) בשעה ${s.time} ב${s.location}. ${s.description || ''} מחכה לראות אתכם! 💪⚡`;
   };
 
-  const handleDuplicateWeek = async () => {
+  const performDuplication = async (targetSundayStr: string) => {
     const sessionsToCopy = props.sessions.filter(s => weekDates.includes(s.date));
-    
     if (sessionsToCopy.length === 0) {
         alert('לא נמצאו אימונים לשכפול בשבוע זה.');
         return;
     }
-
-    const targetSundayStr = prompt('הכנס תאריך יום ראשון של שבוע היעד (YYYY-MM-DD):', 
-        new Date(new Date(weekDates[0]).getTime() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0]
-    );
-
-    if (!targetSundayStr) return;
 
     const targetSunday = new Date(targetSundayStr);
     if (isNaN(targetSunday.getTime())) {
@@ -147,6 +141,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         props.onAddSession(newSession);
     }
     setSaveIndicator('השבוע שוכפל בהצלחה! ✓');
+    setShowDuplicationOptions(false);
     setTimeout(() => setSaveIndicator(null), 3000);
   };
 
@@ -216,8 +211,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0] || 'פונקציונלי', date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false })} className="py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl">+ אימון חדש</Button>
-                <Button onClick={handleDuplicateWeek} variant="secondary" className="py-7 rounded-[45px] text-xl font-black italic border-dashed border-2 border-white/20">שכפל שבוע זה 📑</Button>
+                <Button onClick={() => setShowDuplicationOptions(true)} variant="secondary" className="py-7 rounded-[45px] text-xl font-black italic border-dashed border-2 border-white/20">שכפל שבוע זה 📑</Button>
              </div>
+
+             {showDuplicationOptions && (
+                 <div className="bg-gray-900 p-6 rounded-[40px] border border-red-500/30 shadow-2xl animate-install-overlay-animation">
+                     <h4 className="text-white font-black uppercase italic mb-4 text-center">לאן לשכפל את השבוע הזה?</h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                         <Button onClick={() => performDuplication(new Date(new Date(weekDates[0]).getTime() + 7 * 24 * 3600 * 1000).toISOString().split('T')[0])} className="py-4 bg-red-600">לשבוע הבא ⏩</Button>
+                         <div className="flex flex-col gap-2">
+                             <label className="text-[10px] text-gray-500 font-black uppercase">בחר יום ראשון (תאריך יעד):</label>
+                             <input 
+                                type="date" 
+                                className="bg-gray-800 p-4 rounded-2xl text-white font-bold border border-white/10"
+                                onChange={(e) => { if(e.target.value) performDuplication(e.target.value); }}
+                             />
+                         </div>
+                     </div>
+                     <button onClick={() => setShowDuplicationOptions(false)} className="w-full text-center text-gray-500 text-xs font-black mt-4 uppercase">ביטול ✕</button>
+                 </div>
+             )}
 
              <div className="space-y-12">
               {weekDates.map(date => {
@@ -350,7 +363,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 )}
 
-                {/* Fixed the syntax error on line 510 where onClick was missing and had an extra brace, which caused the parser to fail and report 'Cannot find name div' */}
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic shadow-2xl shadow-red-600/20 bg-red-600">שמירה ✅</Button>

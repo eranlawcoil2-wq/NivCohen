@@ -348,20 +348,20 @@ const App: React.FC = () => {
 
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-[60] ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'} ${appConfig.urgentMessage && showUrgent ? 'mt-0' : ''}`}>
           <div className="flex justify-between items-center mb-6">
-              <div onClick={() => !isAdminMode && navigateTo('landing')} className={`cursor-pointer group select-none active:scale-95 transition-transform ${isAdminMode ? 'pointer-events-none' : ''}`}>
-                  <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
-                  <p className="text-[14px] sm:text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
-                  {isChampMode && <p className="text-[10px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
-              </div>
               <div className="flex items-center gap-4">
-                  {!isAdminMode && <button onClick={() => navigateTo('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>}
                   {currentUser && !isAdminMode && (
-                      <div className="text-left cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
-                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
+                      <div className="text-right cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors text-left">פרופיל אישי</p>
                           <p className="text-white font-black italic text-sm group-hover:text-brand-primary transition-colors" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                       </div>
                   )}
               </div>
+              <div className="text-center">
+                  <h1 className="text-3xl sm:text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">NIV COHEN</h1>
+                  <p className="text-[10px] sm:text-[12px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
+                  {isChampMode && <p className="text-[8px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
+              </div>
+              <div className="w-20"></div> {/* Placeholder for balance */}
           </div>
           {currentUser && !isAdminMode && !isChampMode && (
               <div className="grid grid-cols-4 gap-2">
