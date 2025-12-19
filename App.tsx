@@ -104,6 +104,8 @@ const App: React.FC = () => {
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
   
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
 
@@ -170,6 +172,7 @@ const App: React.FC = () => {
 
   const refreshData = useCallback(async () => {
       if (isSyncingRef.current) return; 
+      setIsSyncing(true);
       try {
           const [u, s, locs, types, config, q] = await Promise.all([
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
@@ -177,11 +180,18 @@ const App: React.FC = () => {
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
           if (q.length > 0 && !quote) setQuote(q[Math.floor(Math.random() * q.length)].text);
       } catch (e) {}
+      setIsSyncing(false);
   }, [quote]);
 
   useEffect(() => {
+    // Check if running in standalone mode
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    if (!isStandalone && !localStorage.getItem('niv_install_guide_seen')) {
+        setShowInstallGuide(true);
+    }
+
     refreshData();
-    const interval = setInterval(() => { if (!isSyncingRef.current) refreshData(); }, 15000); 
+    const interval = setInterval(() => { if (!isSyncingRef.current) refreshData(); }, 30000); 
     return () => clearInterval(interval);
   }, [refreshData]);
 
@@ -310,6 +320,9 @@ const App: React.FC = () => {
                           <p className="text-white font-black italic text-sm group-hover:text-brand-primary transition-colors" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                       </div>
                   )}
+                  {isSyncing && (
+                      <div className="w-4 h-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin ml-2"></div>
+                  )}
               </div>
               <div className="text-center" onClick={() => navigateTo('landing')}>
                   <h1 className="text-3xl sm:text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">NIV COHEN</h1>
@@ -414,6 +427,38 @@ const App: React.FC = () => {
             </div>
         )}
       </main>
+
+      {/* PWA Install Guide Overlay */}
+      {showInstallGuide && (
+          <div className="fixed inset-0 bg-black/90 z-[1000] flex flex-col items-center justify-end p-6 backdrop-blur-md">
+              <div className="bg-gray-900 w-full max-w-md p-8 rounded-[50px] border border-brand-primary/30 shadow-3xl text-right animate-install-overlay-animation" dir="rtl">
+                  <div className="flex justify-center mb-6">
+                      <div className="w-20 h-20 bg-brand-primary rounded-3xl flex items-center justify-center text-black font-black text-2xl shadow-2xl">NIV</div>
+                  </div>
+                  <h3 className="text-2xl font-black text-white italic text-center mb-4 uppercase">הוספה למסך הבית ⚡</h3>
+                  <p className="text-gray-400 text-center mb-8 leading-relaxed">כדי שתוכלו להזמין אימונים בקלות ובמהירות, הוסיפו את האפליקציה למסך הבית שלכם.</p>
+                  
+                  <div className="space-y-6 mb-8">
+                      <div className="flex items-center gap-4 bg-gray-800 p-4 rounded-2xl border border-white/5">
+                          <span className="text-3xl">📱</span>
+                          <div className="text-sm">
+                              <p className="text-white font-black mb-1">למשתמשי אייפון (iPhone):</p>
+                              <p className="text-gray-500 font-bold">לחצו על כפתור השיתוף (מרובע עם חץ למעלה) ואז על "הוספה למסך הבית".</p>
+                          </div>
+                      </div>
+                      <div className="flex items-center gap-4 bg-gray-800 p-4 rounded-2xl border border-white/5">
+                          <span className="text-3xl">🤖</span>
+                          <div className="text-sm">
+                              <p className="text-white font-black mb-1">למשתמשי אנדרואיד (Android):</p>
+                              <p className="text-gray-500 font-bold">לחצו על שלוש הנקודות למעלה בדפדפן כרום ואז על "התקן אפליקציה".</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  <Button onClick={() => { setShowInstallGuide(false); localStorage.setItem('niv_install_guide_seen', 'true'); }} className="w-full py-6 rounded-[30px] text-lg font-black italic shadow-2xl bg-brand-primary text-black">הבנתי, תודה ✓</Button>
+              </div>
+          </div>
+      )}
 
       <div id="login-modal" className="hidden fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
           <div className="bg-gray-900 p-10 rounded-[60px] w-full max-w-md border border-white/10 shadow-3xl text-right" dir="rtl">
