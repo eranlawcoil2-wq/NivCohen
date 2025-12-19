@@ -303,7 +303,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         {activeTab === 'settings' && (
             <div className="space-y-10 mt-6">
                 {settingsSection === 'general' && (
-                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl text-right" dir="rtl">
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 👤</h3>
                         <div className="space-y-3">
                             <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
@@ -319,6 +319,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                     </div>
                 )}
+                
+                {settingsSection === 'infrastructure' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl text-right" dir="rtl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">ניהול מיקומים 📍</h3>
+                        <div className="space-y-6">
+                            {localLocations.map((loc, idx) => (
+                                <div key={loc.id} className="p-6 bg-gray-900/60 rounded-[35px] border border-white/5 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500 font-black text-[10px] uppercase">מיקום #{idx + 1}</span>
+                                        <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500 text-xs font-black">מחק ✕</button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שם המקום (לתצוגה)</label>
+                                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold border border-white/10 outline-none focus:border-brand-primary" value={loc.name} onChange={e => {
+                                                const newLocs = [...localLocations];
+                                                newLocs[idx].name = e.target.value;
+                                                setLocalLocations(newLocs);
+                                            }} />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] text-brand-primary font-black mb-1 block uppercase">כתובת מלאה לוויז (כולל עיר!)</label>
+                                            <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold border border-brand-primary/30 outline-none focus:border-brand-primary" value={loc.address} onChange={e => {
+                                                const newLocs = [...localLocations];
+                                                newLocs[idx].address = e.target.value;
+                                                setLocalLocations(newLocs);
+                                            }} placeholder="למשל: רחוב החרש 10, נס ציונה" />
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            <Button onClick={() => setLocalLocations([...localLocations, { id: Date.now().toString(), name: 'מיקום חדש', address: '' }])} variant="outline" className="w-full py-4 rounded-[30px] border-dashed">+ הוסף מיקום חדש</Button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
                     {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic bg-red-600" isLoading={isSaving}>שמירת הגדרות ✅</Button>

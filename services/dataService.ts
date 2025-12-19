@@ -70,14 +70,14 @@ export const dataService = {
           isPersonalTraining: !!s.isPersonalTraining,
           isZoomSession: !!s.isZoomSession,
           isCancelled: !!s.isCancelled,
-          manualHasStarted: !!s.manualHasStarted
+          manualHasStarted: s.manualHasStarted ?? null
       })) as TrainingSession[];
     }
     return safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS).map(s => ({
         ...s,
         isPersonalTraining: !!s.isPersonalTraining,
         isCancelled: !!s.isCancelled,
-        manualHasStarted: !!s.manualHasStarted,
+        manualHasStarted: s.manualHasStarted ?? null,
         isZoomSession: !!s.isZoomSession
     }));
   },
@@ -96,7 +96,7 @@ export const dataService = {
         isPersonalTraining: !!session.isPersonalTraining,
         isZoomSession: !!session.isZoomSession,
         isCancelled: !!session.isCancelled,
-        manualHasStarted: !!session.manualHasStarted
+        manualHasStarted: session.manualHasStarted
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').insert([data]);
@@ -123,7 +123,7 @@ export const dataService = {
         isPersonalTraining: !!session.isPersonalTraining,
         isZoomSession: !!session.isZoomSession,
         isCancelled: !!session.isCancelled,
-        manualHasStarted: !!session.manualHasStarted
+        manualHasStarted: session.manualHasStarted
     };
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
