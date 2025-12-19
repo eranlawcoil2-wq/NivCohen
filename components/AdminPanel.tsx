@@ -33,6 +33,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [traineeSearch, setTraineeSearch] = useState('');
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const [userSortBy, setUserSortBy] = useState<'monthly' | 'record' | 'streak'>('monthly');
   const [showDuplicationOptions, setShowDuplicationOptions] = useState(false);
   
@@ -639,7 +640,12 @@ CREATE TABLE IF NOT EXISTS quotes (
                             };
                             
                             await props.onUpdateSession(finalSession); 
-                            setAttendanceSession(null); 
+                            setSaveSuccess(true);
+                            // Brief success state before closing
+                            setTimeout(() => {
+                                setAttendanceSession(null); 
+                                setSaveSuccess(false);
+                            }, 1000);
                           } catch (err) {
                             console.error("Save error:", err);
                             setSaveIndicator('שגיאה בשמירה ⚠️');
@@ -647,7 +653,9 @@ CREATE TABLE IF NOT EXISTS quotes (
                             setIsSaving(false);
                             setSaveIndicator(null);
                           }
-                      }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl" isLoading={isSaving}>שמור שינויים ✓</Button>
+                      }} className={`flex-1 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl transition-all ${saveSuccess ? 'bg-green-600' : 'bg-red-600'}`} isLoading={isSaving}>
+                        {saveSuccess ? 'נשמר בהצלחה! ✓' : 'שמור שינויים ✓'}
+                      </Button>
                       <Button onClick={async ()=>{if(confirm('מחיקת אימון?')){ await props.onDeleteSession(sessionDraft.id); setAttendanceSession(null);}}} variant="danger" className="px-12 rounded-[45px]" disabled={isSaving}>מחק 🗑️</Button>
                   </div>
               </div>

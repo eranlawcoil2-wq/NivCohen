@@ -46,17 +46,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const diffHours = diffMs / (1000 * 60 * 60);
 
   const isFinished = !isCancelled && diffHours <= -1.5;
-  let isHappening = false;
-  if (!isCancelled && !isFinished) {
-      if (session.manualHasStarted) {
-          isHappening = true;
-      } else {
-          // Narrower auto-start window: 5 minutes before up to 1.5 hours after
-          if (diffHours <= 0.083 && diffHours > -1.5) { // 0.083 hours is ~5 mins
-              isHappening = true;
-          }
-      }
-  }
+  
+  // FIXED: isHappening now strictly follows the coach's manual toggle.
+  // This prevents the system from "forcing" the happening status based on time.
+  const isHappening = !!session.manualHasStarted && !isCancelled && !isFinished;
 
   let borderColor = isAdmin ? '#EF4444' : '#333';
   if (isCancelled) borderColor = '#EF4444';
