@@ -92,12 +92,13 @@ const App: React.FC = () => {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [appConfig, setAppConfig] = useState<AppConfig>({
-      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0528726618', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
+      coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0528726618', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: '', coachBio: '', healthDeclarationTemplate: 'אני מצהיר כי מצב בריאותי תקין ומאפשר ביצוע פעילות גופנית...'
   });
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(() => localStorage.getItem('niv_app_current_phone'));
   const [loginPhoneInput, setLoginPhoneInput] = useState('');
   const [loginNameInput, setLoginNameInput] = useState('');
   const [isNewUserLogin, setIsNewUserLogin] = useState(false);
+  const [idNumberInput, setIdNumberInput] = useState('');
   
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
@@ -117,6 +118,23 @@ const App: React.FC = () => {
           localStorage.setItem('niv_app_current_phone', np);
       }
       await dataService.updateUser(updated);
+  };
+
+  const handleSignDeclaration = async () => {
+    if (!currentUser) return;
+    if (idNumberInput.length < 8) {
+        alert('נא להזין מספר תעודת זהות תקין');
+        return;
+    }
+    const now = new Date();
+    const updatedUser: User = {
+        ...currentUser,
+        healthDeclarationId: idNumberInput,
+        healthDeclarationDate: now.toLocaleString('he-IL')
+    };
+    await handleUpdateProfile(updatedUser);
+    setIdNumberInput('');
+    alert('הצהרת הבריאות נחתמה בהצלחה!');
   };
 
   const navigateTo = (view: 'landing' | 'work' | 'admin' | 'CHAMP') => {
@@ -217,10 +235,10 @@ const App: React.FC = () => {
       } catch (e) { console.error("Error refreshing data:", e); }
   }, [quote]);
 
-  // Real-time Sync Polling
+  // Use a longer interval to prevent race conditions during updates
   useEffect(() => {
     refreshData();
-    const interval = setInterval(refreshData, 15000); // Sync every 15 seconds
+    const interval = setInterval(refreshData, 30000); 
     return () => clearInterval(interval);
   }, [refreshData]);
 
@@ -258,10 +276,14 @@ const App: React.FC = () => {
       let updated = { ...session };
       if (session.registeredPhoneNumbers.includes(phone)) {
           updated.registeredPhoneNumbers = session.registeredPhoneNumbers.filter(p => p !== phone);
+          updated.attendedPhoneNumbers = (session.attendedPhoneNumbers || []).filter(p => p !== phone);
       } else {
           if (session.registeredPhoneNumbers.length >= session.maxCapacity) { alert('האימון מלא!'); return; }
           updated.registeredPhoneNumbers = [...session.registeredPhoneNumbers, phone];
+          updated.attendedPhoneNumbers = [...(session.attendedPhoneNumbers || []), phone];
       }
+      
+      // Update local state first for immediate UI response
       setSessions(prev => prev.map(s => s.id === sid ? updated : s));
       await dataService.updateSession(updated);
   };
@@ -366,7 +388,7 @@ const App: React.FC = () => {
                   <p className="text-[10px] sm:text-[12px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
                   {isChampMode && <p className="text-[8px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
               </div>
-              <div className="w-20"></div> {/* Placeholder for balance */}
+              <div className="w-20"></div> 
           </div>
           {currentUser && !isAdminMode && !isChampMode && (
               <div className="grid grid-cols-4 gap-2">
@@ -387,7 +409,10 @@ const App: React.FC = () => {
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(prev => prev.map(x=>x.id===u.id?u:x)); }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
                 onAddSession={async s => { await dataService.addSession(s); setSessions(prev => [...prev, s]); }}
-                onUpdateSession={async s => { await dataService.updateSession(s); setSessions(prev => prev.map(x=>x.id===s.id?s:x)); }}
+                onUpdateSession={async s => { 
+                    // Update locally first for zero-lag UI
+                    setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
+                }}
                 onDeleteSession={async id => { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); }}
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
@@ -462,16 +487,44 @@ const App: React.FC = () => {
                 </div>
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">שם מלא</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.fullName} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} /></div>
-                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">כינוי</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שם מלא</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.fullName} onChange={e => handleUpdateProfile({...currentUser, fullName: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">כינוי</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} /></div>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">טלפון</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold font-mono" value={currentUser.phone} onChange={e => handleUpdateProfile({...currentUser, phone: e.target.value})} /></div>
-                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block">אימייל</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.email} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">טלפון</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold font-mono" value={currentUser.phone} onChange={e => handleUpdateProfile({...currentUser, phone: e.target.value})} /></div>
+                        <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">אימייל</label><input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={currentUser.email} onChange={e => handleUpdateProfile({...currentUser, email: e.target.value})} /></div>
                     </div>
                     <div>
-                        <label className="text-[10px] text-gray-500 font-black mb-1 block">צבע כינוי</label>
+                        <label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">צבע כינוי</label>
                         <input type="color" className="w-full h-12 bg-gray-800 rounded-2xl p-2 cursor-pointer border-none" value={currentUser.userColor || '#A3E635'} onChange={e => handleUpdateProfile({...currentUser, userColor: e.target.value})} />
+                    </div>
+
+                    <div className="bg-gray-800/40 p-6 rounded-[40px] border border-white/5 space-y-4">
+                        <h4 className="text-white font-black uppercase text-sm italic tracking-widest border-b border-white/10 pb-2">הצהרת בריאות 🩺</h4>
+                        {currentUser.healthDeclarationDate ? (
+                            <div className="bg-brand-primary/10 p-4 rounded-2xl border border-brand-primary/20 text-center">
+                                <p className="text-brand-primary font-black text-xs uppercase mb-1">הצהרה חתומה ✅</p>
+                                <p className="text-white text-[10px] font-bold">ת.ז: {currentUser.healthDeclarationId}</p>
+                                <p className="text-white text-[10px] font-bold">נחתם ב: {currentUser.healthDeclarationDate}</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="bg-gray-900 p-4 rounded-2xl max-h-32 overflow-y-auto border border-white/5 text-[10px] font-bold text-gray-400 leading-relaxed scrollbar-thin">
+                                    {appConfig.healthDeclarationTemplate}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[9px] text-gray-500 font-black uppercase">הזן מספר תעודת זהות לחתימה:</label>
+                                    <input 
+                                        type="tel" 
+                                        placeholder="תעודת זהות" 
+                                        className="w-full bg-gray-900 p-4 rounded-2xl text-white font-bold outline-none border border-white/5 focus:border-brand-primary" 
+                                        value={idNumberInput}
+                                        onChange={e => setIdNumberInput(e.target.value)}
+                                    />
+                                    <Button onClick={handleSignDeclaration} className="w-full py-4 rounded-2xl text-xs">קראתי ואני מאשר את ההצהרה ✅</Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <Button onClick={() => setShowProfile(false)} className="w-full mt-8 py-6 rounded-[40px] bg-white text-brand-black">סגור ✓</Button>

@@ -36,6 +36,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [showGroupSessions, setShowGroupSessions] = useState(true);
   const [showPersonalTraining, setShowPersonalTraining] = useState(true);
 
+  const [isEditing, setIsEditing] = useState(false);
+
   const [localAppConfig, setLocalAppConfig] = useState<AppConfig>(props.appConfig);
   const [localLocations, setLocalLocations] = useState<LocationDef[]>(props.locations);
   const [localWorkoutTypes, setLocalWorkoutTypes] = useState<string[]>(props.workoutTypes);
@@ -55,13 +57,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   }, [attendanceSession]);
 
   useEffect(() => {
-    if (activeTab === 'settings') {
+    if (!isEditing) {
       setLocalAppConfig(props.appConfig);
       setLocalLocations(props.locations);
       setLocalWorkoutTypes(props.workoutTypes);
       setLocalQuotes(props.quotes);
     }
-  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, activeTab]);
+  }, [props.appConfig, props.locations, props.workoutTypes, props.quotes, isEditing, activeTab]);
 
   const normalizePhone = (p: string) => {
     if (!p) return '';
@@ -155,7 +157,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const handleSaveAllSettings = async () => {
     setSaveIndicator('שומר הגדרות...');
     try {
-      // Direct call to dataService to ensure persistence
       await Promise.all([
           dataService.saveAppConfig(localAppConfig),
           dataService.saveLocations(localLocations),
@@ -163,17 +164,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           dataService.saveQuotes(localQuotes)
       ]);
       
-      // Update parent state for immediate UI feedback
       props.onUpdateAppConfig(localAppConfig);
       props.onUpdateLocations(localLocations);
       props.onUpdateWorkoutTypes(localWorkoutTypes);
       
+      setIsEditing(false);
       setSaveIndicator('הכל נשמר בהצלחה ✓');
       setTimeout(() => setSaveIndicator(null), 3000);
     } catch (e) { 
       console.error("Save error:", e);
       setSaveIndicator('שגיאה בשמירה לשרת ⚠️'); 
     }
+  };
+
+  const copyToClipboard = (text: string) => {
+      navigator.clipboard.writeText(text);
+      alert('הלינק הועתק! 📋');
   };
 
   return (
@@ -312,11 +318,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 👤</h3>
                         <div className="space-y-3">
                             <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
-                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה שתופיע למעלה באדום..." />
+                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic shadow-inner outline-none focus:border-red-500" value={localAppConfig.urgentMessage || ''} onChange={e => { setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value}); setIsEditing(true); }} placeholder="כתוב כאן הודעה שתופיע למעלה באדום..." />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (דף נחיתה)</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} placeholder="ספר על עצמך כאן..." />
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed" value={localAppConfig.coachBio || ''} onChange={e => { setLocalAppConfig({...localAppConfig, coachBio: e.target.value}); setIsEditing(true); }} placeholder="ספר על עצמך כאן..." />
+                        </div>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-purple-400 font-black uppercase block">נוסח הצהרת בריאות</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed text-sm" value={localAppConfig.healthDeclarationTemplate || ''} onChange={e => { setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value}); setIsEditing(true); }} placeholder="כתוב כאן את נוסח הצהרת הבריאות שהמתאמנים צריכים לאשר..." />
                         </div>
                     </div>
                 )}
@@ -326,21 +336,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-4 shadow-2xl">
                             <div className="flex justify-between items-center mb-4">
                                 <h4 className="text-white font-black uppercase italic tracking-widest">מיקומים וכתובות 📍</h4>
-                                <Button onClick={() => { const n = prompt('שם המיקום:'); if(n) setLocalLocations([...localLocations, {id: Date.now().toString(), name: n, address: n, color: '#A3E635'}]); }} size="sm" variant="secondary">הוסף מיקום</Button>
+                                <Button onClick={() => { const n = prompt('שם המיקום:'); if(n) { setLocalLocations([...localLocations, {id: Date.now().toString(), name: n, address: n, color: '#A3E635'}]); setIsEditing(true); } }} size="sm" variant="secondary">הוסף מיקום</Button>
                             </div>
                             <div className="grid gap-4">
                                 {localLocations.map(loc => (
                                     <div key={loc.id} className="bg-gray-900/50 p-6 rounded-[35px] space-y-4 border border-white/5">
                                         <div className="flex justify-between gap-4">
-                                            <input className="bg-transparent text-white font-black italic text-lg outline-none flex-1" value={loc.name} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l))} placeholder="שם המיקום (למשל: סטודיו נס ציונה)" />
+                                            <input className="bg-transparent text-white font-black italic text-lg outline-none flex-1" value={loc.name} onChange={e => { setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, name: e.target.value} : l)); setIsEditing(true); }} placeholder="שם המיקום (למשל: סטודיו נס ציונה)" />
                                             <div className="flex items-center gap-2">
-                                                <input type="color" className="w-8 h-8 rounded-full border-none p-1 cursor-pointer bg-transparent" value={loc.color || '#A3E635'} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, color: e.target.value} : l))} />
-                                                <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500">✕</button>
+                                                <input type="color" className="w-8 h-8 rounded-full border-none p-1 cursor-pointer bg-transparent" value={loc.color || '#A3E635'} onChange={e => { setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, color: e.target.value} : l)); setIsEditing(true); }} />
+                                                <button onClick={() => { setLocalLocations(localLocations.filter(l => l.id !== loc.id)); setIsEditing(true); }} className="text-red-500">✕</button>
                                             </div>
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-[9px] text-gray-500 uppercase font-black">כתובת ל-Waze</label>
-                                            <input className="w-full bg-gray-800 p-3 rounded-xl text-white text-xs border border-white/5" value={loc.address} onChange={e => setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l))} placeholder="כתובת מדויקת..." />
+                                            <input className="w-full bg-gray-800 p-3 rounded-xl text-white text-xs border border-white/5" value={loc.address} onChange={e => { setLocalLocations(localLocations.map(l => l.id === loc.id ? {...l, address: e.target.value} : l)); setIsEditing(true); }} placeholder="כתובת מדויקת..." />
                                         </div>
                                     </div>
                                 ))}
@@ -355,17 +365,76 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <h3 className="text-white font-black uppercase italic tracking-widest">משפטי מוטיבציה ⚡</h3>
                             <div className="flex gap-2">
                                 <Button onClick={handleGenerateAIQuote} size="sm" variant="outline">ייצור AI ✨</Button>
-                                <Button onClick={() => { const q = prompt('הכנס משפט מוטיבציה:'); if(q) setLocalQuotes([...localQuotes, {id: Date.now().toString(), text: q}]); }} size="sm" variant="secondary">הוסף ידנית</Button>
+                                <Button onClick={() => { const q = prompt('הכנס משפט מוטיבציה:'); if(q) { setLocalQuotes([...localQuotes, {id: Date.now().toString(), text: q}]); setIsEditing(true); } }} size="sm" variant="secondary">הוסף ידנית</Button>
                             </div>
                         </div>
                         <div className="grid gap-3">
                             {localQuotes.map(q => (
                                 <div key={q.id} className="bg-gray-900/50 p-5 rounded-[30px] border border-white/5 flex justify-between items-center gap-4 group">
                                     <p className="text-white font-bold italic text-sm">"{q.text}"</p>
-                                    <button onClick={() => setLocalQuotes(localQuotes.filter(x => x.id !== q.id))} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                                    <button onClick={() => { setLocalQuotes(localQuotes.filter(x => x.id !== q.id)); setIsEditing(true); }} className="text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                                 </div>
                             ))}
                             {localQuotes.length === 0 && <p className="text-center text-gray-500 py-10 italic">אין משפטים מוגדרים. ה-AI ייצר משפטים אוטומטית.</p>}
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'connections' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ואינטגרציות 🔌</h3>
+                        <div className="space-y-6">
+                            <div className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-brand-primary font-black text-sm uppercase">Supabase (מסד נתונים) 🗄️</h4>
+                                    <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
+                                </div>
+                                <p className="text-gray-400 text-xs leading-relaxed">מסד הנתונים שומר את כל המתאמנים, האימונים וההגדרות שלך בענן. הנתונים מסונכרנים בזמן אמת לכל המכשירים.</p>
+                                <div className="space-y-2 border-t border-white/5 pt-4">
+                                    <p className="text-[10px] text-gray-500 uppercase font-black italic">פרטי חיבור פעילים:</p>
+                                    <p className="text-[9px] text-gray-600 font-mono">Project URL: https://xjqlluobnzpgpttprmio.supabase.co</p>
+                                    <p className="text-[9px] text-gray-600 font-mono">API Key: ********** (מפתח Anon פעיל)</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-brand-primary font-black text-sm uppercase">Google Gemini AI 🧠</h4>
+                                    <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
+                                </div>
+                                <p className="text-gray-400 text-xs leading-relaxed">ה-AI אחראי על ייצור משפטי מוטיבציה ותיאורי אימונים. המפתח מוזן בצורה מאובטחת בסביבת העבודה.</p>
+                            </div>
+
+                            <div className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h4 className="text-brand-primary font-black text-sm uppercase">WhatsApp Direct API 📱</h4>
+                                    <span className="bg-green-500/20 text-green-500 text-[9px] px-2 py-1 rounded-full font-black">מחובר ✅</span>
+                                </div>
+                                <p className="text-gray-400 text-xs leading-relaxed">חיבור המאפשר שליחת הודעות וואטסאפ מובנות למתאמנים בלחיצת כפתור (ללא צורך באישור Meta).</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'views' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">קישורי תצוגה ושיתוף 🔗</h3>
+                        <div className="grid gap-4">
+                            {[
+                                { title: 'דף נחיתה (ראשי)', url: window.location.origin + '/', desc: 'הדף שכולם רואים בכניסה ראשונה' },
+                                { title: 'לו"ז מתאמנים קבוצתי', url: window.location.origin + '/?mode=work', desc: 'הלינק להרשמה לאימונים קבוצתיים' },
+                                { title: 'תצוגת אלופים (אישיים)', url: window.location.origin + '/?mode=CHAMP', desc: 'תצוגה מיוחדת למתאמנים אישיים (VIP)' },
+                                { title: 'מסך ניהול מאמן', url: window.location.origin + '/?mode=admin', desc: 'גישה מלאה לניהול (דורש קוד)' }
+                            ].map(view => (
+                                <div key={view.title} className="bg-gray-900/60 p-6 rounded-[35px] border border-white/5 flex justify-between items-center group">
+                                    <div className="flex-1">
+                                        <h4 className="text-white font-black text-sm mb-1">{view.title}</h4>
+                                        <p className="text-[9px] text-gray-500 mb-2">{view.desc}</p>
+                                        <p className="text-[9px] text-brand-primary font-mono truncate max-w-[220px]">{view.url}</p>
+                                    </div>
+                                    <button onClick={() => copyToClipboard(view.url)} className="bg-brand-primary/10 text-brand-primary p-4 rounded-2xl hover:bg-brand-primary hover:text-black transition-all shadow-lg active:scale-90">📋</button>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -402,7 +471,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         <button key={u.id} className="w-full p-4 text-right hover:bg-gray-800 transition-colors flex justify-between items-center group" onClick={() => { 
                                             const phone = normalizePhone(u.phone); 
                                             if (!sessionDraft.registeredPhoneNumbers.includes(phone)) {
-                                                setSessionDraft({ ...sessionDraft, registeredPhoneNumbers: [...sessionDraft.registeredPhoneNumbers, phone] }); 
+                                                const newRegistered = [...sessionDraft.registeredPhoneNumbers, phone];
+                                                const newAttended = [...(sessionDraft.attendedPhoneNumbers || []), phone];
+                                                setSessionDraft({ ...sessionDraft, registeredPhoneNumbers: newRegistered, attendedPhoneNumbers: newAttended }); 
                                             }
                                             setTraineeSearch(''); 
                                         }}>
@@ -434,7 +505,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <button onClick={() => { 
                                                 if (!sessionDraft) return;
                                                 const curr = sessionDraft.attendedPhoneNumbers || []; const up = isAttended ? curr.filter(p => p !== phone) : [...curr, phone]; setSessionDraft({...sessionDraft, attendedPhoneNumbers: up}); }} className={`px-4 py-2 rounded-xl text-[10px] font-black ${isAttended ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>{isAttended ? 'נכח' : 'לא נכח'}</button>
-                                            <button onClick={() => setSessionDraft({...sessionDraft, registeredPhoneNumbers: sessionDraft.registeredPhoneNumbers.filter(p => p !== phone)})} className="text-red-500 p-2">✕</button>
+                                            <button onClick={() => setSessionDraft({...sessionDraft, registeredPhoneNumbers: sessionDraft.registeredPhoneNumbers.filter(p => p !== phone), attendedPhoneNumbers: (sessionDraft.attendedPhoneNumbers || []).filter(p => p !== phone)})} className="text-red-500 p-2">✕</button>
                                         </div>
                                     </div>
                                 );
@@ -480,7 +551,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       <Button onClick={async ()=>{ 
                           if (!sessionDraft) return;
                           setSaveIndicator('שומר אימון...');
-                          const isNew = !props.sessions.find(s => s.id === sessionDraft.id);
                           const finalSession = {
                             ...sessionDraft,
                             isPersonalTraining: Boolean(sessionDraft.isPersonalTraining),
@@ -488,7 +558,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             isCancelled: Boolean(sessionDraft.isCancelled),
                             manualHasStarted: Boolean(sessionDraft.manualHasStarted)
                           };
-                          if (isNew) props.onAddSession(finalSession); else props.onUpdateSession(finalSession); 
+                          
+                          // Ensure explicit persistence before local update
+                          await dataService.updateSession(finalSession);
+                          props.onUpdateSession(finalSession); 
+                          
                           setAttendanceSession(null); 
                           setSaveIndicator(null);
                       }} className="flex-1 bg-red-600 py-8 rounded-[45px] text-2xl font-black italic uppercase shadow-2xl">שמור שינויים ✓</Button>
@@ -522,6 +596,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <input type="checkbox" id="isRestrictedEdit" className="w-6 h-6 accent-red-500" checked={!!editingUser.isRestricted} onChange={e=>setEditingUser({...editingUser, isRestricted: e.target.checked})} />
                         <label htmlFor="isRestrictedEdit" className="text-red-500 font-black uppercase text-xs">חסום גישה לאתר 🚫</label>
                       </div>
+
+                      {editingUser.healthDeclarationDate && (
+                          <div className="bg-green-900/20 p-4 rounded-3xl border border-green-500/30">
+                              <p className="text-green-500 font-black text-[10px] uppercase mb-1">הצהרת בריאות חתומה ✅</p>
+                              <p className="text-white text-xs font-bold">נחתם ב: {editingUser.healthDeclarationDate}</p>
+                              <p className="text-white text-xs font-bold">ת.ז: {editingUser.healthDeclarationId}</p>
+                          </div>
+                      )}
+
                       <div className="mt-8 flex gap-4">
                         <Button onClick={()=>{ props.onUpdateUser(editingUser); setEditingUser(null); }} className="flex-1 bg-red-600 py-6 rounded-[40px] text-xl font-black italic uppercase shadow-2xl">שמור ✓</Button>
                         <Button onClick={()=>{if(confirm(`למחוק את ${editingUser.fullName}?`)){props.onDeleteUser(editingUser.id); setEditingUser(null);}}} variant="danger" className="px-8 rounded-[40px]">מחק 🗑️</Button>

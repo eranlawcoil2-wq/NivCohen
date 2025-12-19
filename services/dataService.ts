@@ -38,26 +38,20 @@ export const dataService = {
 
   addUser: async (user: User): Promise<void> => {
     if (supabase) await supabase.from('users').insert([user]);
-    else {
-      const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
-      localStorage.setItem('niv_app_users', JSON.stringify([...users, user]));
-    }
+    const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
+    localStorage.setItem('niv_app_users', JSON.stringify([...users, user]));
   },
 
   updateUser: async (user: User): Promise<void> => {
     if (supabase) await supabase.from('users').update(user).eq('id', user.id);
-    else {
-      const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
-      localStorage.setItem('niv_app_users', JSON.stringify(users.map(u => u.id === user.id ? user : u)));
-    }
+    const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
+    localStorage.setItem('niv_app_users', JSON.stringify(users.map(u => u.id === user.id ? user : u)));
   },
 
   deleteUser: async (userId: string): Promise<void> => {
     if (supabase) await supabase.from('users').delete().eq('id', userId);
-    else {
-      const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
-      localStorage.setItem('niv_app_users', JSON.stringify(users.filter(u => u.id !== userId)));
-    }
+    const users = safeJsonParse<User[]>('niv_app_users', INITIAL_USERS);
+    localStorage.setItem('niv_app_users', JSON.stringify(users.filter(u => u.id !== userId)));
   },
 
   getSessions: async (): Promise<TrainingSession[]> => {
@@ -88,16 +82,15 @@ export const dataService = {
         ...session,
         registeredPhoneNumbers: session.registeredPhoneNumbers || [],
         waitingList: session.waitingList || [],
+        attendedPhoneNumbers: session.attendedPhoneNumbers || [],
         isPersonalTraining: Boolean(session.isPersonalTraining),
         isZoomSession: Boolean(session.isZoomSession),
         isCancelled: Boolean(session.isCancelled),
         manualHasStarted: Boolean(session.manualHasStarted)
     };
     if (supabase) await supabase.from('sessions').insert([data]);
-    else {
-      const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
-      localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, data]));
-    }
+    const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
+    localStorage.setItem('niv_app_sessions', JSON.stringify([...sessions, data]));
   },
 
   updateSession: async (session: TrainingSession): Promise<void> => {
@@ -115,18 +108,15 @@ export const dataService = {
     if (supabase) {
         const { error } = await supabase.from('sessions').update(data).eq('id', id);
         if (error) console.error("Supabase Update Session Error:", error);
-    } else {
-      const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
-      localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.map(s => s.id === id ? {id, ...data} : s)));
     }
+    const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
+    localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.map(s => s.id === id ? {id, ...data} : s)));
   },
 
   deleteSession: async (sessionId: string): Promise<void> => {
     if (supabase) await supabase.from('sessions').delete().eq('id', sessionId);
-    else {
-      const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
-      localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.filter(s => s.id !== sessionId)));
-    }
+    const sessions = safeJsonParse<TrainingSession[]>('niv_app_sessions', INITIAL_SESSIONS);
+    localStorage.setItem('niv_app_sessions', JSON.stringify(sessions.filter(s => s.id !== sessionId)));
   },
 
   getLocations: async (): Promise<LocationDef[]> => {
