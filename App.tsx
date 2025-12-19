@@ -173,6 +173,15 @@ const App: React.FC = () => {
 
   const stats = useMemo(() => currentUser ? getStatsForUser(currentUser) : { monthly: 0, record: 0, streak: 0 }, [currentUser, getStatsForUser]);
 
+  const traineeWeekDates = useMemo(() => {
+    const sun = new Date(); sun.setHours(12,0,0,0);
+    sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
+    return Array.from({length:7}, (_, i) => {
+        const d = new Date(sun); d.setDate(sun.getDate() + i);
+        return d.toISOString().split('T')[0];
+    });
+  }, [traineeWeekOffset]);
+
   const refreshData = useCallback(async () => {
       if (isSyncingRef.current) return; 
       setIsSyncing(true);
@@ -182,9 +191,13 @@ const App: React.FC = () => {
           ]);
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
           if (q.length > 0 && !quote) setQuote(q[Math.floor(Math.random() * q.length)].text);
+          
+          // Fetch weather for the visible trainee week
+          const weather = await getWeatherForDates(traineeWeekDates);
+          setWeatherData(weather);
       } catch (e) {}
       setIsSyncing(false);
-  }, [quote]);
+  }, [quote, traineeWeekDates]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -300,15 +313,6 @@ const App: React.FC = () => {
         isSyncingRef.current = false;
       }
   };
-
-  const traineeWeekDates = useMemo(() => {
-    const sun = new Date(); sun.setHours(12,0,0,0);
-    sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
-    return Array.from({length:7}, (_, i) => {
-        const d = new Date(sun); d.setDate(sun.getDate() + i);
-        return d.toISOString().split('T')[0];
-    });
-  }, [traineeWeekOffset]);
 
   if (isLanding) {
     return (
@@ -429,13 +433,34 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-10 pb-20">
-              <div className="bg-gray-800/40 p-5 rounded-[40px] border border-white/5 shadow-xl">
-                  <div className="flex justify-between items-center px-4">
-                      <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
-                      <span className="text-brand-primary font-black uppercase tracking-[0.3em] bg-brand-primary/10 px-6 py-2 rounded-full text-xs">
-                          {traineeWeekOffset === 0 ? 'השבוע' : traineeWeekOffset === 1 ? 'שבוע הבא' : `שבוע ${traineeWeekOffset}`}
-                      </span>
-                      <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
+              <div className="flex flex-col gap-4">
+                  <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-2">
+                      <button 
+                        onClick={() => setTraineeWeekOffset(0)}
+                        className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${traineeWeekOffset === 0 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500 border border-white/5'}`}
+                      >
+                        השבוע
+                      </button>
+                      <button 
+                        onClick={() => setTraineeWeekOffset(1)}
+                        className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${traineeWeekOffset === 1 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500 border border-white/5'}`}
+                      >
+                        שבוע הבא
+                      </button>
+                  </div>
+                  <div className="bg-gray-800/40 p-5 rounded-[40px] border border-white/5 shadow-xl">
+                      <div className="flex justify-between items-center px-4">
+                          <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
+                          <div className="text-center">
+                              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">
+                                  {new Date(traineeWeekDates[0]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})} - {new Date(traineeWeekDates[6]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})}
+                              </p>
+                              <span className="text-brand-primary font-black uppercase tracking-[0.2em] bg-brand-primary/10 px-6 py-2 rounded-full text-[11px]">
+                                  {traineeWeekOffset === 0 ? 'לו"ז נוכחי' : traineeWeekOffset === 1 ? 'לו"ז שבוע הבא' : `שבוע ${traineeWeekOffset > 0 ? '+' : ''}${traineeWeekOffset}`}
+                              </span>
+                          </div>
+                          <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
+                      </div>
                   </div>
               </div>
 
@@ -461,6 +486,7 @@ const App: React.FC = () => {
                                           onWazeClick={navigateToLocation}
                                           onAddToCalendar={downloadICS}
                                           locations={locations}
+                                          weather={weatherData[s.date]}
                                       />
                                   ))}
                               </div>

@@ -5,6 +5,7 @@ import { Button } from './Button';
 import { SessionCard } from './SessionCard';
 import { dataService } from '../services/dataService';
 import { getMotivationQuote } from '../services/geminiService';
+import { getWeatherIcon } from '../services/weatherService';
 
 interface AdminPanelProps {
   users: User[]; sessions: TrainingSession[]; primaryColor: string; workoutTypes: string[]; locations: LocationDef[];
@@ -194,6 +195,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}`, '_blank');
   };
 
+  const currentModalWeather = sessionDraft ? props.weatherData?.[sessionDraft.date]?.hourly?.[sessionDraft.time.split(':')[0]] : null;
+
   return (
     <div className="bg-brand-black min-h-screen">
       <div className="fixed top-[130px] left-0 right-0 z-[60] bg-brand-black/90 pt-4 border-b border-white/5 pb-4 backdrop-blur-xl px-4">
@@ -262,7 +265,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                               <p className="text-gray-500 font-black text-4xl uppercase tracking-widest opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} onDuplicate={props.onDuplicateSession} onAddToCalendar={props.onAddToCalendar} onWazeClick={navigateToWaze} isAdmin={true} locations={props.locations} weather={props.weatherData?s.date:undefined} />)}
+                            {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} onDuplicate={props.onDuplicateSession} onAddToCalendar={props.onAddToCalendar} onWazeClick={navigateToWaze} isAdmin={true} locations={props.locations} weather={props.weatherData?.[s.date]} />)}
                           </div>
                       </div>
                   );
@@ -368,7 +371,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           <div className="fixed inset-0 bg-black/95 z-[200] flex items-center justify-center p-6 backdrop-blur-xl overflow-y-auto no-scrollbar">
               <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-4xl border border-white/10 text-right shadow-3xl" dir="rtl">
                   <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
-                      <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון ⚙️</h3>
+                      <div className="flex items-center gap-4">
+                          <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון ⚙️</h3>
+                          {currentModalWeather && (
+                              <div className="flex items-center gap-2 bg-gray-800/80 px-4 py-2 rounded-2xl border border-white/5 shadow-xl">
+                                  <span className="text-2xl">{getWeatherIcon(currentModalWeather.weatherCode)}</span>
+                                  <span className="text-brand-primary font-black text-lg">{Math.round(currentModalWeather.temp)}°</span>
+                              </div>
+                          )}
+                      </div>
                       <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
