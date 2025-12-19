@@ -98,16 +98,15 @@ const App: React.FC = () => {
   const [loginNameInput, setLoginNameInput] = useState('');
   const [isNewUserLogin, setIsNewUserLogin] = useState(false);
   const [idNumberInput, setIdNumberInput] = useState('');
+  const [signingHealth, setSigningHealth] = useState(false);
   
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
-  const [hasScrolledToToday, setHasScrolledToToday] = useState(false);
   
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
 
-  // CRITICAL: Prevent refreshData from overwriting active edits or newly saved data
   const isSyncingRef = useRef(false);
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
@@ -230,7 +229,27 @@ const App: React.FC = () => {
     }
   };
 
-  // ... (Rest of App UI remains unchanged)
+  const handleSignHealth = async () => {
+      if (!idNumberInput || !currentUser) return;
+      const updated = {
+          ...currentUser,
+          healthDeclarationDate: new Date().toLocaleDateString('he-IL'),
+          healthDeclarationId: idNumberInput
+      };
+      await handleUpdateProfile(updated);
+      setSigningHealth(false);
+      setIdNumberInput('');
+  };
+
+  const traineeWeekDates = useMemo(() => {
+    const sun = new Date(); sun.setHours(12,0,0,0);
+    sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
+    return Array.from({length:7}, (_, i) => {
+        const d = new Date(sun); d.setDate(sun.getDate() + i);
+        return d.toISOString().split('T')[0];
+    });
+  }, [traineeWeekOffset]);
+
   if (isLanding) {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
@@ -252,7 +271,7 @@ const App: React.FC = () => {
             <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
                 <h2 className="text-brand-primary font-black text-3xl mb-6 italic">קצת עלי...</h2>
                 <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
-                    {appConfig.coachBio}
+                    {appConfig.coachBio || 'מאמן כושר מקצועי בנס ציונה.'}
                 </div>
             </div>
 
@@ -349,10 +368,156 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-10 pb-20">
-              {/* ... Trainee View ... */}
+              <div className="bg-gray-800/40 p-5 rounded-[40px] border border-white/5 shadow-xl">
+                  <div className="flex justify-between items-center px-4">
+                      <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
+                      <span className="text-brand-primary font-black uppercase tracking-[0.3em] bg-brand-primary/10 px-6 py-2 rounded-full text-xs">
+                          {traineeWeekOffset === 0 ? 'השבוע' : traineeWeekOffset === 1 ? 'שבוע הבא' : `שבוע ${traineeWeekOffset}`}
+                      </span>
+                      <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
+                  </div>
+              </div>
+
+              <div className="space-y-12">
+                  {traineeWeekDates.map(date => {
+                      const daySessions = sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
+                      if (daySessions.length === 0) return null;
+                      return (
+                          <div key={date}>
+                              <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-6 px-2">
+                                  <h4 className="text-gray-500 font-black text-3xl uppercase tracking-widest">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
+                                  <p className="text-gray-500 font-black text-xl opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                  {daySessions.map(s => (
+                                      <SessionCard 
+                                          key={s.id} 
+                                          session={s} 
+                                          allUsers={users} 
+                                          isRegistered={!!currentUser && s.registeredPhoneNumbers.includes(normalizePhone(currentUser.phone))} 
+                                          onRegisterClick={handleRegisterClick} 
+                                          onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)}
+                                          onWazeClick={navigateToLocation}
+                                          onAddToCalendar={downloadICS}
+                                      />
+                                  ))}
+                              </div>
+                          </div>
+                      );
+                  })}
+              </div>
+
+              <div className="bg-gray-900/60 p-8 rounded-[40px] border border-white/5 text-center italic shadow-2xl">
+                  <p className="text-gray-500 text-[10px] font-black uppercase mb-4 tracking-[0.5em]">Motivation of the day</p>
+                  <p className="text-white text-xl font-black">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
+              </div>
             </div>
         )}
       </main>
+
+      <div id="login-modal" className="hidden fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
+          <div className="bg-gray-900 p-10 rounded-[60px] w-full max-w-md border border-white/10 shadow-3xl text-right" dir="rtl">
+              <h3 className="text-3xl font-black text-brand-primary italic uppercase mb-8">התחברות ⚡</h3>
+              <div className="space-y-6">
+                  <div>
+                      <label className="text-[10px] text-gray-500 font-black mb-2 block uppercase tracking-widest">מספר טלפון</label>
+                      <input type="tel" className="w-full bg-gray-800 p-6 rounded-[30px] text-white font-black text-xl border border-white/5 focus:border-brand-primary outline-none transition-all" value={loginPhoneInput} onChange={e=>setLoginPhoneInput(e.target.value)} placeholder="05XXXXXXXX" />
+                  </div>
+                  {isNewUserLogin && (
+                      <div className="animate-pulse">
+                          <label className="text-[10px] text-brand-primary font-black mb-2 block uppercase">שם מלא (משתמש חדש)</label>
+                          <input type="text" className="w-full bg-gray-800 p-6 rounded-[30px] text-white font-black border border-brand-primary outline-none" value={loginNameInput} onChange={e=>setLoginNameInput(e.target.value)} />
+                      </div>
+                  )}
+                  <Button onClick={handleLoginSubmit} className="w-full py-6 rounded-[30px] text-xl font-black italic shadow-2xl bg-brand-primary text-black">המשך ✓</Button>
+                  <button onClick={() => document.getElementById('login-modal')?.classList.add('hidden')} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4">חזרה</button>
+              </div>
+          </div>
+      </div>
+
+      {showProfile && currentUser && (
+          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto no-scrollbar animate-install-overlay-animation">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl my-auto text-right" dir="rtl">
+                  <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
+                      <h3 className="text-3xl font-black text-white italic uppercase">פרופיל אישי 👤</h3>
+                      <button onClick={()=>setShowProfile(false)} className="text-gray-500 text-4xl">✕</button>
+                  </div>
+                  
+                  <div className="space-y-10">
+                      <div className="flex items-center gap-6">
+                          <div className="w-24 h-24 rounded-full bg-gray-800 border-4 border-brand-primary/20 flex items-center justify-center text-4xl font-black text-brand-primary shadow-2xl">
+                              {currentUser.fullName.charAt(0)}
+                          </div>
+                          <div>
+                              <h4 className="text-white text-3xl font-black italic">{currentUser.fullName}</h4>
+                              <p className="text-gray-500 font-mono text-lg">{currentUser.phone}</p>
+                          </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4">
+                          <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
+                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">החודש</p>
+                              <p className="text-3xl font-black text-brand-primary">{stats.monthly}</p>
+                          </div>
+                          <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
+                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">שיא</p>
+                              <p className="text-3xl font-black text-white">{stats.record}</p>
+                          </div>
+                          <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
+                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">רצף</p>
+                              <p className="text-3xl font-black text-orange-400">{stats.streak}</p>
+                          </div>
+                      </div>
+
+                      <div className="space-y-4">
+                          <h5 className="text-white font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">הצהרת בריאות 📝</h5>
+                          {currentUser.healthDeclarationDate ? (
+                              <div className="bg-green-500/10 border border-green-500/30 p-6 rounded-[30px] flex justify-between items-center">
+                                  <div>
+                                      <p className="text-green-500 font-black text-xs uppercase">חתומה ומאושרת ✅</p>
+                                      <p className="text-white text-sm font-bold mt-1">נחתם ב: {currentUser.healthDeclarationDate}</p>
+                                  </div>
+                                  <div className="text-right">
+                                      <p className="text-gray-500 text-[9px] uppercase">ת.ז</p>
+                                      <p className="text-white font-mono font-black">{currentUser.healthDeclarationId}</p>
+                                  </div>
+                              </div>
+                          ) : (
+                              <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-[30px] space-y-4">
+                                  <p className="text-red-500 font-black text-xs uppercase">טרם חתמת על הצהרת בריאות ⚠️</p>
+                                  <Button onClick={()=>setSigningHealth(true)} className="w-full bg-red-600 text-white font-black italic">לחתימה עכשיו ✓</Button>
+                              </div>
+                          )}
+                      </div>
+
+                      <div className="pt-6 border-t border-white/5 flex gap-4">
+                          <Button onClick={()=>{localStorage.removeItem('niv_app_current_phone'); window.location.reload();}} variant="outline" className="flex-1 rounded-[30px] text-xs font-black italic uppercase">התנתקות 🔌</Button>
+                          <Button onClick={()=>setShowProfile(false)} className="flex-1 rounded-[30px] text-xs font-black italic uppercase">סגור</Button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {signingHealth && (
+          <div className="fixed inset-0 bg-brand-black z-[600] flex flex-col p-6 overflow-y-auto no-scrollbar text-right" dir="rtl">
+              <div className="max-w-2xl mx-auto w-full space-y-8 py-10">
+                  <h3 className="text-4xl font-black text-brand-primary italic uppercase mb-10">הצהרת בריאות 🖋️</h3>
+                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/10 text-white text-lg leading-relaxed font-bold whitespace-pre-wrap">
+                      {appConfig.healthDeclarationTemplate || 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר ביצוע פעילות גופנית מאומצת.'}
+                  </div>
+                  <div className="space-y-4">
+                      <label className="text-gray-500 font-black text-sm uppercase">תעודת זהות</label>
+                      <input type="tel" className="w-full bg-gray-900 p-6 rounded-[30px] text-white font-black text-2xl border border-white/10 focus:border-brand-primary outline-none" value={idNumberInput} onChange={e=>setIdNumberInput(e.target.value)} placeholder="הקש ת.ז מלאה" />
+                  </div>
+                  <div className="flex gap-4 pt-10">
+                      <Button onClick={handleSignHealth} className="flex-1 py-8 rounded-[40px] text-2xl font-black italic bg-brand-primary text-black shadow-2xl" disabled={!idNumberInput}>חתימה ואישור ✓</Button>
+                      <Button onClick={()=>setSigningHealth(false)} variant="outline" className="px-10 rounded-[40px] font-black italic text-gray-500 border-gray-800">ביטול</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <WhatsAppButton phone={appConfig.coachPhone} />
     </div>
   );
