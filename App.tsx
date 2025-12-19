@@ -95,6 +95,10 @@ const App: React.FC = () => {
       coachNameHeb: 'ניב כהן', coachNameEng: 'NIV COHEN', coachPhone: '0528726618', coachEmail: '', defaultCity: 'נס ציונה', coachAdditionalPhone: 'admin', urgentMessage: ''
   });
   const [currentUserPhone, setCurrentUserPhone] = useState<string | null>(() => localStorage.getItem('niv_app_current_phone'));
+  const [loginPhoneInput, setLoginPhoneInput] = useState('');
+  const [loginNameInput, setLoginNameInput] = useState('');
+  const [isNewUserLogin, setIsNewUserLogin] = useState(false);
+  
   const [quote, setQuote] = useState('');
   const [weatherData, setWeatherData] = useState<Record<string, WeatherInfo>>({});
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
@@ -257,6 +261,44 @@ const App: React.FC = () => {
       await dataService.updateSession(updated);
   };
 
+  const handleLoginSubmit = async () => {
+    if (loginPhoneInput.length < 9) {
+      alert('מספר טלפון לא תקין');
+      return;
+    }
+    const np = normalizePhone(loginPhoneInput);
+    const existingUser = users.find(u => normalizePhone(u.phone) === np);
+
+    if (existingUser) {
+      setCurrentUserPhone(np);
+      localStorage.setItem('niv_app_current_phone', np);
+      document.getElementById('login-modal')?.classList.add('hidden');
+    } else {
+      if (!isNewUserLogin) {
+        setIsNewUserLogin(true);
+      } else {
+        if (loginNameInput.length < 2) {
+          alert('אנא הזן שם מלא');
+          return;
+        }
+        const newUser: User = {
+          id: Date.now().toString(),
+          fullName: loginNameInput,
+          phone: np,
+          email: '',
+          startDate: new Date().toISOString().split('T')[0],
+          paymentStatus: PaymentStatus.PENDING,
+          userColor: '#A3E635'
+        };
+        await dataService.addUser(newUser);
+        setUsers(prev => [...prev, newUser]);
+        setCurrentUserPhone(np);
+        localStorage.setItem('niv_app_current_phone', np);
+        document.getElementById('login-modal')?.classList.add('hidden');
+      }
+    }
+  };
+
   if (isLanding) {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden">
@@ -306,15 +348,15 @@ const App: React.FC = () => {
 
       <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-[60] ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'} ${appConfig.urgentMessage && showUrgent ? 'mt-0' : ''}`}>
           <div className="flex justify-between items-center mb-6">
-              <div onClick={() => navigateTo('landing')} className="cursor-pointer group select-none active:scale-95 transition-transform">
+              <div onClick={() => !isAdminMode && navigateTo('landing')} className={`cursor-pointer group select-none active:scale-95 transition-transform ${isAdminMode ? 'pointer-events-none' : ''}`}>
                   <h1 className="text-4xl sm:text-5xl font-black italic text-white uppercase leading-none transition-all duration-500 group-hover:text-brand-primary">NIV COHEN</h1>
                   <p className="text-[14px] sm:text-[16px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
                   {isChampMode && <p className="text-[10px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
               </div>
               <div className="flex items-center gap-4">
-                  <button onClick={() => navigateTo('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>
+                  {!isAdminMode && <button onClick={() => navigateTo('landing')} className="text-gray-500 hover:text-white text-sm font-black uppercase tracking-widest transition-colors hidden sm:block">אודות</button>}
                   {currentUser && !isAdminMode && (
-                      <div className="text-right cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
+                      <div className="text-left cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
                           <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
                           <p className="text-white font-black italic text-sm group-hover:text-brand-primary transition-colors" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                       </div>
@@ -476,9 +518,30 @@ const App: React.FC = () => {
       {(isLanding || isChampMode) && <WhatsAppButton phone={appConfig.coachPhone} />}
       <div id="login-modal" className="fixed inset-0 bg-black/95 z-[200] hidden flex items-center justify-center p-6 backdrop-blur-xl">
           <div className="bg-gray-900 p-12 rounded-[60px] w-full max-sm border border-gray-800 text-center shadow-3xl">
-              <h3 className="text-white font-black text-4xl mb-6 italic uppercase">מי המתאמן? 🤔</h3>
-              <input type="tel" id="user-phone" placeholder='05x-xxxxxxx' className="w-full p-8 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-5xl font-mono outline-none border border-gray-700 focus:border-brand-primary" />
-              <Button onClick={() => { const p = (document.getElementById('user-phone') as HTMLInputElement).value; if(p.length >= 9) { const np = normalizePhone(p); setCurrentUserPhone(np); localStorage.setItem('niv_app_current_phone', np); document.getElementById('login-modal')?.classList.add('hidden'); } else alert('מספר לא תקין'); }} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">התחברות 🚀</Button>
+              <h3 className="text-white font-black text-4xl mb-6 italic uppercase">{isNewUserLogin ? 'ברוך הבא! איך קוראים לך?' : 'מי המתאמן? 🤔'}</h3>
+              
+              {!isNewUserLogin ? (
+                <input 
+                  type="tel" 
+                  placeholder='05x-xxxxxxx' 
+                  className="w-full p-6 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-3xl font-mono outline-none border border-gray-700 focus:border-brand-primary" 
+                  value={loginPhoneInput}
+                  onChange={(e) => setLoginPhoneInput(e.target.value)}
+                />
+              ) : (
+                <input 
+                  type="text" 
+                  placeholder='שם מלא' 
+                  className="w-full p-6 bg-gray-800 text-white rounded-[40px] mb-10 text-center text-3xl font-black outline-none border border-gray-700 focus:border-brand-primary" 
+                  value={loginNameInput}
+                  onChange={(e) => setLoginNameInput(e.target.value)}
+                  autoFocus
+                />
+              )}
+              
+              <Button onClick={handleLoginSubmit} className="w-full py-8 rounded-[45px] shadow-2xl shadow-brand-primary/20">
+                {isNewUserLogin ? 'סיום הרשמה 🏁' : 'התחברות 🚀'}
+              </Button>
           </div>
       </div>
     </div>
