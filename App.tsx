@@ -17,9 +17,8 @@ const normalizePhone = (phone: string): string => {
     return cleaned;
 };
 
-const navigateToLocation = (location: string, locations: LocationDef[] = []) => {
-    const loc = locations.find(l => l.name === location);
-    const query = loc?.address || location;
+const navigateToLocation = (query: string) => {
+    if (!query) return;
     window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}`, '_blank');
 };
 
@@ -461,6 +460,7 @@ const App: React.FC = () => {
                                           onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)}
                                           onWazeClick={navigateToLocation}
                                           onAddToCalendar={downloadICS}
+                                          locations={locations}
                                       />
                                   ))}
                               </div>

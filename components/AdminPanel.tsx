@@ -189,9 +189,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-      navigator.clipboard.writeText(text);
-      alert('הלינק הועתק! 📋');
+  const navigateToWaze = (query: string) => {
+      if (!query) return;
+      window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}`, '_blank');
   };
 
   return (
@@ -262,7 +262,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                               <p className="text-gray-500 font-black text-4xl uppercase tracking-widest opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
                           </div>
                           <div className="grid grid-cols-2 gap-4">
-                            {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} onDuplicate={props.onDuplicateSession} onAddToCalendar={props.onAddToCalendar} isAdmin={true} locations={props.locations} weather={props.weatherData?s.date:undefined} />)}
+                            {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} onDuplicate={props.onDuplicateSession} onAddToCalendar={props.onAddToCalendar} onWazeClick={navigateToWaze} isAdmin={true} locations={props.locations} weather={props.weatherData?s.date:undefined} />)}
                           </div>
                       </div>
                   );

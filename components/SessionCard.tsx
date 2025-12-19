@@ -13,7 +13,7 @@ interface SessionCardProps {
   onViewDetails: (sessionId: string) => void;
   onDuplicate?: (session: TrainingSession) => void;
   onAddToCalendar?: (session: TrainingSession) => void;
-  onWazeClick?: (location: string) => void;
+  onWazeClick?: (query: string) => void;
   locations?: LocationDef[];
   isAdmin?: boolean; 
 }
@@ -45,12 +45,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const diffMs = sessionStart.getTime() - now.getTime();
   const hoursUntil = diffMs / (1000 * 60 * 60);
 
-  // A session is finished if it's 1.5 hours past start
   const isFinished = !isCancelled && diffMs < -(1.5 * 60 * 60 * 1000);
   
-  // Logic for Happening:
-  // 1. If coach explicitly set to true
-  // 2. If coach didn't explicitly set to false (null/undefined) AND it's 3 hours before (or 1.5h after)
   const isHappening = !isCancelled && !isFinished && (
     session.manualHasStarted === true || 
     (session.manualHasStarted === null || session.manualHasStarted === undefined) && (hoursUntil <= 3 && hoursUntil > -1.5)
@@ -86,6 +82,13 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         return u ? (u.displayName || u.fullName.split(' ')[0]) : phone;
       }).join(', ')
     : '';
+
+  const handleWazeClickInternal = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const loc = locations.find(l => l.name === session.location);
+      const query = (loc && loc.address) ? loc.address : session.location;
+      onWazeClick?.(query);
+  };
 
   return (
     <div 
@@ -140,7 +143,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
             <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                     <button 
-                        onClick={(e) => { e.stopPropagation(); onWazeClick?.(session.location); }}
+                        onClick={handleWazeClickInternal}
                         className={`py-2 rounded-xl text-[8px] sm:text-[10px] font-black uppercase italic flex items-center justify-center gap-1 ${isFinished ? 'bg-gray-800 text-gray-600' : 'bg-blue-600/20 text-blue-400 border border-blue-500/20'}`}
                         disabled={isFinished}
                     >
@@ -162,7 +165,10 @@ export const SessionCard: React.FC<SessionCardProps> = ({
                 <Button onClick={(e)=>{e.stopPropagation(); onViewDetails(session.id);}} className="w-full py-2 sm:py-4 bg-white text-brand-black text-[9px] sm:text-[12px] uppercase font-black italic rounded-2xl sm:rounded-[30px] shadow-lg">ניהול ⚙️</Button>
                 <div className="grid grid-cols-2 gap-2">
                     <Button onClick={(e)=>{e.stopPropagation(); onDuplicate?.(session);}} className="py-1 sm:py-2 bg-gray-700 text-white text-[7px] sm:text-[9px] uppercase font-black rounded-xl">שכפל 📑</Button>
-                    <Button onClick={(e)=>{e.stopPropagation(); onAddToCalendar?.(session);}} className="py-1 sm:py-2 bg-gray-700 text-white text-[7px] sm:text-[9px] uppercase font-black rounded-xl">ליומן 📅</Button>
+                    <button 
+                        onClick={handleWazeClickInternal}
+                        className="py-1 sm:py-2 bg-blue-600/20 text-blue-400 text-[7px] sm:text-[9px] uppercase font-black rounded-xl border border-blue-500/20"
+                    >🚙 Waze</button>
                 </div>
             </div>
         )}
