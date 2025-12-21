@@ -85,7 +85,6 @@ const App: React.FC = () => {
 
   const isAdminMode = currentView === 'admin';
   const isLanding = currentView === 'landing';
-  const isChampMode = currentView === 'CHAMP';
 
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => localStorage.getItem('niv_admin_auth') === 'true');
   const [showUrgent, setShowUrgent] = useState(true);
@@ -107,8 +106,6 @@ const App: React.FC = () => {
   const [viewingSession, setViewingSession] = useState<TrainingSession | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallOverlay, setShowInstallOverlay] = useState(false);
   const [traineeWeekOffset, setTraineeWeekOffset] = useState(0);
   const [pendingSessionId, setPendingSessionId] = useState<string | null>(null);
 
@@ -116,6 +113,13 @@ const App: React.FC = () => {
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
+  // Force Health Declaration if missing
+  useEffect(() => {
+    if (currentUser && !currentUser.healthDeclarationDate && !signingHealth && !isAdminMode && !isLanding) {
+        setSigningHealth(true);
+    }
+  }, [currentUser, signingHealth, isAdminMode, isLanding]);
+
   const handleUpdateProfile = async (updated: User) => {
       isSyncingRef.current = true;
       try {
@@ -124,6 +128,11 @@ const App: React.FC = () => {
       } finally {
           isSyncingRef.current = false;
       }
+  };
+
+  const handleUpdateAppConfig = async (config: AppConfig) => {
+      setAppConfig(config);
+      await dataService.saveAppConfig(config);
   };
 
   const navigateTo = (view: 'landing' | 'work' | 'admin' | 'CHAMP') => {
@@ -137,13 +146,6 @@ const App: React.FC = () => {
           }
       }
       setCurrentView(view);
-      try {
-          let newUrl = window.location.origin + window.location.pathname;
-          if (view === 'admin') newUrl += '?mode=admin';
-          else if (view === 'work') newUrl += '?mode=work';
-          else if (view === 'CHAMP') newUrl += '?mode=CHAMP';
-          window.history.pushState({}, '', newUrl);
-      } catch (e) {}
   };
 
   const getStatsForUser = useCallback((user: User) => {
@@ -155,12 +157,14 @@ const App: React.FC = () => {
         const d = new Date(s.date);
         return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     }).length;
+    
     let streak = 0;
     const weekMap: Record<string, number> = {};
     attendedSessions.forEach(s => {
         const d = new Date(s.date);
         const sun = new Date(d); sun.setDate(d.getDate() - d.getDay()); 
-        weekMap[sun.toISOString().split('T')[0]] = (weekMap[sun.toISOString().split('T')[0]] || 0) + 1;
+        const key = sun.toISOString().split('T')[0];
+        weekMap[key] = (weekMap[key] || 0) + 1;
     });
     let check = new Date(); check.setDate(check.getDate() - check.getDay());
     while(true) {
@@ -189,14 +193,12 @@ const App: React.FC = () => {
 
   const traineeWeekDates = useMemo(() => {
     if (traineeWeekOffset === 0) {
-        // Default: Rolling 7 days from today
         return Array.from({length: 7}, (_, i) => {
             const d = new Date();
             d.setDate(d.getDate() + i);
             return d.toISOString().split('T')[0];
         });
     } else {
-        // Next weeks: Calendar Sunday-Saturday
         const sun = new Date();
         sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
         return Array.from({length: 7}, (_, i) => {
@@ -215,39 +217,30 @@ const App: React.FC = () => {
               dataService.getUsers(), dataService.getSessions(), dataService.getLocations(), dataService.getWorkoutTypes(), dataService.getAppConfig(), dataService.getQuotes()
           ]);
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
-          if (q.length > 0 && !quote) setQuote(q[Math.floor(Math.random() * q.length)].text);
+          if (q.length > 0) setQuote(q[Math.floor(Math.random() * q.length)].text);
           
           const weather = await getWeatherForDates(traineeWeekDates);
           setWeatherData(prev => ({...prev, ...weather}));
       } catch (e) {}
       setIsSyncing(false);
-  }, [quote, traineeWeekDates]);
+  }, [traineeWeekDates]);
 
   useEffect(() => {
-    const handler = (e: any) => {
-        e.preventDefault();
-        setDeferredPrompt(e);
-        if (!localStorage.getItem('niv_install_guide_seen')) {
-            setShowInstallOverlay(true);
-        }
-    };
-    window.addEventListener('beforeinstallprompt', handler);
     refreshData();
     const interval = setInterval(() => { if (!isSyncingRef.current) refreshData(); }, 30000); 
-    if (localStorage.getItem('niv_app_current_phone') && currentView === 'landing') {
-        setCurrentView('work');
-    }
-    return () => {
-        window.removeEventListener('beforeinstallprompt', handler);
-        clearInterval(interval);
-    };
-  }, [refreshData, currentView]);
+    return () => clearInterval(interval);
+  }, [refreshData]);
 
   const handleRegisterClick = async (sid: string) => {
       if (!currentUserPhone) { 
           setPendingSessionId(sid);
           document.getElementById('login-modal')?.classList.remove('hidden'); 
           return; 
+      }
+      if (currentUser && !currentUser.healthDeclarationDate) {
+          alert('עליך לחתום על הצהרת בריאות לפני ההרשמה.');
+          setSigningHealth(true);
+          return;
       }
       const session = sessions.find(s => s.id === sid);
       if (!session || session.isCancelled) return;
@@ -256,47 +249,33 @@ const App: React.FC = () => {
       let updated = { ...session };
       if (session.registeredPhoneNumbers.includes(phone)) {
           updated.registeredPhoneNumbers = session.registeredPhoneNumbers.filter(p => p !== phone);
-          updated.attendedPhoneNumbers = (session.attendedPhoneNumbers || []).filter(p => p !== phone);
       } else {
           if (session.registeredPhoneNumbers.length >= session.maxCapacity) { alert('האימון מלא!'); isSyncingRef.current = false; return; }
           updated.registeredPhoneNumbers = [...session.registeredPhoneNumbers, phone];
-          updated.attendedPhoneNumbers = [...(session.attendedPhoneNumbers || []), phone];
       }
       setSessions(prev => prev.map(s => s.id === sid ? updated : s));
-      try {
-          await dataService.updateSession(updated);
-      } finally {
-          isSyncingRef.current = false;
-      }
+      try { await dataService.updateSession(updated); } finally { isSyncingRef.current = false; }
   };
 
   const handleLoginSubmit = async () => {
     if (loginPhoneInput.length < 9) return;
     const np = normalizePhone(loginPhoneInput);
     const existingUser = users.find(u => normalizePhone(u.phone) === np);
-    let finalUser: User | null = null;
-    if (existingUser) {
-      finalUser = existingUser;
-    } else {
-      if (!isNewUserLogin) {
-          setIsNewUserLogin(true);
-          return;
-      } else {
+    if (!existingUser) {
+      if (!isNewUserLogin) { setIsNewUserLogin(true); return; }
+      else {
         const newUser: User = { id: Date.now().toString(), fullName: loginNameInput, phone: np, email: '', startDate: new Date().toISOString().split('T')[0], paymentStatus: PaymentStatus.PENDING };
         await dataService.addUser(newUser);
         setUsers(prev => [...prev, newUser]);
-        finalUser = newUser;
-      }
-    }
-    if (finalUser) {
-        const phone = normalizePhone(finalUser.phone);
-        setCurrentUserPhone(phone);
-        localStorage.setItem('niv_app_current_phone', phone);
+        setCurrentUserPhone(np);
+        localStorage.setItem('niv_app_current_phone', np);
         document.getElementById('login-modal')?.classList.add('hidden');
-        if (pendingSessionId) {
-            handleRegisterClick(pendingSessionId);
-            setPendingSessionId(null);
-        }
+        setSigningHealth(true); 
+      }
+    } else {
+        setCurrentUserPhone(np);
+        localStorage.setItem('niv_app_current_phone', np);
+        document.getElementById('login-modal')?.classList.add('hidden');
     }
   };
 
@@ -312,46 +291,18 @@ const App: React.FC = () => {
       setIdNumberInput('');
   };
 
-  const handleUpdateAppConfig = async (newConfig: AppConfig) => {
-      isSyncingRef.current = true;
-      try {
-        setAppConfig(newConfig);
-        await dataService.saveAppConfig(newConfig);
-      } finally {
-        isSyncingRef.current = false;
-      }
-  };
-
   if (isLanding) {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden cursor-pointer" onClick={() => navigateTo('work')}>
-        <div className="absolute inset-0 z-0 flex items-center justify-center opacity-10 pointer-events-none">
-            <svg viewBox="0 0 100 100" className="w-[85vw] h-[85vw] text-white">
-                <path fill="currentColor" d="M48 0 L52 0 L52 10 L48 10 Z" />
-                <path fill="currentColor" d="M48 10 L15 90 L20 90 L50 15 Z" />
-                <path fill="currentColor" d="M52 10 L85 90 L80 90 L50 15 Z" />
-                <rect x="15" y="90" width="10" height="2" fill="currentColor" />
-                <rect x="75" y="90" width="10" height="2" fill="currentColor" />
-            </svg>
-        </div>
         <div className="z-10 max-w-2xl space-y-12 py-12">
             <div>
-                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase leading-none tracking-tighter">NIV COHEN</h1>
+                <h1 className="text-7xl sm:text-9xl font-black italic text-white uppercase tracking-tighter">NIV COHEN</h1>
                 <p className="text-xl sm:text-3xl font-black tracking-[0.5em] text-brand-primary uppercase mt-4">CONSISTENCY TRAINING</p>
             </div>
-            {appConfig.coachBio && (
-                <div className="bg-gray-900/60 backdrop-blur-3xl p-8 sm:p-12 rounded-[50px] sm:rounded-[80px] border border-white/5 shadow-2xl text-right" dir="rtl">
-                    <div className="space-y-6 text-white text-lg sm:text-xl font-bold leading-relaxed opacity-90 whitespace-pre-wrap">
-                        {appConfig.coachBio}
-                    </div>
-                </div>
-            )}
-            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block cursor-pointer hover:bg-gray-800 transition-all">
+            <div className="bg-gray-900/40 backdrop-blur-2xl p-8 rounded-[40px] border border-white/5 inline-block">
                 <p className="text-xl font-black text-white italic">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
             </div>
-            <div className="pt-8">
-               <p className="text-gray-500 font-black uppercase tracking-widest text-xs animate-pulse">לחץ בכל מקום לכניסה ללו"ז</p>
-            </div>
+            <div className="pt-8 animate-pulse text-gray-500 font-black uppercase tracking-widest text-xs">לחץ לכניסה</div>
         </div>
         <WhatsAppButton phone={appConfig.coachPhone} />
       </div>
@@ -360,36 +311,23 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen ${isAdminMode ? 'bg-red-950/10' : 'bg-brand-black'} pb-20 font-sans transition-all duration-500`}>
-      {appConfig.urgentMessage && showUrgent && (
-          <div className="bg-red-600 text-white py-2 px-4 text-center font-black italic text-xs sm:text-sm shadow-xl z-[100] sticky top-0 left-0 right-0 overflow-hidden flex items-center justify-center">
-              <div className="animate-pulse flex items-center gap-2">
-                  <span>📢</span>
-                  <span>{appConfig.urgentMessage}</span>
-                  <span>📢</span>
-              </div>
-              <button onClick={() => setShowUrgent(false)} className="absolute right-4 text-white/70 hover:text-white transition-colors">✕</button>
-          </div>
-      )}
-
-      <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-[60] ${isAdminMode ? 'bg-red-900/40 border-red-500/30' : 'bg-brand-black/80'} ${appConfig.urgentMessage && showUrgent ? 'mt-0' : ''}`}>
+      <header className={`p-6 border-b border-gray-800/50 backdrop-blur-md sticky top-0 z-[60] ${isAdminMode ? 'bg-red-900/40' : 'bg-brand-black/80'}`}>
           <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-4">
                   {currentUser && !isAdminMode && (
-                      <div className="text-right cursor-pointer group active:scale-95 transition-transform" onClick={() => setShowProfile(true)}>
-                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest group-hover:text-brand-primary transition-colors text-left">פרופיל אישי</p>
-                          <p className="text-white font-black italic text-sm group-hover:text-brand-primary transition-colors" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
+                      <div className="text-right cursor-pointer" onClick={() => setShowProfile(true)}>
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-left">פרופיל אישי</p>
+                          <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                       </div>
                   )}
-                  {isSyncing && (
-                      <div className="w-4 h-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin ml-2"></div>
-                  )}
+                  {isSyncing && <div className="w-4 h-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin ml-2"></div>}
               </div>
               <div className="text-center" onClick={() => navigateTo('landing')}>
-                  <h1 className="text-3xl sm:text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">NIV COHEN</h1>
+                  <h1 className="text-3xl sm:text-4xl font-black italic text-white uppercase leading-none">NIV COHEN</h1>
                   <p className="text-[10px] sm:text-[12px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
               </div>
               <div className="w-20 flex justify-end">
-                 {isAdminMode && <button onClick={() => navigateTo('work')} className="bg-gray-800 text-white p-2 rounded-xl text-[10px] font-black uppercase italic border border-white/10">לו"ז</button>}
+                 {isAdminMode && <button onClick={() => navigateTo('work')} className="bg-gray-800 text-white p-2 rounded-xl text-[10px] font-black uppercase italic">לו"ז</button>}
               </div> 
           </div>
       </header>
@@ -401,60 +339,34 @@ const App: React.FC = () => {
                 locations={locations} weatherLocation={{name: appConfig.defaultCity, lat:0, lon:0}} paymentLinks={[]} streakGoal={3}
                 appConfig={appConfig} quotes={quotes} weatherData={weatherData} onAddUser={async u => { await dataService.addUser(u); setUsers(prev => [...prev, u]); }}
                 onUpdateUser={async u => { await dataService.updateUser(u); setUsers(prev => prev.map(x=>x.id===u.id?u:x)); }}
-                onAddSession={async s => { 
-                    isSyncingRef.current = true;
-                    try {
-                        await dataService.addSession(s); 
-                        setSessions(prev => [...prev, s]); 
-                    } finally { isSyncingRef.current = false; }
-                }}
-                onUpdateSession={async s => { 
-                    isSyncingRef.current = true;
-                    try {
-                        await dataService.updateSession(s);
-                        setSessions(prev => prev.map(x=>x.id===s.id?s:x)); 
-                    } finally { isSyncingRef.current = false; }
-                }}
+                onAddSession={async s => { isSyncingRef.current = true; try { await dataService.addSession(s); setSessions(prev => [...prev, s]); } finally { isSyncingRef.current = false; } }}
+                onUpdateSession={async s => { isSyncingRef.current = true; try { await dataService.updateSession(s); setSessions(prev => prev.map(x=>x.id===s.id?s:x)); } finally { isSyncingRef.current = false; } }}
                 onDeleteUser={async id => { await dataService.deleteUser(id); setUsers(prev => prev.filter(x=>x.id!==id)); }}
-                onDeleteSession={async id => { 
-                    isSyncingRef.current = true;
-                    try {
-                        await dataService.deleteSession(id); 
-                        setSessions(prev => prev.filter(x=>x.id!==id)); 
-                    } finally { isSyncingRef.current = false; }
-                }}
+                onDeleteSession={async id => { isSyncingRef.current = true; try { await dataService.deleteSession(id); setSessions(prev => prev.filter(x=>x.id!==id)); } finally { isSyncingRef.current = false; } }}
                 onUpdateWorkoutTypes={async t => { await dataService.saveWorkoutTypes(t); setWorkoutTypes(t); refreshData(); }} 
                 onUpdateLocations={async l => { await dataService.saveLocations(l); setLocations(l); refreshData(); }}
                 onUpdateAppConfig={handleUpdateAppConfig} onExitAdmin={() => navigateTo('work')}
-                onDuplicateSession={async s => { 
-                    isSyncingRef.current = true;
-                    try {
-                        const n = {...s, id: Date.now().toString() + Math.random().toString(36).substr(2, 5), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; 
-                        await dataService.addSession(n); 
-                        setSessions(p=>[...p, n]); 
-                    } finally { isSyncingRef.current = false; }
-                }}
-                onAddToCalendar={downloadICS}
-                getStatsForUser={getStatsForUser}
+                onDuplicateSession={async s => { isSyncingRef.current = true; try { const n = {...s, id: Date.now().toString()+Math.random(), registeredPhoneNumbers: [], attendedPhoneNumbers: []}; await dataService.addSession(n); setSessions(p=>[...p, n]); } finally { isSyncingRef.current = false; } }}
+                onAddToCalendar={downloadICS} getStatsForUser={getStatsForUser}
                 onColorChange={()=>{}} onUpdateWeatherLocation={()=>{}} onAddPaymentLink={()=>{}} onDeletePaymentLink={()=>{}} onUpdateStreakGoal={()=>{}}
             />
         ) : (
             <div className="space-y-10 pb-20">
               {currentUser && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center">
+                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center h-28">
                           <p className="text-[9px] text-gray-500 font-black uppercase mb-1">החודש</p>
                           <p className="text-2xl font-black text-brand-primary">{stats.monthly}</p>
                       </div>
-                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center">
+                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center h-28">
                           <p className="text-[9px] text-gray-500 font-black uppercase mb-1">שיא חודשי</p>
                           <p className="text-2xl font-black text-white">{stats.record}</p>
                       </div>
-                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center">
+                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center h-28">
                           <p className="text-[9px] text-gray-500 font-black uppercase mb-1">רצף (3+ בשבוע)</p>
                           <p className="text-2xl font-black text-orange-400">{stats.streak}</p>
                       </div>
-                      <div className="bg-brand-primary/10 p-4 rounded-[30px] border border-brand-primary/30 text-center flex flex-col justify-center col-span-2 sm:col-span-1">
+                      <div className="bg-brand-primary/10 p-4 rounded-[30px] border border-brand-primary/30 text-center flex flex-col justify-center h-28">
                           <p className="text-[9px] text-brand-primary font-black uppercase mb-1">👑 אלוף החודש</p>
                           <p className="text-xs font-black text-white truncate px-1">{championTrainee.name}</p>
                           <p className="text-lg font-black text-brand-primary">{championTrainee.count}</p>
@@ -463,33 +375,21 @@ const App: React.FC = () => {
               )}
 
               <div className="flex flex-col gap-4">
-                  <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-2">
-                      <button 
-                        onClick={() => setTraineeWeekOffset(0)}
-                        className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${traineeWeekOffset === 0 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500 border border-white/5'}`}
-                      >
-                        השבוע
-                      </button>
-                      <button 
-                        onClick={() => setTraineeWeekOffset(1)}
-                        className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${traineeWeekOffset === 1 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500 border border-white/5'}`}
-                      >
-                        שבוע הבא
-                      </button>
+                  <div className="flex justify-center gap-2">
+                      <button onClick={() => setTraineeWeekOffset(0)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${traineeWeekOffset === 0 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500'}`}>השבוע</button>
+                      <button onClick={() => setTraineeWeekOffset(1)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${traineeWeekOffset === 1 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500'}`}>שבוע הבא</button>
                   </div>
-                  <div className="bg-gray-800/40 p-5 rounded-[40px] border border-white/5 shadow-xl">
-                      <div className="flex justify-between items-center px-4">
-                          <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
-                          <div className="text-center">
-                              <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">
-                                  {new Date(traineeWeekDates[0]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})} - {new Date(traineeWeekDates[6]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})}
-                              </p>
-                              <span className="text-brand-primary font-black uppercase tracking-[0.2em] bg-brand-primary/10 px-6 py-2 rounded-full text-[11px]">
-                                  {traineeWeekOffset === 0 ? 'לו"ז קרוב' : `שבוע ${traineeWeekOffset > 0 ? '+' : ''}${traineeWeekOffset}`}
-                              </span>
-                          </div>
-                          <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
+                  <div className="bg-gray-800/40 p-5 rounded-[40px] border border-white/5 flex justify-between items-center px-4">
+                      <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary">←</button>
+                      <div className="text-center">
+                          <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
+                              {new Date(traineeWeekDates[0]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})} - {new Date(traineeWeekDates[6]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})}
+                          </p>
+                          <span className="text-brand-primary font-black uppercase tracking-[0.2em] bg-brand-primary/10 px-6 py-2 rounded-full text-[11px]">
+                              {traineeWeekOffset === 0 ? 'לו"ז קרוב' : `שבוע ${traineeWeekOffset > 0 ? '+' : ''}${traineeWeekOffset}`}
+                          </span>
                       </div>
+                      <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary">→</button>
                   </div>
               </div>
 
@@ -500,22 +400,17 @@ const App: React.FC = () => {
                       return (
                           <div key={date}>
                               <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-6 px-2">
-                                  <h4 className="text-gray-500 font-black text-3xl uppercase tracking-widest">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
+                                  <h4 className="text-gray-500 font-black text-3xl uppercase">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
                                   <p className="text-gray-500 font-black text-xl opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                   {daySessions.map(s => (
                                       <SessionCard 
-                                          key={s.id} 
-                                          session={s} 
-                                          allUsers={users} 
+                                          key={s.id} session={s} allUsers={users} locations={locations} weather={weatherData[s.date]} isAdmin={false}
                                           isRegistered={!!currentUser && s.registeredPhoneNumbers.includes(normalizePhone(currentUser.phone))} 
                                           onRegisterClick={handleRegisterClick} 
                                           onViewDetails={(sid) => setViewingSession(sessions.find(x => x.id === sid) || null)}
-                                          onWazeClick={navigateToLocation}
-                                          onAddToCalendar={downloadICS}
-                                          locations={locations}
-                                          weather={weatherData[s.date]}
+                                          onWazeClick={navigateToLocation} onAddToCalendar={downloadICS}
                                       />
                                   ))}
                               </div>
@@ -523,16 +418,73 @@ const App: React.FC = () => {
                       );
                   })}
               </div>
-
-              <div className="bg-gray-900/60 p-8 rounded-[40px] border border-white/5 text-center italic shadow-2xl">
-                  <p className="text-gray-500 text-[10px] font-black uppercase mb-4 tracking-[0.5em]">Motivation of the day</p>
-                  <p className="text-white text-xl font-black">"{quote || 'הכאב הוא זמני, הגאווה היא נצחית.'}"</p>
-              </div>
             </div>
         )}
       </main>
 
-      <div id="login-modal" className="hidden fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
+      {viewingSession && !isAdminMode && (
+          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto" dir="rtl">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl text-right">
+                  <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
+                      <h3 className="text-3xl font-black text-white italic uppercase">פרטי אימון 👟</h3>
+                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
+                  </div>
+                  <div className="space-y-8">
+                      <div>
+                          <p className="text-brand-primary font-black text-4xl italic uppercase">{viewingSession.type}</p>
+                          <p className="text-white font-black text-xl mt-2">{new Date(viewingSession.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} בשעה {viewingSession.time}</p>
+                          <p className="text-gray-500 font-black mt-1">📍 {viewingSession.location}</p>
+                      </div>
+                      
+                      {viewingSession.description && (
+                          <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-6 rounded-l-[30px]">
+                              <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן:</p>
+                              <p className="text-white text-lg font-bold italic">{viewingSession.description}</p>
+                          </div>
+                      )}
+
+                      <div className="space-y-4">
+                          <h5 className="text-gray-500 font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</h5>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-48 overflow-y-auto no-scrollbar">
+                              {viewingSession.registeredPhoneNumbers.map(phone => {
+                                  const user = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
+                                  return (
+                                      <div key={phone} className="bg-gray-800/40 p-3 rounded-2xl flex items-center gap-3 border border-white/5">
+                                          <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center font-black text-[10px]" style={{ color: user?.userColor || '#A3E635' }}>{user?.fullName.charAt(0) || '?'}</div>
+                                          <span className="text-white text-xs font-bold truncate">{user?.displayName || user?.fullName || 'מתאמן'}</span>
+                                      </div>
+                                  );
+                              })}
+                          </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-white/5 flex gap-4">
+                          <Button onClick={()=>setViewingSession(null)} className="flex-1 rounded-[30px] py-5 font-black italic uppercase">סגור</Button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {signingHealth && (
+          <div className="fixed inset-0 bg-brand-black z-[1000] flex flex-col p-6 overflow-y-auto no-scrollbar text-right" dir="rtl">
+              <div className="max-w-2xl mx-auto w-full space-y-8 py-10">
+                  <h3 className="text-4xl font-black text-brand-primary italic uppercase mb-10">הצהרת בריאות 🖋️</h3>
+                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/10 text-white text-lg leading-relaxed font-bold whitespace-pre-wrap">
+                      {appConfig.healthDeclarationTemplate || 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר ביצוע פעילות גופנית מאומצת.'}
+                  </div>
+                  <div className="space-y-4">
+                      <label className="text-gray-500 font-black text-sm uppercase">תעודת זהות</label>
+                      <input type="tel" className="w-full bg-gray-900 p-6 rounded-[30px] text-white font-black text-2xl border border-white/10 focus:border-brand-primary outline-none" value={idNumberInput} onChange={e=>setIdNumberInput(e.target.value)} placeholder="הקש ת.ז מלאה" />
+                  </div>
+                  <div className="pt-10">
+                      <Button onClick={handleSignHealth} className="w-full py-8 rounded-[40px] text-2xl font-black italic bg-brand-primary text-black" disabled={!idNumberInput}>חתימה ואישור ✓</Button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      <div id="login-modal" className="hidden fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl">
           <div className="bg-gray-900 p-10 rounded-[60px] w-full max-w-md border border-white/10 shadow-3xl text-right" dir="rtl">
               <h3 className="text-3xl font-black text-brand-primary italic uppercase mb-8">התחברות ⚡</h3>
               <div className="space-y-6">
@@ -547,155 +499,11 @@ const App: React.FC = () => {
                       </div>
                   )}
                   <Button onClick={handleLoginSubmit} className="w-full py-6 rounded-[30px] text-xl font-black italic shadow-2xl bg-brand-primary text-black">המשך ✓</Button>
-                  <button onClick={() => { document.getElementById('login-modal')?.classList.add('hidden'); setPendingSessionId(null); }} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4">חזרה</button>
+                  <button onClick={() => { document.getElementById('login-modal')?.classList.add('hidden'); }} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4">חזרה</button>
               </div>
           </div>
       </div>
 
-      {viewingSession && (
-          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
-              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl text-right overflow-y-auto no-scrollbar" dir="rtl">
-                  <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
-                      <h3 className="text-3xl font-black text-white italic uppercase">פרטי אימון 👟</h3>
-                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
-                  </div>
-                  <div className="space-y-8">
-                      <div>
-                          <p className="text-brand-primary font-black text-4xl italic uppercase">{viewingSession.type}</p>
-                          <div className="flex gap-4 items-center mt-2">
-                             <p className="text-white font-black text-xl">{new Date(viewingSession.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} בשעה {viewingSession.time}</p>
-                             {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
-                                 <div className="flex items-center gap-1 bg-gray-800 px-3 py-1 rounded-full border border-white/10">
-                                     <span>{getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}</span>
-                                     <span className="text-xs font-black text-white">{Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°</span>
-                                 </div>
-                             )}
-                          </div>
-                          <p className="text-gray-500 font-black mt-1">📍 {viewingSession.location}</p>
-                      </div>
-                      
-                      {viewingSession.description && (
-                          <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-6 rounded-l-[30px]">
-                              <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן:</p>
-                              <p className="text-white text-lg font-bold leading-relaxed">{viewingSession.description}</p>
-                          </div>
-                      )}
-
-                      <div className="space-y-4">
-                          <h5 className="text-gray-500 font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</h5>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                              {viewingSession.registeredPhoneNumbers.map(phone => {
-                                  const user = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
-                                  return (
-                                      <div key={phone} className="bg-gray-800/40 p-3 rounded-2xl flex items-center gap-3 border border-white/5">
-                                          <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center font-black text-[10px]" style={{ color: user?.userColor || '#A3E635', border: `1px solid ${user?.userColor || '#A3E635'}30` }}>{user?.fullName.charAt(0) || '?'}</div>
-                                          <span className="text-white text-xs font-bold truncate">{user?.displayName || user?.fullName || 'מתאמן'}</span>
-                                      </div>
-                                  );
-                              })}
-                              {viewingSession.registeredPhoneNumbers.length === 0 && (
-                                  <p className="text-gray-600 italic text-sm col-span-full">עדיין אין נרשמים לאימון זה.</p>
-                              )}
-                          </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-white/5 flex gap-4">
-                          <Button onClick={()=>setViewingSession(null)} className="flex-1 rounded-[30px] py-5 font-black italic uppercase">סגור</Button>
-                          <button onClick={() => navigateToLocation(locations.find(l => l.name === viewingSession?.location)?.address || viewingSession?.location || '')} className="flex-1 rounded-[30px] bg-blue-600/20 text-blue-400 font-black italic uppercase border border-blue-500/20">ניווט Waze</button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {showProfile && currentUser && (
-          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto no-scrollbar animate-install-overlay-animation">
-              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl my-auto text-right" dir="rtl">
-                  <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
-                      <h3 className="text-3xl font-black text-white italic uppercase">פרופיל אישי 👤</h3>
-                      <button onClick={()=>setShowProfile(false)} className="text-gray-500 text-4xl">✕</button>
-                  </div>
-                  <div className="space-y-10">
-                      <div className="flex flex-col sm:flex-row items-center gap-6">
-                          <div className="w-24 h-24 rounded-full bg-gray-800 border-4 flex items-center justify-center text-4xl font-black shadow-2xl transition-colors" style={{ borderColor: (currentUser.userColor || '#A3E635') + '40', color: currentUser.userColor || '#A3E635' }}>
-                              {currentUser.fullName.charAt(0)}
-                          </div>
-                          <div className="flex-1 space-y-4">
-                              <div className="space-y-1">
-                                <label className="text-[9px] text-gray-500 font-black uppercase">כינוי תצוגה</label>
-                                <input className="w-full bg-gray-800/50 p-4 rounded-2xl text-white font-black italic outline-none border border-white/5 focus:border-brand-primary" value={currentUser.displayName || ''} onChange={e => handleUpdateProfile({...currentUser, displayName: e.target.value})} placeholder="בחר כינוי..." />
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[9px] text-gray-500 font-black uppercase">בחר צבע פרופיל</label>
-                                <div className="flex gap-3">
-                                    {PRESET_COLORS.map(c => (
-                                        <button key={c} onClick={() => handleUpdateProfile({...currentUser, userColor: c})} className={`w-8 h-8 rounded-full border-2 transition-transform ${currentUser.userColor === c ? 'scale-125 border-white' : 'border-transparent opacity-60'}`} style={{ backgroundColor: c }} />
-                                    ))}
-                                </div>
-                              </div>
-                          </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-4">
-                          <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
-                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">החודש</p>
-                              <p className="text-3xl font-black text-brand-primary">{stats.monthly}</p>
-                          </div>
-                          <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
-                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">שיא</p>
-                              <p className="text-3xl font-black text-white">{stats.record}</p>
-                          </div>
-                          <div className="bg-gray-800/40 p-4 rounded-[30px] text-center border border-white/5">
-                              <p className="text-[9px] text-gray-500 font-black uppercase mb-1">רצף</p>
-                              <p className="text-3xl font-black text-orange-400">{stats.streak}</p>
-                          </div>
-                      </div>
-                      <div className="space-y-4">
-                          <h5 className="text-white font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">הצהרת בריאות 📝</h5>
-                          {currentUser.healthDeclarationDate ? (
-                              <div className="bg-green-500/10 border border-green-500/30 p-6 rounded-[30px] flex justify-between items-center">
-                                  <div>
-                                      <p className="text-green-500 font-black text-xs uppercase">חתומה ומאושרת ✅</p>
-                                      <p className="text-white text-sm font-bold mt-1">נחתם ב: {currentUser.healthDeclarationDate}</p>
-                                  </div>
-                                  <div className="text-right">
-                                      <p className="text-gray-500 text-[9px] uppercase">ת.ז</p>
-                                      <p className="text-white font-mono font-black">{currentUser.healthDeclarationId}</p>
-                                  </div>
-                              </div>
-                          ) : (
-                              <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-[30px] space-y-4">
-                                  <p className="text-red-500 font-black text-xs uppercase">טרם חתמת על הצהרת בריאות ⚠️</p>
-                                  <Button onClick={()=>setSigningHealth(true)} className="w-full bg-red-600 text-white font-black italic">לחתימה עכשיו ✓</Button>
-                              </div>
-                          )}
-                      </div>
-                      <div className="pt-6 border-t border-white/5 flex gap-4">
-                          <Button onClick={()=>{localStorage.removeItem('niv_app_current_phone'); window.location.reload();}} variant="outline" className="flex-1 rounded-[30px] text-xs font-black italic uppercase">התנתקות 🔌</Button>
-                          <Button onClick={()=>setShowProfile(false)} className="flex-1 rounded-[30px] text-xs font-black italic uppercase">סגור</Button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {signingHealth && (
-          <div className="fixed inset-0 bg-brand-black z-[600] flex flex-col p-6 overflow-y-auto no-scrollbar text-right" dir="rtl">
-              <div className="max-w-2xl mx-auto w-full space-y-8 py-10">
-                  <h3 className="text-4xl font-black text-brand-primary italic uppercase mb-10">הצהרת בריאות 🖋️</h3>
-                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/10 text-white text-lg leading-relaxed font-bold whitespace-pre-wrap">
-                      {appConfig.healthDeclarationTemplate || 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר ביצוע פעילות גופנית מאומצת.'}
-                  </div>
-                  <div className="space-y-4">
-                      <label className="text-gray-500 font-black text-sm uppercase">תעודת זהות</label>
-                      <input type="tel" className="w-full bg-gray-900 p-6 rounded-[30px] text-white font-black text-2xl border border-white/10 focus:border-brand-primary outline-none" value={idNumberInput} onChange={e=>setIdNumberInput(e.target.value)} placeholder="הקש ת.ז מלאה" />
-                  </div>
-                  <div className="flex gap-4 pt-10">
-                      <Button onClick={handleSignHealth} className="flex-1 py-8 rounded-[40px] text-2xl font-black italic bg-brand-primary text-black shadow-2xl" disabled={!idNumberInput}>חתימה ואישור ✓</Button>
-                      <Button onClick={()=>setSigningHealth(false)} variant="outline" className="px-10 rounded-[40px] font-black italic text-gray-500 border-gray-800">ביטול</Button>
-                  </div>
-              </div>
-          </div>
-      )}
       <WhatsAppButton phone={appConfig.coachPhone} />
     </div>
   );
