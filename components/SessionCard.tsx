@@ -37,8 +37,11 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const isZoom = !!session.isZoomSession || !!session.zoomLink;
   const isPersonal = !!session.isPersonalTraining;
   
-  const sessionHour = session.time.split(':')[0];
-  const hourlyWeather = weather?.hourly?.[sessionHour];
+  const sessionHourStr = session.time.split(':')[0];
+  const sessionHourNum = parseInt(sessionHourStr);
+  const hourlyWeather = weather?.hourly?.[sessionHourStr];
+  // Mark as night if hour is 18:00 or later, or before 06:00
+  const isNight = sessionHourNum >= 18 || sessionHourNum < 6;
   
   const now = new Date();
   const sessionStart = new Date(`${session.date}T${session.time}`);
@@ -74,9 +77,9 @@ export const SessionCard: React.FC<SessionCardProps> = ({
 
   const traineeNames = isAdmin && isPersonal 
     ? session.registeredPhoneNumbers.map(phone => {
-        const up = phone.replace(/\D/g, '');
         const u = allUsers.find(user => {
             const userP = user.phone.replace(/\D/g, '');
+            const up = phone.replace(/\D/g, '');
             return userP.endsWith(up.slice(-9));
         });
         return u ? (u.displayName || u.fullName.split(' ')[0]) : phone;
@@ -108,7 +111,7 @@ export const SessionCard: React.FC<SessionCardProps> = ({
            <span className={`text-2xl sm:text-5xl font-black font-mono italic leading-none transition-colors duration-500 ${isCancelled ? 'text-red-500 line-through opacity-50' : (isFinished ? 'text-gray-500' : 'text-white')}`}>{session.time}</span>
            {hourlyWeather && (
                <div className="flex flex-col items-end opacity-40">
-                  <span className="text-lg sm:text-2xl">{getWeatherIcon(hourlyWeather.weatherCode)}</span>
+                  <span className="text-lg sm:text-2xl">{getWeatherIcon(hourlyWeather.weatherCode, isNight)}</span>
                   <span className="text-[10px] sm:text-[12px] font-black">{Math.round(hourlyWeather.temp)}°</span>
                </div>
            )}
@@ -127,8 +130,8 @@ export const SessionCard: React.FC<SessionCardProps> = ({
         )}
 
         {session.description && !isCancelled && !isFinished && (
-            <div className="bg-brand-primary/10 border-r-2 sm:border-r-4 border-brand-primary p-2 sm:p-3 rounded-l-xl mb-3 sm:mb-6">
-                <p className="text-white text-[9px] sm:text-xs font-bold leading-tight">{session.description}</p>
+            <div className="bg-brand-primary/10 border-r-2 sm:border-r-4 border-brand-primary p-3 sm:p-4 rounded-l-xl mb-3 sm:mb-6">
+                <p className="text-white text-sm sm:text-lg font-bold leading-tight italic">{session.description}</p>
             </div>
         )}
       </div>

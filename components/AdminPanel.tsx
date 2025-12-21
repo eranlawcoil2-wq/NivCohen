@@ -80,12 +80,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   };
 
   const weekDates = useMemo(() => {
-    const sun = new Date(); sun.setHours(12, 0, 0, 0); 
-    sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
-    return Array.from({length:7}, (_, i) => { 
-        const d = new Date(sun); d.setDate(sun.getDate() + i); 
-        return d.toISOString().split('T')[0]; 
-    });
+    if (weekOffset === 0) {
+        // Default: Rolling 7 days from today
+        return Array.from({length: 7}, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            return d.toISOString().split('T')[0];
+        });
+    } else {
+        // Next weeks: Calendar Sunday-Saturday
+        const sun = new Date();
+        sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
+        return Array.from({length: 7}, (_, i) => {
+            const d = new Date(sun);
+            d.setDate(sun.getDate() + i);
+            return d.toISOString().split('T')[0];
+        });
+    }
   }, [weekOffset]);
 
   const sortedUsers = useMemo(() => {
@@ -195,7 +206,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       window.open(`https://waze.com/ul?q=${encodeURIComponent(query)}`, '_blank');
   };
 
+  const currentModalHour = sessionDraft ? parseInt(sessionDraft.time.split(':')[0]) : 12;
   const currentModalWeather = sessionDraft ? props.weatherData?.[sessionDraft.date]?.hourly?.[sessionDraft.time.split(':')[0]] : null;
+  const isNightModal = currentModalHour >= 18 || currentModalHour < 6;
 
   return (
     <div className="bg-brand-black min-h-screen">
@@ -375,7 +388,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                           <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון ⚙️</h3>
                           {currentModalWeather && (
                               <div className="flex items-center gap-2 bg-gray-800/80 px-4 py-2 rounded-2xl border border-white/5 shadow-xl">
-                                  <span className="text-2xl">{getWeatherIcon(currentModalWeather.weatherCode)}</span>
+                                  <span className="text-2xl">{getWeatherIcon(currentModalWeather.weatherCode, isNightModal)}</span>
                                   <span className="text-brand-primary font-black text-lg">{Math.round(currentModalWeather.temp)}°</span>
                               </div>
                           )}

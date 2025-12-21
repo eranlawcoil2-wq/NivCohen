@@ -5,7 +5,7 @@ import { SessionCard } from './components/SessionCard';
 import { AdminPanel } from './components/AdminPanel';
 import { Button } from './components/Button';
 import { getMotivationQuote } from './services/geminiService';
-import { getWeatherForDates, getCityCoordinates } from './services/weatherService';
+import { getWeatherForDates, getCityCoordinates, getWeatherIcon } from './services/weatherService';
 import { dataService } from './services/dataService';
 
 const normalizePhone = (phone: string): string => {
@@ -164,7 +164,8 @@ const App: React.FC = () => {
     });
     let check = new Date(); check.setDate(check.getDate() - check.getDay());
     while(true) {
-        if ((weekMap[check.toISOString().split('T')[0]] || 0) >= 3) { streak++; check.setDate(check.getDate() - 7); }
+        const key = check.toISOString().split('T')[0];
+        if ((weekMap[key] || 0) >= 3) { streak++; check.setDate(check.getDate() - 7); }
         else break;
         if (check.getFullYear() < 2024) break;
     }
@@ -173,13 +174,37 @@ const App: React.FC = () => {
 
   const stats = useMemo(() => currentUser ? getStatsForUser(currentUser) : { monthly: 0, record: 0, streak: 0 }, [currentUser, getStatsForUser]);
 
-  const traineeWeekDates = useMemo(() => {
-    const sun = new Date(); sun.setHours(12,0,0,0);
-    sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
-    return Array.from({length:7}, (_, i) => {
-        const d = new Date(sun); d.setDate(sun.getDate() + i);
-        return d.toISOString().split('T')[0];
+  const championTrainee = useMemo(() => {
+    const now = new Date();
+    const traineesWithCounts = users.map(u => {
+        const attended = sessions.filter(s => (s.attendedPhoneNumbers || []).includes(normalizePhone(u.phone)));
+        const monthly = attended.filter(s => {
+            const d = new Date(s.date);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).length;
+        return { name: u.displayName || u.fullName, count: monthly };
     });
+    return traineesWithCounts.sort((a,b) => b.count - a.count)[0] || { name: 'אין עדיין', count: 0 };
+  }, [users, sessions]);
+
+  const traineeWeekDates = useMemo(() => {
+    if (traineeWeekOffset === 0) {
+        // Default: Rolling 7 days from today
+        return Array.from({length: 7}, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() + i);
+            return d.toISOString().split('T')[0];
+        });
+    } else {
+        // Next weeks: Calendar Sunday-Saturday
+        const sun = new Date();
+        sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
+        return Array.from({length: 7}, (_, i) => {
+            const d = new Date(sun);
+            d.setDate(sun.getDate() + i);
+            return d.toISOString().split('T')[0];
+        });
+    }
   }, [traineeWeekOffset]);
 
   const refreshData = useCallback(async () => {
@@ -192,9 +217,8 @@ const App: React.FC = () => {
           setUsers(u); setSessions(s); setLocations(locs); setWorkoutTypes(types); setAppConfig(config); setQuotes(q);
           if (q.length > 0 && !quote) setQuote(q[Math.floor(Math.random() * q.length)].text);
           
-          // Fetch weather for the visible trainee week
           const weather = await getWeatherForDates(traineeWeekDates);
-          setWeatherData(weather);
+          setWeatherData(prev => ({...prev, ...weather}));
       } catch (e) {}
       setIsSyncing(false);
   }, [quote, traineeWeekDates]);
@@ -274,22 +298,6 @@ const App: React.FC = () => {
             setPendingSessionId(null);
         }
     }
-  };
-
-  const handleInstallClick = async () => {
-      if (deferredPrompt) {
-          deferredPrompt.prompt();
-          const { outcome } = await deferredPrompt.userChoice;
-          if (outcome === 'accepted') {
-              setDeferredPrompt(null);
-              setShowInstallOverlay(false);
-              localStorage.setItem('niv_install_guide_seen', 'true');
-          }
-      } else {
-          setShowInstallOverlay(false);
-          localStorage.setItem('niv_install_guide_seen', 'true');
-          alert('כדי להוסיף למסך הבית באייפון, לחצו על כפתור השיתוף ואז על "הוספה למסך הבית" 📱');
-      }
   };
 
   const handleSignHealth = async () => {
@@ -379,7 +387,6 @@ const App: React.FC = () => {
               <div className="text-center" onClick={() => navigateTo('landing')}>
                   <h1 className="text-3xl sm:text-4xl font-black italic text-white uppercase leading-none transition-all duration-500">NIV COHEN</h1>
                   <p className="text-[10px] sm:text-[12px] font-black tracking-[0.4em] text-brand-primary uppercase mt-1">CONSISTENCY TRAINING</p>
-                  {isChampMode && <p className="text-[8px] font-black text-brand-primary mt-1 uppercase italic tracking-widest">CHAMP VIEW 🏆</p>}
               </div>
               <div className="w-20 flex justify-end">
                  {isAdminMode && <button onClick={() => navigateTo('work')} className="bg-gray-800 text-white p-2 rounded-xl text-[10px] font-black uppercase italic border border-white/10">לו"ז</button>}
@@ -433,6 +440,28 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-10 pb-20">
+              {currentUser && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center">
+                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">החודש</p>
+                          <p className="text-2xl font-black text-brand-primary">{stats.monthly}</p>
+                      </div>
+                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center">
+                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">שיא חודשי</p>
+                          <p className="text-2xl font-black text-white">{stats.record}</p>
+                      </div>
+                      <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center">
+                          <p className="text-[9px] text-gray-500 font-black uppercase mb-1">רצף (3+ בשבוע)</p>
+                          <p className="text-2xl font-black text-orange-400">{stats.streak}</p>
+                      </div>
+                      <div className="bg-brand-primary/10 p-4 rounded-[30px] border border-brand-primary/30 text-center flex flex-col justify-center col-span-2 sm:col-span-1">
+                          <p className="text-[9px] text-brand-primary font-black uppercase mb-1">👑 אלוף החודש</p>
+                          <p className="text-xs font-black text-white truncate px-1">{championTrainee.name}</p>
+                          <p className="text-lg font-black text-brand-primary">{championTrainee.count}</p>
+                      </div>
+                  </div>
+              )}
+
               <div className="flex flex-col gap-4">
                   <div className="flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-2">
                       <button 
@@ -456,7 +485,7 @@ const App: React.FC = () => {
                                   {new Date(traineeWeekDates[0]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})} - {new Date(traineeWeekDates[6]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})}
                               </p>
                               <span className="text-brand-primary font-black uppercase tracking-[0.2em] bg-brand-primary/10 px-6 py-2 rounded-full text-[11px]">
-                                  {traineeWeekOffset === 0 ? 'לו"ז נוכחי' : traineeWeekOffset === 1 ? 'לו"ז שבוע הבא' : `שבוע ${traineeWeekOffset > 0 ? '+' : ''}${traineeWeekOffset}`}
+                                  {traineeWeekOffset === 0 ? 'לו"ז קרוב' : `שבוע ${traineeWeekOffset > 0 ? '+' : ''}${traineeWeekOffset}`}
                               </span>
                           </div>
                           <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
@@ -522,6 +551,62 @@ const App: React.FC = () => {
               </div>
           </div>
       </div>
+
+      {viewingSession && (
+          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl animate-install-overlay-animation">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl text-right overflow-y-auto no-scrollbar" dir="rtl">
+                  <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
+                      <h3 className="text-3xl font-black text-white italic uppercase">פרטי אימון 👟</h3>
+                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
+                  </div>
+                  <div className="space-y-8">
+                      <div>
+                          <p className="text-brand-primary font-black text-4xl italic uppercase">{viewingSession.type}</p>
+                          <div className="flex gap-4 items-center mt-2">
+                             <p className="text-white font-black text-xl">{new Date(viewingSession.date).toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'numeric' })} בשעה {viewingSession.time}</p>
+                             {weatherData[viewingSession.date]?.hourly?.[viewingSession.time.split(':')[0]] && (
+                                 <div className="flex items-center gap-1 bg-gray-800 px-3 py-1 rounded-full border border-white/10">
+                                     <span>{getWeatherIcon(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].weatherCode)}</span>
+                                     <span className="text-xs font-black text-white">{Math.round(weatherData[viewingSession.date].hourly![viewingSession.time.split(':')[0]].temp)}°</span>
+                                 </div>
+                             )}
+                          </div>
+                          <p className="text-gray-500 font-black mt-1">📍 {viewingSession.location}</p>
+                      </div>
+                      
+                      {viewingSession.description && (
+                          <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-6 rounded-l-[30px]">
+                              <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן:</p>
+                              <p className="text-white text-lg font-bold leading-relaxed">{viewingSession.description}</p>
+                          </div>
+                      )}
+
+                      <div className="space-y-4">
+                          <h5 className="text-gray-500 font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</h5>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                              {viewingSession.registeredPhoneNumbers.map(phone => {
+                                  const user = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
+                                  return (
+                                      <div key={phone} className="bg-gray-800/40 p-3 rounded-2xl flex items-center gap-3 border border-white/5">
+                                          <div className="w-8 h-8 rounded-full bg-gray-900 flex items-center justify-center font-black text-[10px]" style={{ color: user?.userColor || '#A3E635', border: `1px solid ${user?.userColor || '#A3E635'}30` }}>{user?.fullName.charAt(0) || '?'}</div>
+                                          <span className="text-white text-xs font-bold truncate">{user?.displayName || user?.fullName || 'מתאמן'}</span>
+                                      </div>
+                                  );
+                              })}
+                              {viewingSession.registeredPhoneNumbers.length === 0 && (
+                                  <p className="text-gray-600 italic text-sm col-span-full">עדיין אין נרשמים לאימון זה.</p>
+                              )}
+                          </div>
+                      </div>
+
+                      <div className="pt-6 border-t border-white/5 flex gap-4">
+                          <Button onClick={()=>setViewingSession(null)} className="flex-1 rounded-[30px] py-5 font-black italic uppercase">סגור</Button>
+                          <button onClick={() => navigateToLocation(locations.find(l => l.name === viewingSession?.location)?.address || viewingSession?.location || '')} className="flex-1 rounded-[30px] bg-blue-600/20 text-blue-400 font-black italic uppercase border border-blue-500/20">ניווט Waze</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {showProfile && currentUser && (
           <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto no-scrollbar animate-install-overlay-animation">
