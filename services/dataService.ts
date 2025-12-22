@@ -197,14 +197,20 @@ export const dataService = {
   },
 
   saveAppConfig: async (config: AppConfig): Promise<void> => {
+      // Always update local storage first as a safety measure
       localStorage.setItem('niv_app_config', JSON.stringify(config));
+      
       if (supabase) {
-          const { error } = await supabase.from('config_general').upsert({ id: 'main', ...config });
+          // Using explicit id 'main' and handling conflict for robust updates
+          const { error } = await supabase
+            .from('config_general')
+            .upsert({ id: 'main', ...config }, { onConflict: 'id' });
+            
           if (error) {
-              console.error("Supabase saveAppConfig Error:", error.message);
-              // Check for common schema issues like length constraints
+              console.error("Supabase saveAppConfig Detailed Error:", error);
+              // Check if it's a field size limit (Postgres error 22001)
               if (error.code === '22001') {
-                  console.warn("Detected string length error. The text might be too long for the database column.");
+                  throw new Error("הטקסט ארוך מדי עבור בסיס הנתונים. נסה לקצר מעט.");
               }
               throw error;
           }

@@ -6,7 +6,6 @@ import { SessionCard } from './SessionCard';
 import { dataService } from '../services/dataService';
 import { getWeatherIcon } from '../services/weatherService';
 
-// Added helper function to normalize phone numbers for comparison within AdminPanel
 const normalizePhone = (phone: string): string => {
     if (!phone) return '';
     let cleaned = phone.replace(/\D/g, '');
@@ -97,25 +96,51 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   }, [props.users, searchTerm, userSortBy, props.getStatsForUser]);
 
   const handleSaveAllSettings = async () => {
-    setSaveIndicator('שומר הגדרות...');
+    setSaveIndicator('מתחיל שמירה...');
     setIsSaving(true);
-    let errorCount = 0;
+    let failures: string[] = [];
     
     try {
-        // Attempt category by category to ensure partial success and better error reporting
-        try { await props.onUpdateAppConfig(localAppConfig); } catch (e) { console.error("Config save failed:", e); errorCount++; }
-        try { await dataService.saveLocations(localLocations); } catch (e) { console.error("Locations save failed:", e); errorCount++; }
-        try { await dataService.saveWorkoutTypes(localWorkoutTypes); } catch (e) { console.error("Workout types save failed:", e); errorCount++; }
-        try { await dataService.saveQuotes(localQuotes); } catch (e) { console.error("Quotes save failed:", e); errorCount++; }
-
-        if (errorCount === 0) {
-            setSaveIndicator('הכל נשמר בהצלחה ✓');
-        } else if (errorCount < 4) {
-            setSaveIndicator('חלק מהנתונים נשמרו, בדוק לוגים ⚠️');
-        } else {
-            setSaveIndicator('שגיאת שמירה חמורה ❌');
+        try {
+            await props.onUpdateAppConfig(localAppConfig);
+        } catch (e: any) {
+            console.error("Config save failed:", e);
+            failures.push("הגדרות כלליות (ייתכן טקסט ארוך מדי)");
         }
-        setTimeout(() => setSaveIndicator(null), 4000);
+
+        try {
+            await dataService.saveLocations(localLocations);
+        } catch (e) {
+            console.error("Locations save failed:", e);
+            failures.push("מיקומים");
+        }
+
+        try {
+            await dataService.saveWorkoutTypes(localWorkoutTypes);
+        } catch (e) {
+            console.error("Workout types save failed:", e);
+            failures.push("סוגי אימונים");
+        }
+
+        try {
+            await dataService.saveQuotes(localQuotes);
+        } catch (e) {
+            console.error("Quotes save failed:", e);
+            failures.push("ציטוטים");
+        }
+
+        if (failures.length === 0) {
+            setSaveIndicator('כל הנתונים נשמרו בהצלחה! ✓');
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 2000);
+        } else {
+            setSaveIndicator(`שגיאה ב: ${failures.join(', ')} ⚠️`);
+        }
+        
+        setTimeout(() => setSaveIndicator(null), 5000);
+    } catch (e) {
+        setSaveIndicator('שגיאה חריגה בתהליך השמירה ❌');
+        setTimeout(() => setSaveIndicator(null), 5000);
     } finally {
         setIsSaving(false);
     }
@@ -124,6 +149,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const currentModalHour = sessionDraft ? parseInt(sessionDraft.time.split(':')[0]) : 12;
   const currentModalWeather = sessionDraft ? props.weatherData?.[sessionDraft.date]?.hourly?.[sessionDraft.time.split(':')[0]] : null;
   const isNightModal = currentModalHour >= 18 || currentModalHour < 6;
+
+  const handleSendWhatsAppHighlights = (phone: string, traineeName: string) => {
+      if (!sessionDraft) return;
+      const dateStr = new Date(sessionDraft.date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
+      const dayName = new Date(sessionDraft.date).toLocaleDateString('he-IL', { weekday: 'long' });
+      const highlights = sessionDraft.description || 'אין דגשים מיוחדים';
+      
+      const message = `היי ${traineeName}, רציתי לעדכן אותך בדגשים לאימון ${sessionDraft.type} ביום ${dayName} ה-${dateStr} בשעה ${sessionDraft.time}:\n\n*דגשים מהמאמן:* ${highlights}\n\nנתראה שם! 💪`;
+      
+      const url = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+      window.open(url, '_blank');
+  };
 
   return (
     <div className="bg-brand-black min-h-screen">
@@ -248,8 +285,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 🏋️</h3>
                         <div className="space-y-3">
-                            <label className="text-[10px] text-red-500 font-black uppercase block italic">הודעה דחופה באתר</label>
-                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic outline-none" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה דחופה..." />
+                            <label className="text-[10px] text-red-500 font-black uppercase block italic">הודעה דחופה באתר (יופיע בראש הלו"ז)</label>
+                            <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic outline-none" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה דחופה שתוצג למתאמנים..." />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[10px] text-brand-primary font-black uppercase block italic">טקסט אודות (ביוגרפיה)</label>
@@ -257,7 +294,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                         <div className="space-y-3 border-t border-white/5 pt-8">
                             <label className="text-[10px] text-purple-400 font-black uppercase block italic">נוסח הצהרת בריאות לחתום 🖋️</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-64 italic leading-relaxed focus:border-purple-500 transition-all outline-none text-sm" value={localAppConfig.healthDeclarationTemplate || ''} onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} placeholder="הכנס כאן את הטקסט המשפטי של הצהרת הבריאות..." />
+                            <p className="text-[8px] text-gray-500 mb-2 italic">זהו הנוסח שיופיע למתאמנים בעת חתימה על ההצהרה.</p>
+                            <textarea 
+                                className="w-full bg-gray-900/60 border border-purple-500/20 p-6 rounded-[30px] text-white font-bold h-64 italic leading-relaxed focus:border-purple-500 transition-all outline-none text-sm shadow-inner" 
+                                value={localAppConfig.healthDeclarationTemplate || ''} 
+                                onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} 
+                                placeholder="הכנס כאן את הטקסט המשפטי של הצהרת הבריאות..." 
+                            />
                         </div>
                     </div>
                 )}
@@ -341,8 +384,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 )}
                 
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
-                    {saveIndicator && <p className={`text-xs font-black uppercase tracking-widest ${saveIndicator.includes('✓') ? 'text-brand-primary' : 'text-red-500'} animate-pulse`}>{saveIndicator}</p>}
-                    <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic bg-red-600 shadow-xl tracking-tighter" isLoading={isSaving}>שמירת הגדרות ושינויים ✅</Button>
+                    {saveIndicator && <p className={`text-xs font-black uppercase tracking-widest ${saveIndicator.includes('✓') ? 'text-brand-primary' : 'text-red-500'} animate-pulse text-center max-w-[250px]`}>{saveIndicator}</p>}
+                    <Button onClick={handleSaveAllSettings} className={`w-full py-6 rounded-[40px] text-xl font-black italic shadow-xl tracking-tighter transition-all ${saveSuccess ? 'bg-green-600' : 'bg-red-600'}`} isLoading={isSaving}>
+                        {saveSuccess ? 'נשמר בהצלחה! ✓' : 'שמירת הגדרות ושינויים ✅'}
+                    </Button>
                     <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black text-sm uppercase opacity-60 italic">חזרה ללו"ז הכללי</Button>
                 </div>
             </div>
@@ -369,9 +414,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <div key={phone} className="flex justify-between items-center p-4 rounded-2xl bg-gray-900/50 border border-white/5 hover:border-brand-primary/30 transition-all">
                                     <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center font-black text-[10px]" style={{color: user?.userColor || 'white'}}>{user?.fullName.charAt(0) || '?'}</div>
-                                        <span className="text-white text-sm font-bold italic">{user?.fullName || phone}</span>
+                                        <span className="text-white text-sm font-bold italic">{user?.displayName || user?.fullName || phone}</span>
                                     </div>
                                     <div className="flex gap-2">
+                                        {/* WHATSAPP HIGHLIGHTS BUTTON */}
+                                        <button 
+                                            onClick={() => handleSendWhatsAppHighlights(phone, user?.displayName || user?.fullName || 'מתאמן')}
+                                            className="p-2 bg-green-500/10 text-green-500 rounded-xl hover:bg-green-500/20 transition-all"
+                                            title="שלח דגשים בוואטסאפ"
+                                        >
+                                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                            </svg>
+                                        </button>
                                         <button onClick={() => {
                                             const curr = sessionDraft.attendedPhoneNumbers || [];
                                             const up = curr.includes(phone) ? curr.filter(p => p !== phone) : [...curr, phone];
@@ -395,6 +450,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase italic">תאריך</label><input type="date" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none border border-white/5" value={sessionDraft.date} onChange={e=>setSessionDraft({...sessionDraft, date: e.target.value})} /></div>
                             <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase italic">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none border border-white/5" value={sessionDraft.time} onChange={e=>setSessionDraft({...sessionDraft, time: e.target.value})} /></div>
                         </div>
+
+                        {/* HIGHLIGHTS EDITOR */}
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-brand-primary font-black mb-1 block uppercase italic tracking-widest">דגשי המאמן לאימון (Highlights) 👟</label>
+                            <textarea 
+                                className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none border border-white/5 focus:border-brand-primary transition-all h-32 italic leading-tight shadow-inner" 
+                                value={sessionDraft.description || ''} 
+                                onChange={e=>setSessionDraft({...sessionDraft, description: e.target.value})}
+                                placeholder="לדוגמה: להביא מגבת ומים, אימון אינטרוולים עצים..."
+                            />
+                        </div>
+
                         <div className="space-y-4 pt-4 border-t border-white/5">
                             <div className="flex items-center gap-4 bg-gray-800/20 p-4 rounded-3xl border border-white/5 hover:border-blue-500/30 transition-all cursor-pointer" onClick={()=>setSessionDraft({...sessionDraft, isZoomSession: !sessionDraft.isZoomSession})}>
                                 <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500" checked={!!sessionDraft.isZoomSession} readOnly />

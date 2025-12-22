@@ -358,6 +358,20 @@ const App: React.FC = () => {
             />
         ) : (
             <div className="space-y-10 pb-20">
+              {/* URGENT MESSAGE BANNER */}
+              {appConfig.urgentMessage && showUrgent && (
+                <div className="bg-red-600/20 border-2 border-red-600 p-6 rounded-[40px] mb-8 flex items-center justify-between gap-4 animate-pulse relative overflow-hidden">
+                  <div className="flex items-center gap-4">
+                    <span className="text-3xl">🚨</span>
+                    <div>
+                        <p className="text-red-500 font-black text-[10px] uppercase tracking-widest mb-1">הודעה דחופה מהמאמן</p>
+                        <p className="text-white font-black text-lg sm:text-xl italic leading-tight">{appConfig.urgentMessage}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setShowUrgent(false)} className="text-red-500/50 hover:text-red-500 p-2 text-xl">✕</button>
+                </div>
+              )}
+
               {currentUser && (
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div className="bg-gray-800/40 p-4 rounded-[30px] border border-white/5 text-center flex flex-col justify-center h-28">
@@ -514,7 +528,7 @@ const App: React.FC = () => {
                       {viewingSession.description && (
                           <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-6 rounded-l-[30px]">
                               <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן:</p>
-                              <p className="text-white text-lg font-bold italic leading-relaxed">{viewingSession.description}</p>
+                              <p className="text-white text-lg font-bold italic leading-relaxed whitespace-pre-wrap">{viewingSession.description}</p>
                           </div>
                       )}
 
