@@ -65,18 +65,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   };
 
   const weekDates = useMemo(() => {
-    if (weekOffset === 0) {
-        return Array.from({length: 7}, (_, i) => {
-            const d = new Date(); d.setDate(d.getDate() + i);
-            return d.toISOString().split('T')[0];
-        });
-    } else {
-        const sun = new Date(); sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
-        return Array.from({length: 7}, (_, i) => {
-            const d = new Date(sun); d.setDate(sun.getDate() + i);
-            return d.toISOString().split('T')[0];
-        });
-    }
+    // Coach View Fix: Always show full Sunday to Saturday week to allow editing past sessions
+    const sun = new Date();
+    sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
+    return Array.from({length: 7}, (_, i) => {
+        const d = new Date(sun);
+        d.setDate(sun.getDate() + i);
+        return d.toISOString().split('T')[0];
+    });
   }, [weekOffset]);
 
   const sortedUsers = useMemo(() => {
@@ -129,7 +125,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 <div className="flex gap-2 p-1 bg-gray-900/60 rounded-2xl overflow-x-auto no-scrollbar border border-white/5">
                     {(['connections', 'quotes', 'infrastructure', 'general'] as const).map(s => (
                         <button key={s} onClick={() => setSettingsSection(s)} className={`flex-1 py-2.5 px-4 text-[11px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${settingsSection === s ? 'bg-gray-800 text-white' : 'text-gray-600'}`}>
-                            {s === 'general' ? 'כללי' : s === 'infrastructure' ? 'מיקומים' : s === 'quotes' ? 'ציטוטים' : 'חיבורים'}
+                            {s === 'general' ? 'כללי' : s === 'infrastructure' ? 'מיקומים/סוגים' : s === 'quotes' ? 'ציטוטים' : 'חיבורים'}
                         </button>
                     ))}
                 </div>
@@ -150,7 +146,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 </div>
              </div>
              <div className="grid grid-cols-1">
-                <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0], date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false, manualHasStarted: null })} className="py-7 rounded-[45px] bg-red-600 text-xl font-black italic">+ אימון חדש</Button>
+                <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0], date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false, manualHasStarted: null })} className="py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl tracking-tighter">+ אימון חדש</Button>
              </div>
              <div className="space-y-12">
               {weekDates.map(date => {
@@ -159,11 +155,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   return (
                       <div key={date}>
                           <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-4">
-                              <h4 className="text-gray-500 font-black text-4xl uppercase">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
+                              <h4 className="text-gray-500 font-black text-4xl uppercase tracking-widest">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
                               <p className="text-gray-500 font-black text-4xl opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
                           </div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} isAdmin={true} weather={props.weatherData?.[s.date]} />)}
+                            {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} isAdmin={true} locations={props.locations} weather={props.weatherData?.[s.date]} />)}
                           </div>
                       </div>
                   );
@@ -183,7 +179,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         {id: 'payment', label: 'תשלום'},
                         {id: 'health', label: 'הצהרה'}
                     ].map(opt => (
-                        <button key={opt.id} onClick={() => setUserSortBy(opt.id as any)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap border transition-all ${userSortBy === opt.id ? 'bg-red-600 text-white border-red-600' : 'bg-gray-900 text-gray-500 border-white/5'}`}>
+                        <button key={opt.id} onClick={() => setUserSortBy(opt.id as any)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap border transition-all ${userSortBy === opt.id ? 'bg-red-600 text-white border-red-600 shadow-lg shadow-red-600/20' : 'bg-gray-900 text-gray-500 border-white/5'}`}>
                             {opt.label}
                         </button>
                     ))}
@@ -229,7 +225,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             <div className="space-y-10 mt-6">
                 {settingsSection === 'general' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי</h3>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 👤</h3>
                         <div className="space-y-3">
                             <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
                             <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic outline-none" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה דחופה..." />
@@ -238,12 +234,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (ביוגרפיה)</label>
                             <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-brand-primary transition-all outline-none" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} />
                         </div>
+                        <div className="space-y-3">
+                            <label className="text-[10px] text-purple-400 font-black uppercase block">נוסח הצהרת בריאות 🖋️</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-purple-500 transition-all outline-none text-sm" value={localAppConfig.healthDeclarationTemplate || ''} onChange={e => setLocalAppConfig({...localAppConfig, healthDeclarationTemplate: e.target.value})} placeholder="הכנס כאן את הנוסח של הצהרת הבריאות שעל המתאמנים לחתום..." />
+                        </div>
+                    </div>
+                )}
+
+                {settingsSection === 'infrastructure' && (
+                    <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-12 shadow-2xl">
+                        <div className="space-y-8">
+                            <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">ניהול מיקומים 📍</h3>
+                            {localLocations.map((loc, idx) => (
+                                <div key={loc.id} className="p-6 bg-gray-900/60 rounded-[35px] border border-white/5 space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-gray-500 font-black text-[10px] uppercase">מיקום #{idx + 1}</span>
+                                        <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500 text-xs font-black">מחק ✕</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <input className="bg-gray-800 border border-white/5 p-4 rounded-2xl text-white font-bold" value={loc.name} placeholder="שם המקום" onChange={e => {
+                                            const newLocs = [...localLocations];
+                                            newLocs[idx].name = e.target.value;
+                                            setLocalLocations(newLocs);
+                                        }} />
+                                        <input className="bg-gray-800 border border-white/5 p-4 rounded-2xl text-white text-xs font-bold" value={loc.address || ''} placeholder="כתובת מלאה (Waze)" onChange={e => {
+                                            const newLocs = [...localLocations];
+                                            newLocs[idx].address = e.target.value;
+                                            setLocalLocations(newLocs);
+                                        }} />
+                                    </div>
+                                </div>
+                            ))}
+                            <Button onClick={() => setLocalLocations([...localLocations, {id: Date.now().toString(), name: '', address: ''}])} variant="outline" className="w-full rounded-[30px] border-dashed py-4">+ הוסף מיקום</Button>
+                        </div>
+
+                        <div className="space-y-8 border-t border-white/5 pt-12">
+                            <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">סוגי אימונים 👟</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                {localWorkoutTypes.map((type, idx) => (
+                                    <div key={idx} className="flex gap-2 bg-gray-900/60 p-4 rounded-[25px] border border-white/5 items-center">
+                                        <input className="flex-1 bg-transparent text-white font-black italic outline-none" value={type} onChange={e => {
+                                            const newTypes = [...localWorkoutTypes];
+                                            newTypes[idx] = e.target.value;
+                                            setLocalWorkoutTypes(newTypes);
+                                        }} />
+                                        <button onClick={() => setLocalWorkoutTypes(localWorkoutTypes.filter((_, i) => i !== idx))} className="text-red-500">✕</button>
+                                    </div>
+                                ))}
+                            </div>
+                            <Button onClick={() => setLocalWorkoutTypes([...localWorkoutTypes, 'אימון חדש'])} variant="outline" className="w-full rounded-[30px] border-dashed py-4">+ הוסף סוג אימון</Button>
+                        </div>
                     </div>
                 )}
 
                 {settingsSection === 'quotes' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">משפטי מוטיבציה</h3>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">משפטי מוטיבציה 💪</h3>
                         <div className="space-y-4">
                             {localQuotes.map((q, idx) => (
                                 <div key={q.id} className="flex gap-2">
@@ -262,7 +308,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                 {settingsSection === 'connections' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים</h3>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים ⚡</h3>
                         <div className="space-y-6">
                             <div className="p-6 bg-gray-900/60 rounded-[35px] border border-white/5">
                                 <label className="text-[10px] text-gray-500 font-black mb-2 block uppercase">סיסמת ניהול (Admin Password)</label>
@@ -287,8 +333,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
               <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-4xl border border-white/10 text-right shadow-3xl" dir="rtl">
                   <div className="flex justify-between mb-8 border-b border-white/5 pb-5">
                       <div className="flex items-center gap-4">
-                          <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון</h3>
-                          {currentModalWeather && <span className="text-brand-primary font-black">{Math.round(currentModalWeather.temp)}° {getWeatherIcon(currentModalWeather.weatherCode, isNightModal)}</span>}
+                          <h3 className="text-3xl font-black text-white italic uppercase">ניהול אימון ⚙️</h3>
+                          {currentModalWeather && <span className="text-brand-primary font-black bg-brand-primary/10 px-3 py-1 rounded-full">{Math.round(currentModalWeather.temp)}° {getWeatherIcon(currentModalWeather.weatherCode, isNightModal)}</span>}
                       </div>
                       <button onClick={()=>setAttendanceSession(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
@@ -317,16 +363,30 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       </div>
                       <div className="space-y-5">
                         <div className="grid grid-cols-2 gap-4">
-                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">סוג</label><select className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.type} onChange={e=>setSessionDraft({...sessionDraft, type: e.target.value})}>{props.workoutTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">מיקום</label><select className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.location} onChange={e=>setSessionDraft({...sessionDraft, location: e.target.value})}>{props.locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}</select></div>
+                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">סוג</label><select className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none" value={sessionDraft.type} onChange={e=>setSessionDraft({...sessionDraft, type: e.target.value})}>{props.workoutTypes.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">מיקום</label><select className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none" value={sessionDraft.location} onChange={e=>setSessionDraft({...sessionDraft, location: e.target.value})}>{props.locations.map(l => <option key={l.id} value={l.name}>{l.name}</option>)}</select></div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
-                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">תאריך</label><input type="date" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.date} onChange={e=>setSessionDraft({...sessionDraft, date: e.target.value})} /></div>
-                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold" value={sessionDraft.time} onChange={e=>setSessionDraft({...sessionDraft, time: e.target.value})} /></div>
+                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">תאריך</label><input type="date" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none" value={sessionDraft.date} onChange={e=>setSessionDraft({...sessionDraft, date: e.target.value})} /></div>
+                            <div><label className="text-[10px] text-gray-500 font-black mb-1 block uppercase">שעה</label><input type="time" className="w-full bg-gray-800 p-5 rounded-3xl text-white font-bold outline-none" value={sessionDraft.time} onChange={e=>setSessionDraft({...sessionDraft, time: e.target.value})} /></div>
                         </div>
-                        <div className="flex items-center gap-4 bg-gray-800/20 p-4 rounded-3xl border border-white/5">
-                            <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
-                            <label htmlFor="isCancelledDraft" className="text-red-500 text-xs font-black uppercase">אימון מבוטל ❌</label>
+                        <div className="space-y-4 pt-4 border-t border-white/5">
+                            <div className="flex items-center gap-4 bg-gray-800/20 p-4 rounded-3xl border border-white/5">
+                                <input type="checkbox" id="isZoomDraft" className="w-6 h-6 accent-blue-500" checked={!!sessionDraft.isZoomSession} onChange={e=>setSessionDraft({...sessionDraft, isZoomSession: e.target.checked})} />
+                                <label htmlFor="isZoomDraft" className="text-blue-400 text-xs font-black uppercase">אימון זום 📹</label>
+                            </div>
+                            <div className="flex items-center gap-4 bg-gray-800/20 p-4 rounded-3xl border border-white/5">
+                                <input type="checkbox" id="isCancelledDraft" className="w-6 h-6 accent-red-500" checked={!!sessionDraft.isCancelled} onChange={e=>setSessionDraft({...sessionDraft, isCancelled: e.target.checked})} />
+                                <label htmlFor="isCancelledDraft" className="text-red-500 text-xs font-black uppercase">אימון מבוטל ❌</label>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] text-gray-500 font-black uppercase block">סטטוס תצוגה (מתקיים)</label>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setSessionDraft({...sessionDraft, manualHasStarted: null})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${sessionDraft.manualHasStarted === null ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-500'}`}>אוטומטי (3ש')</button>
+                                    <button onClick={() => setSessionDraft({...sessionDraft, manualHasStarted: true})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${sessionDraft.manualHasStarted === true ? 'bg-brand-primary text-black' : 'bg-gray-800 text-gray-500'}`}>פעיל ✓</button>
+                                    <button onClick={() => setSessionDraft({...sessionDraft, manualHasStarted: false})} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase ${sessionDraft.manualHasStarted === false ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-500'}`}>מושבת ✗</button>
+                                </div>
+                            </div>
                         </div>
                       </div>
                   </div>
@@ -345,20 +405,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto">
               <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl text-right" dir="rtl">
                   <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
-                      <h3 className="text-3xl font-black text-white italic uppercase">עריכת מתאמן</h3>
+                      <h3 className="text-3xl font-black text-white italic uppercase">עריכת מתאמן 👤</h3>
                       <button onClick={()=>setViewingTrainee(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
                   <div className="space-y-10">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-[9px] text-gray-500 font-black uppercase">סטטוס תשלום</label>
-                            <select className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold" value={viewingTrainee.paymentStatus} onChange={e => props.onUpdateUser({...viewingTrainee, paymentStatus: e.target.value as PaymentStatus})}>
+                            <select className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold outline-none" value={viewingTrainee.paymentStatus} onChange={e => props.onUpdateUser({...viewingTrainee, paymentStatus: e.target.value as PaymentStatus})}>
                                 {Object.values(PaymentStatus).map(s => <option key={s} value={s}>{s === PaymentStatus.PAID ? 'שולם' : s === PaymentStatus.PENDING ? 'ממתין' : 'באיחור'}</option>)}
                             </select>
                         </div>
                         <div>
-                            <label className="text-[9px] text-gray-500 font-black uppercase">מחיקה</label>
-                            <Button variant="danger" className="w-full py-4 rounded-2xl" onClick={() => { if(confirm('למחוק מתאמן?')) { props.onDeleteUser(viewingTrainee.id); setViewingTrainee(null); } }}>מחק לצמיתות</Button>
+                            <label className="text-[9px] text-gray-500 font-black uppercase">ניהול פרופיל</label>
+                            <Button variant="danger" className="w-full py-4 rounded-2xl" onClick={() => { if(confirm('למחוק מתאמן? הפעולה לא ניתנת לביטול.')) { props.onDeleteUser(viewingTrainee.id); setViewingTrainee(null); } }}>מחק לצמיתות 🗑️</Button>
                         </div>
                       </div>
                       <Button onClick={()=>setViewingTrainee(null)} className="w-full rounded-[30px] py-6 font-black italic uppercase">סגור</Button>
