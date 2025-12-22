@@ -192,14 +192,12 @@ const App: React.FC = () => {
 
   const traineeWeekDates = useMemo(() => {
     if (traineeWeekOffset === 0) {
-        // ROLLING 7 DAYS FROM TODAY (DEFAULT FOR EVERYONE ON FIRST ENTRY)
         return Array.from({length: 7}, (_, i) => {
             const d = new Date();
             d.setDate(d.getDate() + i);
             return d.toISOString().split('T')[0];
         });
     } else {
-        // CALENDAR WEEKS FOR OTHERS
         const sun = new Date();
         sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
         return Array.from({length: 7}, (_, i) => {
@@ -292,6 +290,13 @@ const App: React.FC = () => {
       setIdNumberInput('');
   };
 
+  const handleLogout = () => {
+      localStorage.removeItem('niv_app_current_phone');
+      setCurrentUserPhone(null);
+      setShowProfile(false);
+      navigateTo('landing');
+  };
+
   if (isLanding) {
     return (
       <div className="min-h-screen bg-brand-black flex flex-col items-center justify-center p-8 text-center relative overflow-hidden cursor-pointer" onClick={() => navigateTo('work')}>
@@ -316,8 +321,8 @@ const App: React.FC = () => {
           <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-4">
                   {currentUser && !isAdminMode && (
-                      <div className="text-right cursor-pointer" onClick={() => setShowProfile(true)}>
-                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-left">פרופיל אישי</p>
+                      <div className="text-right cursor-pointer group" onClick={() => setShowProfile(true)}>
+                          <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-left group-hover:text-brand-primary transition-colors">פרופיל אישי</p>
                           <p className="text-white font-black italic text-sm" style={{ color: currentUser.userColor || 'white' }}>{currentUser.displayName || currentUser.fullName}</p>
                       </div>
                   )}
@@ -381,7 +386,7 @@ const App: React.FC = () => {
                       <button onClick={() => setTraineeWeekOffset(1)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase transition-all ${traineeWeekOffset === 1 ? 'bg-brand-primary text-black shadow-lg shadow-brand-primary/20' : 'bg-gray-800/50 text-gray-500'}`}>שבוע הבא</button>
                   </div>
                   <div className="bg-gray-800/40 p-5 rounded-[40px] border border-white/5 flex justify-between items-center px-4">
-                      <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary">←</button>
+                      <button onClick={()=>setTraineeWeekOffset(p=>p-1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">←</button>
                       <div className="text-center">
                           <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">
                               {new Date(traineeWeekDates[0]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})} - {new Date(traineeWeekDates[6]).toLocaleDateString('he-IL', {day:'numeric', month:'short'})}
@@ -390,7 +395,7 @@ const App: React.FC = () => {
                               {traineeWeekOffset === 0 ? 'לו"ז קרוב' : `שבוע ${traineeWeekOffset > 0 ? '+' : ''}${traineeWeekOffset}`}
                           </span>
                       </div>
-                      <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary">→</button>
+                      <button onClick={()=>setTraineeWeekOffset(p=>p+1)} className="text-white text-2xl p-2 hover:text-brand-primary transition-colors">→</button>
                   </div>
               </div>
 
@@ -423,12 +428,81 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {showProfile && currentUser && (
+          <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto no-scrollbar" dir="rtl">
+              <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl text-right">
+                  <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center font-black text-2xl border-2" style={{borderColor: currentUser.userColor || 'white', color: currentUser.userColor || 'white'}}>{currentUser.fullName.charAt(0)}</div>
+                        <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">פרופיל אישי 👤</h3>
+                      </div>
+                      <button onClick={()=>setShowProfile(false)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
+                  </div>
+
+                  <div className="space-y-10">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-gray-500 font-black uppercase italic">שם לתצוגה</label>
+                            <input 
+                                className="w-full bg-gray-800 p-4 rounded-2xl text-white font-bold border border-white/5 focus:border-brand-primary outline-none transition-all" 
+                                value={currentUser.displayName || currentUser.fullName} 
+                                onChange={(e) => handleUpdateProfile({...currentUser, displayName: e.target.value})}
+                                placeholder="איך תרצה שנקרא לך?"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-[10px] text-gray-500 font-black uppercase italic">צבע פרופיל</label>
+                            <div className="flex gap-2 justify-end py-2">
+                                {PRESET_COLORS.map(c => (
+                                    <button 
+                                        key={c} 
+                                        onClick={() => handleUpdateProfile({...currentUser, userColor: c})}
+                                        className={`w-8 h-8 rounded-full border-2 transition-transform hover:scale-110 ${currentUser.userColor === c ? 'scale-125 border-white shadow-lg' : 'border-transparent opacity-60'}`}
+                                        style={{ backgroundColor: c }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-gray-800/20 p-6 rounded-[40px] border border-white/5 shadow-inner space-y-4">
+                          <h4 className="text-brand-primary font-black uppercase italic tracking-widest text-xs">הסטטיסטיקה שלי 🔥</h4>
+                          <div className="grid grid-cols-3 gap-4">
+                             <div className="text-center">
+                                <p className="text-[8px] text-gray-500 font-black uppercase">החודש</p>
+                                <p className="text-3xl font-black text-white">{stats.monthly}</p>
+                             </div>
+                             <div className="text-center">
+                                <p className="text-[8px] text-gray-500 font-black uppercase">שיא</p>
+                                <p className="text-3xl font-black text-white">{stats.record}</p>
+                             </div>
+                             <div className="text-center">
+                                <p className="text-[8px] text-gray-500 font-black uppercase">רצף</p>
+                                <p className="text-3xl font-black text-orange-400">{stats.streak}</p>
+                             </div>
+                          </div>
+                      </div>
+
+                      <div className="pt-8 border-t border-white/5 flex flex-col gap-4">
+                          <Button onClick={()=>setShowProfile(false)} className="w-full rounded-[30px] py-6 font-black italic uppercase tracking-widest bg-white text-black hover:bg-gray-200 shadow-xl transition-all">סגור ורענן</Button>
+                          <button 
+                            onClick={handleLogout} 
+                            className="text-red-500 font-black uppercase italic text-xs py-4 hover:underline transition-all"
+                          >
+                            התנתק מהמערכת 🚪
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {viewingSession && !isAdminMode && (
           <div className="fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl overflow-y-auto" dir="rtl">
               <div className="bg-gray-900 p-8 sm:p-12 rounded-[60px] w-full max-w-2xl border border-white/10 shadow-3xl text-right">
                   <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
                       <h3 className="text-3xl font-black text-white italic uppercase">פרטי אימון 👟</h3>
-                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl">✕</button>
+                      <button onClick={()=>setViewingSession(null)} className="text-gray-500 text-4xl hover:text-white transition-colors">✕</button>
                   </div>
                   <div className="space-y-8">
                       <div>
@@ -440,7 +514,7 @@ const App: React.FC = () => {
                       {viewingSession.description && (
                           <div className="bg-brand-primary/10 border-r-4 border-brand-primary p-6 rounded-l-[30px]">
                               <p className="text-brand-primary text-[10px] font-black uppercase mb-2">דגשי המאמן:</p>
-                              <p className="text-white text-lg font-bold italic">{viewingSession.description}</p>
+                              <p className="text-white text-lg font-bold italic leading-relaxed">{viewingSession.description}</p>
                           </div>
                       )}
 
@@ -460,7 +534,7 @@ const App: React.FC = () => {
                       </div>
 
                       <div className="pt-6 border-t border-white/5 flex gap-4">
-                          <Button onClick={()=>setViewingSession(null)} className="flex-1 rounded-[30px] py-5 font-black italic uppercase">סגור</Button>
+                          <Button onClick={()=>setViewingSession(null)} className="flex-1 rounded-[30px] py-5 font-black italic uppercase shadow-xl">סגור</Button>
                       </div>
                   </div>
               </div>
@@ -471,15 +545,15 @@ const App: React.FC = () => {
           <div className="fixed inset-0 bg-brand-black z-[1000] flex flex-col p-6 overflow-y-auto no-scrollbar text-right" dir="rtl">
               <div className="max-w-2xl mx-auto w-full space-y-8 py-10">
                   <h3 className="text-4xl font-black text-brand-primary italic uppercase mb-10">הצהרת בריאות 🖋️</h3>
-                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/10 text-white text-lg leading-relaxed font-bold whitespace-pre-wrap">
+                  <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/10 text-white text-lg leading-relaxed font-bold whitespace-pre-wrap shadow-inner">
                       {appConfig.healthDeclarationTemplate || 'אני מצהיר בזאת כי מצב בריאותי תקין ומאפשר ביצוע פעילות גופנית מאומצת.'}
                   </div>
                   <div className="space-y-4">
                       <label className="text-gray-500 font-black text-sm uppercase">תעודת זהות</label>
-                      <input type="tel" className="w-full bg-gray-900 p-6 rounded-[30px] text-white font-black text-2xl border border-white/10 focus:border-brand-primary outline-none" value={idNumberInput} onChange={e=>setIdNumberInput(e.target.value)} placeholder="הקש ת.ז מלאה" />
+                      <input type="tel" className="w-full bg-gray-900 p-6 rounded-[30px] text-white font-black text-2xl border border-white/10 focus:border-brand-primary outline-none transition-all" value={idNumberInput} onChange={e=>setIdNumberInput(e.target.value)} placeholder="הקש ת.ז מלאה" />
                   </div>
                   <div className="pt-10">
-                      <Button onClick={handleSignHealth} className="w-full py-8 rounded-[40px] text-2xl font-black italic bg-brand-primary text-black" disabled={!idNumberInput}>חתימה ואישור ✓</Button>
+                      <Button onClick={handleSignHealth} className="w-full py-8 rounded-[40px] text-2xl font-black italic bg-brand-primary text-black shadow-2xl" disabled={!idNumberInput}>חתימה ואישור ✓</Button>
                   </div>
               </div>
           </div>
@@ -491,16 +565,16 @@ const App: React.FC = () => {
               <div className="space-y-6">
                   <div>
                       <label className="text-[10px] text-gray-500 font-black mb-2 block uppercase tracking-widest">מספר טלפון</label>
-                      <input type="tel" className="w-full bg-gray-800 p-6 rounded-[30px] text-white font-black text-xl border border-white/5 focus:border-brand-primary outline-none transition-all" value={loginPhoneInput} onChange={e=>setLoginPhoneInput(e.target.value)} placeholder="05XXXXXXXX" />
+                      <input type="tel" className="w-full bg-gray-800 p-6 rounded-[30px] text-white font-black text-xl border border-white/5 focus:border-brand-primary outline-none transition-all shadow-inner" value={loginPhoneInput} onChange={e=>setLoginPhoneInput(e.target.value)} placeholder="05XXXXXXXX" />
                   </div>
                   {isNewUserLogin && (
                       <div className="animate-pulse">
-                          <label className="text-[10px] text-brand-primary font-black mb-2 block uppercase">שם מלא (משתמש חדש)</label>
-                          <input type="text" className="w-full bg-gray-800 p-6 rounded-[30px] text-white font-black border border-brand-primary outline-none" value={loginNameInput} onChange={e=>setLoginNameInput(e.target.value)} />
+                          <label className="text-[10px] text-brand-primary font-black mb-2 block uppercase italic">שם מלא (משתמש חדש)</label>
+                          <input type="text" className="w-full bg-gray-800 p-6 rounded-[30px] text-white font-black border border-brand-primary outline-none shadow-inner" value={loginNameInput} onChange={e=>setLoginNameInput(e.target.value)} />
                       </div>
                   )}
                   <Button onClick={handleLoginSubmit} className="w-full py-6 rounded-[30px] text-xl font-black italic shadow-2xl bg-brand-primary text-black">המשך ✓</Button>
-                  <button onClick={() => { document.getElementById('login-modal')?.classList.add('hidden'); }} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4">חזרה</button>
+                  <button onClick={() => { document.getElementById('login-modal')?.classList.add('hidden'); }} className="w-full text-center text-gray-600 font-black text-xs uppercase mt-4 hover:text-white transition-colors">חזרה</button>
               </div>
           </div>
       </div>
