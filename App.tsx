@@ -113,7 +113,6 @@ const App: React.FC = () => {
 
   const currentUser = useMemo(() => users.find(u => normalizePhone(u.phone) === normalizePhone(currentUserPhone || '')), [users, currentUserPhone]);
   
-  // Force Health Declaration if missing
   useEffect(() => {
     if (currentUser && !currentUser.healthDeclarationDate && !signingHealth && !isAdminMode && !isLanding) {
         setSigningHealth(true);
@@ -193,12 +192,14 @@ const App: React.FC = () => {
 
   const traineeWeekDates = useMemo(() => {
     if (traineeWeekOffset === 0) {
+        // ROLLING 7 DAYS FROM TODAY (DEFAULT)
         return Array.from({length: 7}, (_, i) => {
             const d = new Date();
             d.setDate(d.getDate() + i);
             return d.toISOString().split('T')[0];
         });
     } else {
+        // CALENDAR WEEKS FOR OTHERS
         const sun = new Date();
         sun.setDate(sun.getDate() - sun.getDay() + (traineeWeekOffset * 7));
         return Array.from({length: 7}, (_, i) => {
@@ -366,7 +367,7 @@ const App: React.FC = () => {
                           <p className="text-[9px] text-gray-500 font-black uppercase mb-1">רצף (3+ בשבוע)</p>
                           <p className="text-2xl font-black text-orange-400">{stats.streak}</p>
                       </div>
-                      <div className="bg-brand-primary/10 p-4 rounded-[30px] border border-brand-primary/30 text-center flex flex-col justify-center h-28">
+                      <div className="bg-brand-primary/10 p-4 rounded-[30px] border border-brand-primary/30 text-center flex flex-col justify-center h-28 border-2 border-brand-primary/60">
                           <p className="text-[9px] text-brand-primary font-black uppercase mb-1">👑 אלוף החודש</p>
                           <p className="text-xs font-black text-white truncate px-1">{championTrainee.name}</p>
                           <p className="text-lg font-black text-brand-primary">{championTrainee.count}</p>
