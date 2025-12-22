@@ -192,7 +192,7 @@ const App: React.FC = () => {
 
   const traineeWeekDates = useMemo(() => {
     if (traineeWeekOffset === 0) {
-        // ROLLING 7 DAYS FROM TODAY (DEFAULT)
+        // ROLLING 7 DAYS FROM TODAY (DEFAULT FOR EVERYONE ON FIRST ENTRY)
         return Array.from({length: 7}, (_, i) => {
             const d = new Date();
             d.setDate(d.getDate() + i);
