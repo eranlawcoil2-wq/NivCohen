@@ -6,6 +6,16 @@ import { SessionCard } from './SessionCard';
 import { dataService } from '../services/dataService';
 import { getWeatherIcon } from '../services/weatherService';
 
+// Added helper function to normalize phone numbers for comparison within AdminPanel
+const normalizePhone = (phone: string): string => {
+    if (!phone) return '';
+    let cleaned = phone.replace(/\D/g, '');
+    if (cleaned.startsWith('972')) cleaned = '972' + cleaned.substring(3);
+    else if (cleaned.startsWith('0')) cleaned = '972' + cleaned.substring(1);
+    else if (!cleaned.startsWith('972')) cleaned = '972' + cleaned;
+    return cleaned;
+};
+
 interface AdminPanelProps {
   users: User[]; sessions: TrainingSession[]; primaryColor: string; workoutTypes: string[]; locations: LocationDef[];
   weatherLocation: WeatherLocation; weatherData?: Record<string, WeatherInfo>; paymentLinks: any[];
@@ -23,13 +33,15 @@ interface AdminPanelProps {
   getStatsForUser: (user: User) => { monthly: number; record: number; streak: number };
 }
 
+const PRESET_COLORS = ['#A3E635', '#3B82F6', '#A855F7', '#F97316', '#06B6D4', '#EC4899'];
+
 export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const [activeTab, setActiveTab] = useState<'attendance' | 'users' | 'settings'>('attendance');
   const [settingsSection, setSettingsSection] = useState<'general' | 'infrastructure' | 'quotes' | 'connections' | 'views'>('general');
   const [attendanceSession, setAttendanceSession] = useState<TrainingSession | null>(null);
   const [viewingTrainee, setViewingTrainee] = useState<User | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
-  const [isCalendarMode, setIsCalendarMode] = useState(false); // Sunday-Saturday view
+  const [isCalendarMode, setIsCalendarMode] = useState(false); 
   const [searchTerm, setSearchTerm] = useState('');
   const [saveIndicator, setSaveIndicator] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -57,23 +69,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     } else setSessionDraft(null);
   }, [attendanceSession]);
 
-  const normalizePhone = (p: string) => {
-    if (!p) return '';
-    let cleaned = p.replace(/\D/g, '');
-    if (cleaned.startsWith('0')) cleaned = '972' + cleaned.substring(1);
-    else if (!cleaned.startsWith('972')) cleaned = '972' + cleaned;
-    return cleaned;
-  };
-
   const weekDates = useMemo(() => {
     if (weekOffset === 0 && !isCalendarMode) {
-      // ROLLING 7 DAYS FROM TODAY (INITIAL COACH VIEW)
       return Array.from({length: 7}, (_, i) => {
           const d = new Date(); d.setDate(d.getDate() + i);
           return d.toISOString().split('T')[0];
       });
     } else {
-      // CALENDAR WEEK (SUNDAY-SATURDAY) - TRIGGERED BY BUTTONS
       const sun = new Date(); sun.setDate(sun.getDate() - sun.getDay() + (weekOffset * 7));
       return Array.from({length: 7}, (_, i) => {
           const d = new Date(sun); d.setDate(sun.getDate() + i);
@@ -97,17 +99,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
   const handleSaveAllSettings = async () => {
     setSaveIndicator('שומר הגדרות...');
     setIsSaving(true);
+    let errorCount = 0;
+    
     try {
-      await Promise.all([
-          props.onUpdateAppConfig(localAppConfig),
-          dataService.saveLocations(localLocations),
-          dataService.saveWorkoutTypes(localWorkoutTypes),
-          dataService.saveQuotes(localQuotes)
-      ]);
-      setSaveIndicator('הכל נשמר בהצלחה ✓');
-      setTimeout(() => setSaveIndicator(null), 3000);
-    } catch (e) { 
-      setSaveIndicator('שגיאה בשמירה ⚠️'); 
+        // Attempt category by category to ensure partial success and better error reporting
+        try { await props.onUpdateAppConfig(localAppConfig); } catch (e) { console.error("Config save failed:", e); errorCount++; }
+        try { await dataService.saveLocations(localLocations); } catch (e) { console.error("Locations save failed:", e); errorCount++; }
+        try { await dataService.saveWorkoutTypes(localWorkoutTypes); } catch (e) { console.error("Workout types save failed:", e); errorCount++; }
+        try { await dataService.saveQuotes(localQuotes); } catch (e) { console.error("Quotes save failed:", e); errorCount++; }
+
+        if (errorCount === 0) {
+            setSaveIndicator('הכל נשמר בהצלחה ✓');
+        } else if (errorCount < 4) {
+            setSaveIndicator('חלק מהנתונים נשמרו, בדוק לוגים ⚠️');
+        } else {
+            setSaveIndicator('שגיאת שמירה חמורה ❌');
+        }
+        setTimeout(() => setSaveIndicator(null), 4000);
     } finally {
         setIsSaving(false);
     }
@@ -145,17 +153,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
           <div className="space-y-6">
              <div className="flex flex-col gap-4 bg-gray-800/40 p-5 rounded-3xl border border-white/5 shadow-xl">
                 <div className="flex justify-between items-center">
-                    <button onClick={()=>{setWeekOffset(p=>p-1); setIsCalendarMode(true);}} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">←</button>
+                    <button onClick={()=>{setWeekOffset(p=>p-1); setIsCalendarMode(true);}} className="text-white text-2xl p-2 transition-colors">←</button>
                     <div className="flex flex-col items-center">
                         <div className="flex gap-2 mb-2">
                            <button onClick={()=>{setIsCalendarMode(false); setWeekOffset(0);}} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${!isCalendarMode && weekOffset === 0 ? 'bg-red-600 text-white shadow-lg' : 'bg-gray-900 text-gray-500'}`}>7 ימים</button>
                            <button onClick={()=>{setIsCalendarMode(true); setWeekOffset(0);}} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase transition-all ${isCalendarMode && weekOffset === 0 ? 'bg-red-600 text-white shadow-lg' : 'bg-gray-900 text-gray-500'}`}>השבוע</button>
                         </div>
                         <span className="text-red-500 font-black uppercase tracking-[0.3em] bg-red-500/10 px-4 py-1 rounded-full text-xs">
-                           {isCalendarMode ? `שבוע ${weekOffset === 0 ? 'נוכחי' : weekOffset > 0 ? '+' + weekOffset : weekOffset}` : 'לו"ז קרוב (Rolling)'}
+                           {isCalendarMode ? `שבוע ${weekOffset === 0 ? 'נוכחי' : weekOffset > 0 ? '+' + weekOffset : weekOffset}` : 'לו"ז קרוב'}
                         </span>
                     </div>
-                    <button onClick={()=>{setWeekOffset(p=>p+1); setIsCalendarMode(true);}} className="text-white text-2xl p-2 hover:text-red-500 transition-colors">→</button>
+                    <button onClick={()=>{setWeekOffset(p=>p+1); setIsCalendarMode(true);}} className="text-white text-2xl p-2 transition-colors">→</button>
                 </div>
              </div>
              <div className="grid grid-cols-1">
@@ -167,11 +175,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   if (daySessions.length === 0) return null;
                   return (
                       <div key={date}>
-                          <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-4">
+                          <div className="flex justify-between items-end border-b border-white/5 pb-2 mb-4 px-2">
                               <h4 className="text-gray-500 font-black text-4xl uppercase tracking-widest">{new Date(date).toLocaleDateString('he-IL', { weekday: 'long' })}</h4>
                               <p className="text-gray-500 font-black text-4xl opacity-30">{new Date(date).toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' })}</p>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-2">
                             {daySessions.map(s => <SessionCard key={s.id} session={s} allUsers={props.users} isRegistered={false} onRegisterClick={()=>{}} onViewDetails={(sid) => setAttendanceSession(props.sessions.find(x => x.id === sid) || null)} isAdmin={true} locations={props.locations} weather={props.weatherData?.[s.date]} />)}
                           </div>
                       </div>
@@ -183,7 +191,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
         {activeTab === 'users' && (
             <div className="space-y-6">
-                <input type="text" placeholder="חיפוש מתאמן..." className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 transition-all shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
+                <input type="text" placeholder="חיפוש מתאמן..." className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white outline-none focus:border-red-500 shadow-xl" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
                 <div className="flex gap-2 overflow-x-auto no-scrollbar py-2">
                     {[
                         {id: 'monthly', label: 'החודש'},
@@ -192,7 +200,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         {id: 'payment', label: 'תשלום'},
                         {id: 'health', label: 'הצהרה'}
                     ].map(opt => (
-                        <button key={opt.id} onClick={() => setUserSortBy(opt.id as any)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap border transition-all ${userSortBy === opt.id ? 'bg-red-600 text-white border-red-600 shadow-md shadow-red-600/20' : 'bg-gray-900 text-gray-500 border-white/5'}`}>
+                        <button key={opt.id} onClick={() => setUserSortBy(opt.id as any)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase whitespace-nowrap border transition-all ${userSortBy === opt.id ? 'bg-red-600 text-white border-red-600' : 'bg-gray-900 text-gray-500 border-white/5'}`}>
                             {opt.label}
                         </button>
                     ))}
@@ -238,14 +246,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             <div className="space-y-10 mt-6">
                 {settingsSection === 'general' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי</h3>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">מידע כללי 🏋️</h3>
                         <div className="space-y-3">
-                            <label className="text-[10px] text-red-500 font-black uppercase block">הודעה דחופה באתר</label>
+                            <label className="text-[10px] text-red-500 font-black uppercase block italic">הודעה דחופה באתר</label>
                             <input className="w-full bg-red-900/10 border border-red-500/30 p-6 rounded-[30px] text-white font-black italic outline-none" value={localAppConfig.urgentMessage || ''} onChange={e => setLocalAppConfig({...localAppConfig, urgentMessage: e.target.value})} placeholder="כתוב כאן הודעה דחופה..." />
                         </div>
                         <div className="space-y-3">
-                            <label className="text-[10px] text-brand-primary font-black uppercase block">טקסט אודות (ביוגרפיה)</label>
-                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-brand-primary transition-all outline-none" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} />
+                            <label className="text-[10px] text-brand-primary font-black uppercase block italic">טקסט אודות (ביוגרפיה)</label>
+                            <textarea className="w-full bg-gray-800 border border-white/10 p-6 rounded-[30px] text-white font-bold h-48 italic leading-relaxed focus:border-brand-primary outline-none" value={localAppConfig.coachBio || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachBio: e.target.value})} />
                         </div>
                         <div className="space-y-3 border-t border-white/5 pt-8">
                             <label className="text-[10px] text-purple-400 font-black uppercase block italic">נוסח הצהרת בריאות לחתום 🖋️</label>
@@ -262,7 +270,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <div key={loc.id} className="p-6 bg-gray-900/60 rounded-[35px] border border-white/5 space-y-4 shadow-inner">
                                     <div className="flex justify-between items-center">
                                         <span className="text-gray-500 font-black text-[10px] uppercase">מיקום #{idx + 1}</span>
-                                        <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500 text-[10px] font-black hover:underline">מחק ✕</button>
+                                        <button onClick={() => setLocalLocations(localLocations.filter(l => l.id !== loc.id))} className="text-red-500 text-[10px] font-black">מחק ✕</button>
                                     </div>
                                     <div className="grid grid-cols-1 gap-4">
                                         <input className="bg-gray-800 border border-white/5 p-4 rounded-2xl text-white font-bold outline-none focus:border-brand-primary" value={loc.name} placeholder="שם המקום" onChange={e => {
@@ -285,7 +293,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">סוגי אימונים 👟</h3>
                             <div className="grid grid-cols-2 gap-3">
                                 {localWorkoutTypes.map((type, idx) => (
-                                    <div key={idx} className="flex gap-2 bg-gray-900/60 p-4 rounded-[25px] border border-white/5 items-center shadow-sm">
+                                    <div key={idx} className="flex gap-2 bg-gray-900/60 p-4 rounded-[25px] border border-white/5 items-center">
                                         <input className="flex-1 bg-transparent text-white font-black italic outline-none" value={type} onChange={e => {
                                             const newTypes = [...localWorkoutTypes];
                                             newTypes[idx] = e.target.value;
@@ -295,7 +303,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     </div>
                                 ))}
                             </div>
-                            <Button onClick={() => setLocalWorkoutTypes([...localWorkoutTypes, 'סוג אימון חדש'])} variant="outline" className="w-full rounded-[30px] border-dashed py-4 uppercase text-xs">+ הוסף סוג אימון</Button>
+                            <Button onClick={() => setLocalWorkoutTypes([...localWorkoutTypes, 'אימון חדש'])} variant="outline" className="w-full rounded-[30px] border-dashed py-4 uppercase text-xs">+ הוסף סוג אימון</Button>
                         </div>
                     </div>
                 )}
@@ -305,7 +313,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">משפטי מוטיבציה 💪</h3>
                         <div className="space-y-4">
                             {localQuotes.map((q, idx) => (
-                                <div key={q.id} className="flex gap-2 bg-gray-900/40 p-4 rounded-[25px] border border-white/5 shadow-inner">
+                                <div key={q.id} className="flex gap-2 bg-gray-900/40 p-4 rounded-[25px] border border-white/5">
                                     <input className="flex-1 bg-transparent text-white font-bold italic outline-none" value={q.text} onChange={e => {
                                         const newQuotes = [...localQuotes];
                                         newQuotes[idx].text = e.target.value;
@@ -321,19 +329,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
                 {settingsSection === 'connections' && (
                     <div className="bg-gray-800/40 p-8 rounded-[50px] border border-white/5 space-y-8 shadow-2xl">
-                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים וניהול</h3>
+                        <h3 className="text-white font-black uppercase italic tracking-widest border-b border-white/10 pb-4">חיבורים וניהול 🔐</h3>
                         <div className="space-y-6">
                             <div className="p-6 bg-gray-900/60 rounded-[35px] border border-white/5 shadow-inner">
-                                <label className="text-[10px] text-gray-500 font-black mb-2 block uppercase">סיסמת ניהול (Admin Password)</label>
+                                <label className="text-[10px] text-gray-500 font-black mb-2 block uppercase italic">סיסמת ניהול (Admin Password)</label>
                                 <input className="w-full bg-gray-800 p-4 rounded-2xl text-white font-mono text-xs border border-white/10 outline-none focus:border-brand-primary" value={localAppConfig.coachAdditionalPhone || ''} onChange={e => setLocalAppConfig({...localAppConfig, coachAdditionalPhone: e.target.value})} />
-                                <p className="text-[8px] text-gray-600 mt-2 font-black italic">המילה שתשמש כסיסמת הכניסה לממשק המאמן.</p>
+                                <p className="text-[8px] text-gray-600 mt-2 font-black italic">הסיסמה שתשמש לכניסה לממשק הניהול הנוכחי.</p>
                             </div>
                         </div>
                     </div>
                 )}
                 
                 <div className="sticky bottom-4 z-[60] bg-brand-black/80 backdrop-blur-xl p-4 rounded-[40px] border border-white/10 shadow-3xl flex flex-col items-center gap-2">
-                    {saveIndicator && <p className="text-xs font-black uppercase tracking-widest text-brand-primary animate-pulse">{saveIndicator}</p>}
+                    {saveIndicator && <p className={`text-xs font-black uppercase tracking-widest ${saveIndicator.includes('✓') ? 'text-brand-primary' : 'text-red-500'} animate-pulse`}>{saveIndicator}</p>}
                     <Button onClick={handleSaveAllSettings} className="w-full py-6 rounded-[40px] text-xl font-black italic bg-red-600 shadow-xl tracking-tighter" isLoading={isSaving}>שמירת הגדרות ושינויים ✅</Button>
                     <Button onClick={props.onExitAdmin} variant="outline" className="w-full py-4 rounded-[40px] font-black text-sm uppercase opacity-60 italic">חזרה ללו"ז הכללי</Button>
                 </div>
@@ -424,7 +432,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
                       <div className="flex items-center gap-4">
                         <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center font-black text-2xl border-2" style={{borderColor: viewingTrainee.userColor || 'white', color: viewingTrainee.userColor || 'white'}}>{viewingTrainee.fullName.charAt(0)}</div>
-                        <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">פרופיל מתאמן</h3>
+                        <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">פרופיל מתאמן 👤</h3>
                       </div>
                       <button onClick={()=>setViewingTrainee(null)} className="text-gray-500 text-4xl">✕</button>
                   </div>
@@ -439,12 +447,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-[9px] text-gray-500 font-black uppercase italic">מחיקת משתמש</label>
-                            <Button variant="danger" className="w-full py-4 rounded-2xl text-xs font-black" onClick={() => { if(confirm('למחוק מתאמן? הפעולה לא ניתנת לביטול.')) { props.onDeleteUser(viewingTrainee.id); setViewingTrainee(null); } }}>מחק לצמיתות 🗑️</Button>
+                            <label className="text-[9px] text-gray-500 font-black uppercase italic">צבע פרופיל</label>
+                            <div className="flex gap-2 justify-end">
+                                {PRESET_COLORS.map(c => (
+                                    <button key={c} onClick={() => props.onUpdateUser({...viewingTrainee, userColor: c})} className={`w-6 h-6 rounded-full border-2 transition-transform ${viewingTrainee.userColor === c ? 'scale-125 border-white' : 'border-transparent opacity-60'}`} style={{ backgroundColor: c }} />
+                                ))}
+                            </div>
                         </div>
                       </div>
                       
-                      <div className="bg-gray-800/20 p-6 rounded-[35px] border border-white/5 space-y-4">
+                      <div className="bg-gray-800/20 p-6 rounded-[35px] border border-white/5 space-y-4 shadow-inner">
                          <div className="flex justify-between items-center border-b border-white/5 pb-3">
                             <span className="text-gray-500 text-xs font-black uppercase italic">הצהרת בריאות</span>
                             <span className={`text-[10px] font-black px-3 py-1 rounded-full ${viewingTrainee.healthDeclarationDate ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
@@ -452,29 +464,38 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             </span>
                          </div>
                          {viewingTrainee.healthDeclarationDate && (
-                             <div className="space-y-2">
-                                <p className="text-white text-sm font-bold">תאריך חתימה: {viewingTrainee.healthDeclarationDate}</p>
-                                <p className="text-white text-sm font-bold">מספר זהות: {viewingTrainee.healthDeclarationId || 'לא צוין'}</p>
+                             <div className="grid grid-cols-2 gap-4 pt-2">
+                                <div className="p-3 bg-gray-900/60 rounded-2xl">
+                                    <p className="text-[8px] text-gray-500 uppercase font-black mb-1">תאריך חתימה</p>
+                                    <p className="text-white text-xs font-bold">{viewingTrainee.healthDeclarationDate}</p>
+                                </div>
+                                <div className="p-3 bg-gray-900/60 rounded-2xl">
+                                    <p className="text-[8px] text-gray-500 uppercase font-black mb-1">מספר זהות</p>
+                                    <p className="text-white text-xs font-bold">{viewingTrainee.healthDeclarationId || 'חסר'}</p>
+                                </div>
                              </div>
                          )}
                       </div>
 
                       <div className="grid grid-cols-3 gap-4 border-t border-white/5 pt-8">
-                         <div className="text-center p-4 bg-gray-900/40 rounded-3xl border border-white/5">
-                            <p className="text-[8px] text-gray-500 font-black uppercase">החודש</p>
+                         <div className="text-center p-4 bg-gray-900/40 rounded-3xl border border-white/5 shadow-inner">
+                            <p className="text-[8px] text-gray-500 font-black uppercase italic mb-1">חודש נוכחי</p>
                             <p className="text-2xl font-black text-brand-primary">{props.getStatsForUser(viewingTrainee).monthly}</p>
                          </div>
-                         <div className="text-center p-4 bg-gray-900/40 rounded-3xl border border-white/5">
-                            <p className="text-[8px] text-gray-500 font-black uppercase">שיא</p>
+                         <div className="text-center p-4 bg-gray-900/40 rounded-3xl border border-white/5 shadow-inner">
+                            <p className="text-[8px] text-gray-500 font-black uppercase italic mb-1">שיא היסטורי</p>
                             <p className="text-2xl font-black text-white">{props.getStatsForUser(viewingTrainee).record}</p>
                          </div>
-                         <div className="text-center p-4 bg-gray-900/40 rounded-3xl border border-white/5">
-                            <p className="text-[8px] text-gray-500 font-black uppercase">רצף</p>
+                         <div className="text-center p-4 bg-gray-900/40 rounded-3xl border border-white/5 shadow-inner">
+                            <p className="text-[8px] text-gray-500 font-black uppercase italic mb-1">רצף נוכחי</p>
                             <p className="text-2xl font-black text-orange-400">{props.getStatsForUser(viewingTrainee).streak}</p>
                          </div>
                       </div>
 
-                      <Button onClick={()=>setViewingTrainee(null)} className="w-full rounded-[30px] py-6 font-black italic uppercase tracking-widest bg-gray-800 text-white hover:bg-gray-700">סגור חלון עריכה</Button>
+                      <div className="pt-4 flex flex-col gap-3">
+                        <Button onClick={()=>setViewingTrainee(null)} className="w-full rounded-[30px] py-6 font-black italic uppercase tracking-widest bg-gray-800 text-white hover:bg-gray-700 shadow-xl">סגור פרופיל</Button>
+                        <button onClick={() => { if(confirm('למחוק מתאמן? הפעולה לא ניתנת לביטול.')) { props.onDeleteUser(viewingTrainee.id); setViewingTrainee(null); } }} className="text-red-500/40 text-[10px] uppercase font-black hover:text-red-500 transition-colors py-2">מחק מתאמן לצמיתות 🗑️</button>
+                      </div>
                   </div>
               </div>
           </div>
