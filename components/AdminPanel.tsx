@@ -486,7 +486,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                       <Button onClick={async ()=>{ 
                           if (!sessionDraft || isSaving) return;
                           setIsSaving(true);
-                          try { await props.onUpdateSession(sessionDraft); setSaveSuccess(true); setTimeout(() => { setAttendanceSession(null); setSaveSuccess(false); }, 800); } finally { setIsSaving(false); }
+                          try { 
+                              const isNew = !props.sessions.some(s => s.id === sessionDraft.id);
+                              if (isNew) {
+                                  await props.onAddSession(sessionDraft);
+                              } else {
+                                  await props.onUpdateSession(sessionDraft); 
+                              }
+                              setSaveSuccess(true); 
+                              setTimeout(() => { setAttendanceSession(null); setSaveSuccess(false); }, 800); 
+                          } finally { setIsSaving(false); }
                       }} className={`w-full py-8 rounded-[45px] text-2xl font-black italic shadow-2xl tracking-tighter ${saveSuccess ? 'bg-green-600' : 'bg-red-600'}`} isLoading={isSaving}>{saveSuccess ? 'נשמר בהצלחה! ✓' : 'שמור שינויים ✓'}</Button>
                   </div>
               </div>
