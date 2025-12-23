@@ -162,6 +162,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
       window.open(url, '_blank');
   };
 
+  const handleDeleteCurrentSession = async () => {
+      if (!sessionDraft) return;
+      if (!confirm('האם אתה בטוח שברצונך למחוק את האימון לצמיתות?')) return;
+      
+      setIsSaving(true);
+      try {
+          await props.onDeleteSession(sessionDraft.id);
+          setAttendanceSession(null);
+      } catch (e) {
+          alert('חלה שגיאה במחיקת האימון');
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   return (
     <div className="bg-brand-black min-h-screen">
       <div className="fixed top-[130px] left-0 right-0 z-[60] bg-brand-black/90 pt-4 border-b border-white/5 pb-4 backdrop-blur-xl px-4">
@@ -414,7 +429,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 <div key={phone} className="flex justify-between items-center p-4 rounded-2xl bg-gray-900/50 border border-white/5 hover:border-brand-primary/30 transition-all">
                                     <div className="flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center font-black text-[10px]" style={{color: user?.userColor || 'white'}}>{user?.fullName.charAt(0) || '?'}</div>
-                                        <span className="text-white text-sm font-bold italic">{user?.displayName || user?.fullName || phone}</span>
+                                        <span className="text-white text-sm font-bold italic">{user?.fullName || phone}</span>
                                     </div>
                                     <div className="flex gap-2">
                                         {/* WHATSAPP HIGHLIGHTS BUTTON */}
@@ -482,7 +497,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                       </div>
                   </div>
-                  <div className="mt-12">
+                  <div className="mt-12 space-y-4">
                       <Button onClick={async ()=>{ 
                           if (!sessionDraft || isSaving) return;
                           setIsSaving(true);
@@ -497,6 +512,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                               setTimeout(() => { setAttendanceSession(null); setSaveSuccess(false); }, 800); 
                           } finally { setIsSaving(false); }
                       }} className={`w-full py-8 rounded-[45px] text-2xl font-black italic shadow-2xl tracking-tighter ${saveSuccess ? 'bg-green-600' : 'bg-red-600'}`} isLoading={isSaving}>{saveSuccess ? 'נשמר בהצלחה! ✓' : 'שמור שינויים ✓'}</Button>
+                      
+                      <button 
+                        onClick={handleDeleteCurrentSession}
+                        className="w-full text-red-500/50 hover:text-red-500 font-black uppercase italic text-xs py-2 transition-all"
+                      >
+                        מחק אימון לצמיתות 🗑️
+                      </button>
                   </div>
               </div>
           </div>
