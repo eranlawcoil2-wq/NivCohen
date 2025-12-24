@@ -532,8 +532,15 @@ const App: React.FC = () => {
                           </div>
                       )}
 
-                      <div className="space-y-4">
-                          <h5 className="text-gray-500 font-black uppercase italic tracking-widest text-sm border-b border-white/10 pb-2">מי מגיע ({viewingSession.registeredPhoneNumbers.length}/{viewingSession.maxCapacity})</h5>
+                      <div className="space-y-6">
+                          <div className="flex justify-between items-center border-b border-white/10 pb-4">
+                             <h5 className="text-gray-500 font-black uppercase italic tracking-widest text-sm">מי מגיע</h5>
+                             <div className="bg-brand-primary/10 px-5 py-2 rounded-2xl border border-brand-primary/30 flex items-center gap-2 shadow-lg shadow-brand-primary/5">
+                                <span className="text-3xl font-black text-brand-primary italic tracking-tighter">{viewingSession.registeredPhoneNumbers.length}</span>
+                                <span className="text-gray-500 font-black text-xs uppercase opacity-40">מתוך {viewingSession.maxCapacity}</span>
+                             </div>
+                          </div>
+                          
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-48 overflow-y-auto no-scrollbar">
                               {viewingSession.registeredPhoneNumbers.map(phone => {
                                   const user = users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
@@ -574,7 +581,7 @@ const App: React.FC = () => {
       )}
 
       <div id="login-modal" className="hidden fixed inset-0 bg-black/95 z-[500] flex items-center justify-center p-6 backdrop-blur-3xl">
-          <div className="bg-gray-900 p-10 rounded-[60px] w-full max-w-md border border-white/10 shadow-3xl text-right" dir="rtl">
+          <div className="bg-gray-900 p-10 rounded-[60px] w-full max-md border border-white/10 shadow-3xl text-right" dir="rtl">
               <h3 className="text-3xl font-black text-brand-primary italic uppercase mb-8">התחברות ⚡</h3>
               <div className="space-y-6">
                   <div>

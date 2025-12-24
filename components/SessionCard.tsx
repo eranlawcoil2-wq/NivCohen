@@ -40,7 +40,6 @@ export const SessionCard: React.FC<SessionCardProps> = ({
   const sessionHourStr = session.time.split(':')[0];
   const sessionHourNum = parseInt(sessionHourStr);
   const hourlyWeather = weather?.hourly?.[sessionHourStr];
-  // Mark as night if hour is 18:00 or later, or before 06:00
   const isNight = sessionHourNum >= 18 || sessionHourNum < 6;
   
   const now = new Date();
@@ -137,9 +136,12 @@ export const SessionCard: React.FC<SessionCardProps> = ({
       </div>
 
       <div className="space-y-2 sm:space-y-4">
-        <div className="flex justify-between items-center text-[8px] sm:text-[10px] font-black uppercase tracking-widest border-b border-gray-800/50 pb-1 sm:pb-2">
-           <span className={(isFull && !isRegistered && !isFinished) ? 'text-red-500' : 'text-gray-500'}>{registeredCount}/{session.maxCapacity}</span>
-           {isRegistered && !isCancelled && !isFinished && !isAdmin && <span className="text-brand-primary">✓ רשום</span>}
+        <div className="flex justify-between items-center mb-1">
+           <div className={`px-4 py-2 rounded-2xl flex items-center gap-2 border transition-all ${isFull ? 'bg-red-500/10 border-red-500/30 text-red-500 shadow-lg shadow-red-500/10' : 'bg-gray-900/60 border-white/5 text-gray-400 shadow-inner'}`}>
+               <span className="text-lg sm:text-2xl font-black italic tracking-tighter leading-none">{registeredCount}</span>
+               <span className="text-[10px] sm:text-[12px] font-black opacity-30 uppercase">מתוך {session.maxCapacity}</span>
+           </div>
+           {isRegistered && !isCancelled && !isFinished && !isAdmin && <span className="text-brand-primary text-[10px] font-black italic uppercase tracking-widest bg-brand-primary/10 px-3 py-1 rounded-full">✓ רשום</span>}
         </div>
         
         {!isAdmin ? (

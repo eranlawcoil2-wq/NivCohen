@@ -421,7 +421,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                       <div className="bg-gray-800/40 p-6 rounded-[35px] max-h-[500px] overflow-y-auto border border-white/5 space-y-4 shadow-inner no-scrollbar">
-                        <p className="text-gray-500 text-[10px] font-black uppercase mb-4 italic tracking-widest">רשימת נוכחות ({sessionDraft.registeredPhoneNumbers.length})</p>
+                        <div className="flex justify-between items-center border-b border-white/10 pb-4 mb-6">
+                           <p className="text-gray-500 text-[10px] font-black uppercase italic tracking-widest">רשימת נוכחות</p>
+                           <div className="bg-red-600/10 px-5 py-2 rounded-2xl border border-red-600/30 flex items-center gap-2">
+                              <span className="text-3xl font-black text-red-500 italic tracking-tighter">{sessionDraft.registeredPhoneNumbers.length}</span>
+                              <span className="text-gray-500 font-black text-xs uppercase opacity-40">מתוך {sessionDraft.maxCapacity}</span>
+                           </div>
+                        </div>
+                        
                         <div className="space-y-2">
                             {sessionDraft.registeredPhoneNumbers.map(phone => {
                                 const user = props.users.find(u => normalizePhone(u.phone) === normalizePhone(phone));
