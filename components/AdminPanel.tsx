@@ -146,6 +146,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     }
   };
 
+  const handleDuplicateWeek = async () => {
+    const sessionsToDuplicate = props.sessions.filter(s => weekDates.includes(s.date));
+    if (sessionsToDuplicate.length === 0) {
+        alert('אין אימונים בשבוע זה לשכפול.');
+        return;
+    }
+    if (!confirm(`לשכפל ${sessionsToDuplicate.length} אימונים לשבוע הבא? (רשימות הנרשמים יתאפסו)`)) return;
+    
+    setIsSaving(true);
+    setSaveIndicator('משכפל שבוע קדימה...');
+    let count = 0;
+    try {
+        for (const session of sessionsToDuplicate) {
+            const currentDate = new Date(session.date);
+            const nextDate = new Date(currentDate);
+            nextDate.setDate(currentDate.getDate() + 7);
+            
+            const newSession: TrainingSession = {
+                ...session,
+                id: Date.now().toString() + Math.random(),
+                date: nextDate.toISOString().split('T')[0],
+                registeredPhoneNumbers: [],
+                attendedPhoneNumbers: [],
+                manualHasStarted: null
+            };
+            await props.onAddSession(newSession);
+            count++;
+        }
+        setSaveIndicator(`שוכפלו ${count} אימונים בהצלחה! ✓`);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (e) {
+        setSaveIndicator('שגיאה בשכפול השבוע ❌');
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
   const currentModalHour = sessionDraft ? parseInt(sessionDraft.time.split(':')[0]) : 12;
   const currentModalWeather = sessionDraft ? props.weatherData?.[sessionDraft.date]?.hourly?.[sessionDraft.time.split(':')[0]] : null;
   const isNightModal = currentModalHour >= 18 || currentModalHour < 6;
@@ -218,9 +256,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     <button onClick={()=>{setWeekOffset(p=>p+1); setIsCalendarMode(true);}} className="text-white text-2xl p-2 transition-colors">→</button>
                 </div>
              </div>
-             <div className="grid grid-cols-1">
+             
+             {saveIndicator && <p className="text-center text-xs font-black text-brand-primary animate-pulse py-2 uppercase tracking-widest">{saveIndicator}</p>}
+             
+             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Button onClick={() => setAttendanceSession({ id: Date.now().toString(), type: props.workoutTypes[0], date: new Date().toISOString().split('T')[0], time: '18:00', location: props.locations[0]?.name || '', maxCapacity: 15, registeredPhoneNumbers: [], attendedPhoneNumbers: [], description: '', isPersonalTraining: false, isZoomSession: false, isCancelled: false, manualHasStarted: null })} className="py-7 rounded-[45px] bg-red-600 text-xl font-black italic shadow-2xl tracking-tighter uppercase">+ אימון חדש</Button>
+                <Button onClick={handleDuplicateWeek} variant="outline" className="py-7 rounded-[45px] border-white/10 text-white hover:bg-white/5 text-lg font-black italic uppercase tracking-tighter" isLoading={isSaving}>שכפל שבוע קדימה 📋</Button>
              </div>
+             
              <div className="space-y-12">
               {weekDates.map(date => {
                   let daySessions = props.sessions.filter(s => s.date === date).sort((a,b)=>a.time.localeCompare(b.time));
